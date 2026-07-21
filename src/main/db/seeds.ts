@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto'
+import { LOGO_VS_DATAURL } from './logo-embutida'
 import type {
   BancoDados,
   EmpresaConfig,
@@ -16,7 +17,7 @@ const empresa: EmpresaConfig = {
   email: 'vsprestadoradeservicos@outlook.com',
   site: 'https://www.vsprestadora.com.br',
   cnpj: '04.871.989/0001-60',
-  logoDataUrl: null,
+  logoDataUrl: LOGO_VS_DATAURL,
   textoAssinatura: 'V S DE JESUS',
   corFaixaRodape: '#0f6d6b'
 }

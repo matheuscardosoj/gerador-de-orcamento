@@ -14,7 +14,7 @@ function createWindow(): void {
     autoHideMenuBar: true,
     title: 'Gerador de Orçamentos — VS Prestadora',
     webPreferences: {
-      preload: join(__dirname, '../preload/index.mjs'),
+      preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
       contextIsolation: true,
       nodeIntegration: false
