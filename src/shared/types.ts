@@ -24,7 +24,10 @@ export interface EmpresaConfig {
 export interface ParametrosFinanceiros extends ParametrosEncargos {
   aliquotaNotaPadrao: number
   margemLucroPadrao: number
-  custoPorKmPadrao: number
+  /** Consumo padrão do veículo, em km por litro. */
+  consumoVeiculoPadrao: number
+  /** Preço padrão do litro do combustível. */
+  precoCombustivelPadrao: number
   valorRefeicaoPadrao: number
   modoImpostoPadrao: ModoImposto
 }

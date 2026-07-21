@@ -114,15 +114,16 @@ export function calcularCustoServico(e: EntradaCalculo): ResultadoCalculo {
     })
   }
 
-  // 4) Combustível / deslocamento
+  // 4) Combustível / deslocamento (litros = distância / consumo; custo = litros × preço)
   if (e.combustivel?.ativo) {
     const c = e.combustivel
     const km = c.modo === 'diario' ? c.distanciaKm * dias : c.distanciaKm
+    const litros = c.consumoKmL > 0 ? km / c.consumoKmL : 0
     breakdown.push({
       chave: 'combustivel',
       descricao: 'Combustível / deslocamento',
-      valor: km * c.custoPorKm,
-      detalhe: `${km} km × ${formatMoeda(c.custoPorKm)}${c.modo === 'diario' ? ` (${c.distanciaKm} km/dia × ${dias} dia(s))` : ''}`
+      valor: litros * c.precoLitro,
+      detalhe: `${km} km ÷ ${c.consumoKmL} km/l = ${litros.toFixed(1)} L × ${formatMoeda(c.precoLitro)}${c.modo === 'diario' ? ` (${c.distanciaKm} km/dia × ${dias} dia(s))` : ''}`
     })
   }
 
@@ -195,7 +196,8 @@ export function criarEntradaCalculo(
   parametros: ParametrosEncargos & {
     margemLucroPadrao: number
     aliquotaNotaPadrao: number
-    custoPorKmPadrao: number
+    consumoVeiculoPadrao: number
+    precoCombustivelPadrao: number
     valorRefeicaoPadrao: number
     modoImpostoPadrao: 'gross_up' | 'simples'
   }
@@ -205,7 +207,13 @@ export function criarEntradaCalculo(
     maoDeObra: [],
     alimentacao: { ativo: false, qtdPessoas: 0, valorRefeicao: parametros.valorRefeicaoPadrao, modo: 'diario' },
     ferramentas: [],
-    combustivel: { ativo: false, distanciaKm: 0, custoPorKm: parametros.custoPorKmPadrao, modo: 'cheio' },
+    combustivel: {
+      ativo: false,
+      distanciaKm: 0,
+      consumoKmL: parametros.consumoVeiculoPadrao,
+      precoLitro: parametros.precoCombustivelPadrao,
+      modo: 'cheio'
+    },
     estadia: { ativo: false, qtdPessoas: 0, valorPorPessoa: 0, modo: 'diario' },
     avulsos: [],
     margemLucroPercent: parametros.margemLucroPadrao,

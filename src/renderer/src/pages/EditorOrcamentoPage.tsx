@@ -278,30 +278,33 @@ function ServicosCard({
   dados: Dados
   total: number
 }): JSX.Element {
-  const [calcAberto, setCalcAberto] = useState(false)
+  const [calcAberto, setCalcAberto] = useState<ItemServico | 'novo' | null>(null)
   const [manualAberto, setManualAberto] = useState<ItemServico | 'novo' | null>(null)
   const [catalogoSel, setCatalogoSel] = useState('')
 
   const catalogoAtual = dados.servicos.find((s) => s.id === catalogoSel)
 
-  const adicionar = (r: ResultadoServico, servicoId?: string | null): void => {
-    const item: ItemServico = {
-      id: novoId(),
-      servicoId: servicoId ?? null,
-      descricao: r.descricao,
-      unidade: r.unidade,
-      quantidade: r.quantidade,
-      valorUnitario: round2(r.valorUnitario),
-      valorTotal: round2(r.valorTotal),
-      calculo: r.calculo
-    }
-    set({ itensServico: [...orc.itensServico, item] })
-  }
+  const itemDeResultado = (r: ResultadoServico, base?: ItemServico | null, servicoId?: string | null): ItemServico => ({
+    id: base?.id ?? novoId(),
+    servicoId: base?.servicoId ?? servicoId ?? null,
+    descricao: r.descricao,
+    unidade: r.unidade,
+    quantidade: r.quantidade,
+    valorUnitario: round2(r.valorUnitario),
+    valorTotal: round2(r.valorTotal),
+    calculo: r.calculo
+  })
 
   const atualizar = (item: ItemServico): void =>
     set({ itensServico: orc.itensServico.map((i) => (i.id === item.id ? item : i)) })
   const remover = (id: string): void =>
     set({ itensServico: orc.itensServico.filter((i) => i.id !== id) })
+
+  // Ao editar um item: se foi calculado, reabre o modal de cálculo; senão, o manual.
+  const editarItem = (i: ItemServico): void => {
+    if (i.calculo) setCalcAberto(i)
+    else setManualAberto(i)
+  }
 
   return (
     <Card className="p-6">
@@ -318,7 +321,7 @@ function ServicosCard({
                 </option>
               ))}
             </Select>
-            <Button variant="outline" onClick={() => setCalcAberto(true)}>
+            <Button variant="outline" onClick={() => setCalcAberto('novo')}>
               + Com cálculo
             </Button>
             <Button variant="outline" onClick={() => setManualAberto('novo')}>
@@ -361,7 +364,7 @@ function ServicosCard({
                   <td className="px-3 py-2 text-right">
                     <button
                       className="text-xs text-slate-400 hover:text-brand-tealDark"
-                      onClick={() => setManualAberto(i)}
+                      onClick={() => editarItem(i)}
                     >
                       editar
                     </button>{' '}
@@ -390,12 +393,20 @@ function ServicosCard({
       {calcAberto && (
         <ServicoCalculoModal
           parametros={dados.parametros}
-          descricaoInicial={catalogoAtual?.descricaoPadrao}
-          unidadeInicial={catalogoAtual?.unidade}
-          onCancel={() => setCalcAberto(false)}
+          descricaoInicial={
+            calcAberto === 'novo' ? catalogoAtual?.descricaoPadrao : calcAberto.descricao
+          }
+          unidadeInicial={calcAberto === 'novo' ? catalogoAtual?.unidade : calcAberto.unidade}
+          quantidadeInicial={calcAberto === 'novo' ? undefined : calcAberto.quantidade}
+          entradaInicial={calcAberto === 'novo' ? undefined : calcAberto.calculo?.entrada}
+          onCancel={() => setCalcAberto(null)}
           onConfirm={(r) => {
-            adicionar(r, catalogoAtual?.id ?? null)
-            setCalcAberto(false)
+            if (calcAberto === 'novo') {
+              set({ itensServico: [...orc.itensServico, itemDeResultado(r, null, catalogoAtual?.id ?? null)] })
+            } else {
+              atualizar(itemDeResultado(r, calcAberto))
+            }
+            setCalcAberto(null)
           }}
         />
       )}

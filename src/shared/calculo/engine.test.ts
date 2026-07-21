@@ -18,7 +18,7 @@ function base(over: Partial<EntradaCalculo> = {}): EntradaCalculo {
     maoDeObra: [],
     alimentacao: { ativo: false, qtdPessoas: 0, valorRefeicao: 0, modo: 'diario' },
     ferramentas: [],
-    combustivel: { ativo: false, distanciaKm: 0, custoPorKm: 0, modo: 'cheio' },
+    combustivel: { ativo: false, distanciaKm: 0, consumoKmL: 10, precoLitro: 0, modo: 'cheio' },
     estadia: { ativo: false, qtdPessoas: 0, valorPorPessoa: 0, modo: 'diario' },
     avulsos: [],
     margemLucroPercent: 0,
@@ -96,15 +96,17 @@ describe('componentes de custo', () => {
     expect(r.custoTotal).toBe(100)
   })
 
-  it('combustível cheio e diário', () => {
+  it('combustível por consumo: cheio e diário', () => {
+    // 100 km ÷ 10 km/l = 10 L × R$ 6 = R$ 60
     const cheio = calcularCustoServico(
-      base({ dias: 4, combustivel: { ativo: true, distanciaKm: 100, custoPorKm: 2.5, modo: 'cheio' } })
+      base({ dias: 4, combustivel: { ativo: true, distanciaKm: 100, consumoKmL: 10, precoLitro: 6, modo: 'cheio' } })
     )
-    expect(cheio.custoTotal).toBe(250)
+    expect(cheio.custoTotal).toBe(60)
+    // 50 km/dia × 4 dias = 200 km ÷ 10 = 20 L × R$ 6 = R$ 120
     const diario = calcularCustoServico(
-      base({ dias: 4, combustivel: { ativo: true, distanciaKm: 50, custoPorKm: 2.5, modo: 'diario' } })
+      base({ dias: 4, combustivel: { ativo: true, distanciaKm: 50, consumoKmL: 10, precoLitro: 6, modo: 'diario' } })
     )
-    expect(diario.custoTotal).toBe(500) // 50*4*2.5
+    expect(diario.custoTotal).toBe(120)
   })
 
   it('estadia por diária', () => {
@@ -207,12 +209,12 @@ describe('casos de borda', () => {
         dias: 4,
         maoDeObra: [{ id: 'a', qtdFuncionarios: 3, regime: 'diaria', valor: 150 }], // 1800
         alimentacao: { ativo: true, qtdPessoas: 3, valorRefeicao: 20, modo: 'diario' }, // 240
-        combustivel: { ativo: true, distanciaKm: 100, custoPorKm: 2.5, modo: 'cheio' }, // 250
-        avulsos: [{ id: 'x', descricao: 'EPI', valor: 210, modo: 'cheio' }], // 210
+        combustivel: { ativo: true, distanciaKm: 100, consumoKmL: 10, precoLitro: 6, modo: 'cheio' }, // 60
+        avulsos: [{ id: 'x', descricao: 'EPI', valor: 200, modo: 'cheio' }], // 200
         margemLucroPercent: 20
       })
     )
-    expect(r.custoTotal).toBe(2500)
-    expect(r.precoFinal).toBe(3000) // 2500 * 1.2
+    expect(r.custoTotal).toBe(2300) // 1800 + 240 + 60 + 200
+    expect(r.precoFinal).toBe(2760) // 2300 * 1.2
   })
 })

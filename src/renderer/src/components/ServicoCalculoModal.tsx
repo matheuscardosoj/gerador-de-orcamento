@@ -9,6 +9,7 @@ interface Props {
   parametros: ParametrosFinanceiros
   descricaoInicial?: string
   unidadeInicial?: string
+  quantidadeInicial?: number
   entradaInicial?: EntradaCalculo
   onCancel: () => void
   onConfirm: (r: ResultadoServico) => void
@@ -54,13 +55,14 @@ export function ServicoCalculoModal({
   parametros,
   descricaoInicial,
   unidadeInicial,
+  quantidadeInicial,
   entradaInicial,
   onCancel,
   onConfirm
 }: Props): JSX.Element {
   const [descricao, setDescricao] = useState(descricaoInicial ?? '')
   const [unidade, setUnidade] = useState(unidadeInicial ?? 'serviço')
-  const [quantidade, setQuantidade] = useState(1)
+  const [quantidade, setQuantidade] = useState(quantidadeInicial ?? 1)
   const [e, setE] = useState<EntradaCalculo>(entradaInicial ?? criarEntradaCalculo(parametros))
 
   const set = (patch: Partial<EntradaCalculo>): void => setE((prev) => ({ ...prev, ...patch }))
@@ -80,16 +82,16 @@ export function ServicoCalculoModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4">
-      <div className="my-4 w-full max-w-5xl rounded-2xl bg-slate-50 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-slate-50 shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
           <h3 className="text-base font-semibold text-slate-800">Calcular custo do serviço</h3>
           <button onClick={onCancel} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100" aria-label="Fechar">
             ✕
           </button>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 p-6 lg:grid-cols-[1fr_340px]">
+        <div className="grid grid-cols-1 gap-4 overflow-y-auto p-6 lg:grid-cols-[1fr_340px]">
           {/* Coluna de entradas */}
           <div className="space-y-4">
             <Bloco titulo="Serviço">
@@ -374,19 +376,27 @@ function FerramentasBloco({ e, set }: BlocoProps): JSX.Element {
 
 function CombustivelBloco({ e, set }: BlocoProps): JSX.Element {
   const c = e.combustivel
+  const dist = c.modo === 'diario' ? c.distanciaKm * (e.dias || 0) : c.distanciaKm
+  const litros = c.consumoKmL > 0 ? dist / c.consumoKmL : 0
   return (
     <ToggleBloco titulo="Combustível / deslocamento" ativo={c.ativo} onToggle={(v) => set({ combustivel: { ...c, ativo: v } })}>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Field label={c.modo === 'diario' ? 'Km por dia' : 'Km total'}>
           <NumberField value={c.distanciaKm} onChange={(v) => set({ combustivel: { ...c, distanciaKm: v } })} min={0} />
         </Field>
-        <Field label="Custo por km">
-          <NumberField value={c.custoPorKm} onChange={(v) => set({ combustivel: { ...c, custoPorKm: v } })} min={0} />
+        <Field label="Consumo (km/l)">
+          <NumberField value={c.consumoKmL} onChange={(v) => set({ combustivel: { ...c, consumoKmL: v } })} min={0} />
+        </Field>
+        <Field label="Preço do litro">
+          <NumberField value={c.precoLitro} onChange={(v) => set({ combustivel: { ...c, precoLitro: v } })} min={0} />
         </Field>
         <Field label="Aplicação">
           <ModoSelect value={c.modo} onChange={(m) => set({ combustivel: { ...c, modo: m } })} />
         </Field>
       </div>
+      <p className="mt-2 text-xs text-slate-400">
+        {dist} km ÷ {c.consumoKmL || 0} km/l = {litros.toFixed(1)} litros
+      </p>
     </ToggleBloco>
   )
 }

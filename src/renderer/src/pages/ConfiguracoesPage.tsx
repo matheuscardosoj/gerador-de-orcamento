@@ -244,8 +244,14 @@ function SecaoParametros(): JSX.Element {
           <Field label="Alíquota NFS padrão (%)">
             <NumberField value={form.aliquotaNotaPadrao} onChange={(v) => set({ aliquotaNotaPadrao: v })} />
           </Field>
-          <Field label="Custo por km padrão (R$)">
-            <NumberField value={form.custoPorKmPadrao} onChange={(v) => set({ custoPorKmPadrao: v })} />
+          <Field label="Consumo do veículo padrão (km/l)">
+            <NumberField value={form.consumoVeiculoPadrao} onChange={(v) => set({ consumoVeiculoPadrao: v })} />
+          </Field>
+          <Field label="Preço do combustível padrão (R$/l)">
+            <NumberField
+              value={form.precoCombustivelPadrao}
+              onChange={(v) => set({ precoCombustivelPadrao: v })}
+            />
           </Field>
           <Field label="Valor da refeição padrão (R$)">
             <NumberField

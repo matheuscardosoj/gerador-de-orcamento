@@ -36,7 +36,8 @@ function estadoInicial(): BancoDados {
       diasBaseMes: 30,
       aliquotaNotaPadrao: 6,
       margemLucroPadrao: 30,
-      custoPorKmPadrao: 2.5,
+      consumoVeiculoPadrao: 10,
+      precoCombustivelPadrao: 6,
       valorRefeicaoPadrao: 20,
       modoImpostoPadrao: 'gross_up'
     },

@@ -47,12 +47,15 @@ export interface CustoFerramenta {
   modo: ModoAplicacao
 }
 
-/** Combustível / deslocamento. */
+/** Combustível / deslocamento (calculado por consumo do veículo e preço do litro). */
 export interface CustoCombustivel {
   ativo: boolean
   /** cheio = distância total do serviço; diario = distância por dia (multiplicada por dias). */
   distanciaKm: number
-  custoPorKm: number
+  /** Consumo do veículo em km por litro. */
+  consumoKmL: number
+  /** Preço do litro do combustível. */
+  precoLitro: number
   modo: ModoAplicacao
 }
 
