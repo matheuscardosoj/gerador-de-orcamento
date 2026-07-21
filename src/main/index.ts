@@ -1,6 +1,8 @@
 import { app, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { getDb } from './db/store'
+import { registrarIpc } from './ipc'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -37,6 +39,10 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('br.com.vsprestadora.gerador-orcamento')
+
+  // Inicializa o banco (cria arquivo e seeds na primeira execução) e registra o IPC.
+  getDb()
+  registrarIpc()
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
