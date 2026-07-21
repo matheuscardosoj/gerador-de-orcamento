@@ -17,6 +17,12 @@ aplicar margem de lucro e gerar orçamentos no layout da VS Prestadora, exportan
 | `npm run test` | Roda os testes do motor de cálculo (Vitest) |
 | `npm run dist` | Gera o instalador `.exe` (Windows, via electron-builder) |
 
+> **Build do instalador no Windows:** o `electron-builder` baixa o `winCodeSign`,
+> que contém symlinks do macOS que o Windows só cria com o **Modo Desenvolvedor**
+> ativo. A assinatura de código está desabilitada (`signAndEditExecutable: false`),
+> e o build roda com `CSC_IDENTITY_AUTO_DISCOVERY=false`. O instalador sai em
+> `release/Gerador de Orçamentos VS Setup <versão>.exe`.
+
 ## Arquitetura
 
 - `src/main` — processo principal (Node): persistência, IPC, geração de documentos.
