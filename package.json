@@ -19,7 +19,9 @@
     "pack": "electron-vite build && electron-builder --dir",
     "dist": "electron-vite build && electron-builder"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@turbodocx/html-to-docx": "^1.22.0"
+  },
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/tsconfig": "^1.0.1",

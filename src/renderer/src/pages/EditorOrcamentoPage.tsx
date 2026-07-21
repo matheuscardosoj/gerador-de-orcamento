@@ -26,12 +26,15 @@ import type {
   Cliente,
   ServicoCatalogo,
   ObservacaoPadrao,
-  FormaPagamentoPadrao
+  FormaPagamentoPadrao,
+  EmpresaConfig
 } from '@shared/types'
 import { ServicoCalculoModal } from '../components/ServicoCalculoModal'
+import { PreviaModal } from '../components/PreviaModal'
 import { novoId, type ResultadoServico } from '../components/tipos'
 
 interface Dados {
+  empresa: EmpresaConfig
   parametros: ParametrosFinanceiros
   clientes: Cliente[]
   servicos: ServicoCatalogo[]
@@ -45,19 +48,22 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
   const [orc, setOrc] = useState<Orcamento | null>(null)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const [previaAberta, setPreviaAberta] = useState(false)
 
   useEffect(() => {
     let vivo = true
     ;(async () => {
-      const [parametros, clientes, servicos, observacoesPadrao, pagamentosPadrao] = await Promise.all([
-        api.parametros.get(),
-        api.clientes.list(),
-        api.servicos.list(),
-        api.observacoes.list(),
-        api.pagamentos.list()
-      ])
+      const [empresa, parametros, clientes, servicos, observacoesPadrao, pagamentosPadrao] =
+        await Promise.all([
+          api.empresa.get(),
+          api.parametros.get(),
+          api.clientes.list(),
+          api.servicos.list(),
+          api.observacoes.list(),
+          api.pagamentos.list()
+        ])
       if (!vivo) return
-      setDados({ parametros, clientes, servicos, observacoesPadrao, pagamentosPadrao })
+      setDados({ empresa, parametros, clientes, servicos, observacoesPadrao, pagamentosPadrao })
 
       if (orcamentoId) {
         const existente = await api.orcamentos.get(orcamentoId)
@@ -148,6 +154,9 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
           <Button variant="ghost" onClick={() => navegar({ nome: 'historico' })}>
             Voltar
           </Button>
+          <Button variant="outline" onClick={() => setPreviaAberta(true)}>
+            Prévia
+          </Button>
           <Button variant="outline" onClick={() => exportar('docx')}>
             DOCX
           </Button>
@@ -180,6 +189,9 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
           onChange={(pagamentos) => set({ pagamentos })}
         />
       </div>
+      {previaAberta && (
+        <PreviaModal orc={{ ...orc, valorTotal: total }} empresa={dados.empresa} onClose={() => setPreviaAberta(false)} />
+      )}
     </PageShell>
   )
 }

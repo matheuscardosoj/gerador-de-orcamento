@@ -10,6 +10,7 @@ import {
   pagamentosRepo,
   orcamentosRepo
 } from './repositories'
+import { gerarPdf, gerarDocx } from './documents'
 
 async function selecionarLogo(): Promise<string | null> {
   const r = await dialog.showOpenDialog({
@@ -62,7 +63,10 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
   'orcamentos.remove': (id) => orcamentosRepo.remove(id as string),
   'orcamentos.duplicate': (id) => orcamentosRepo.duplicate(id as string),
 
-  'logo.selecionar': () => selecionarLogo()
+  'logo.selecionar': () => selecionarLogo(),
+
+  'documentos.gerarPdf': (id) => gerarPdf(id as string),
+  'documentos.gerarDocx': (id) => gerarDocx(id as string)
 }
 
 export function registrarIpc(): void {
