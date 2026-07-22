@@ -28,7 +28,7 @@ export function HistoricoPage(): JSX.Element {
 
   const orcamentos = data ?? []
 
-  // Busca: número, destinatário, serviços realizados e valor.
+  // Busca: número, destinatário, anotação interna, serviços realizados e valor.
   const filtrados = useMemo(() => {
     const q = busca.toLowerCase().trim()
     if (!q) return orcamentos
@@ -37,6 +37,7 @@ export function HistoricoPage(): JSX.Element {
       return (
         String(o.numero).includes(q) ||
         o.destinatario.toLowerCase().includes(q) ||
+        (o.observacaoInterna ?? '').toLowerCase().includes(q) ||
         emServicos ||
         String(o.valorTotal).includes(q) ||
         formatMoeda(o.valorTotal).toLowerCase().includes(q)
@@ -99,7 +100,7 @@ export function HistoricoPage(): JSX.Element {
               setBusca(e.target.value)
               setPagina(1)
             }}
-            placeholder="Buscar por número, destinatário, serviço ou valor…"
+            placeholder="Buscar por número, destinatário, anotação, serviço ou valor…"
             className="max-w-md"
           />
         </div>
@@ -185,7 +186,14 @@ function LinhaOrcamento({
     <tr className="hover:bg-slate-50">
       <td className="px-4 py-3 font-medium text-slate-800">{o.numero}</td>
       <td className="px-4 py-3 text-slate-600">{formatDataCurta(o.data)}</td>
-      <td className="px-4 py-3 text-slate-600">{o.destinatario || '—'}</td>
+      <td className="max-w-xs px-4 py-3 text-slate-600">
+        <span className="block truncate">{o.destinatario || '—'}</span>
+        {o.observacaoInterna && (
+          <span className="mt-0.5 block truncate text-xs text-slate-400" title={o.observacaoInterna}>
+            {o.observacaoInterna}
+          </span>
+        )}
+      </td>
       <td className="px-4 py-3 text-right font-medium text-slate-700">{formatMoeda(o.valorTotal)}</td>
       <td className="px-4 py-3">
         <Badge color={statusInfo[o.status].cor}>{statusInfo[o.status].label}</Badge>

@@ -1,9 +1,10 @@
 import { BrowserWindow, dialog, app } from 'electron'
 import { writeFile, unlink } from 'fs/promises'
 import { join } from 'path'
-import HTMLtoDOCX from '@turbodocx/html-to-docx'
-import { orcamentosRepo, empresaRepo } from './repositories'
-import { gerarHtmlOrcamento, gerarHtmlParaDocx } from '@shared/documento/template'
+import { Packer } from 'docx'
+import { orcamentosRepo, empresaRepo, anexosRepo } from './repositories'
+import { gerarHtmlOrcamento } from '@shared/documento/template'
+import { montarDocumentoDocx } from '@shared/documento/docx'
 import type { DocumentoResultado } from '@shared/api'
 import type { Orcamento } from '@shared/types'
 
@@ -15,15 +16,34 @@ function nomeBase(orc: Orcamento): string {
   return `Proposta ${orc.numero}${dest ? ' - ' + dest : ''}`
 }
 
-function htmlDoOrcamento(id: string): { html: string; orc: Orcamento } {
+/**
+ * Lê os BLOBs das fotos. Só acontece na hora de gerar o documento — no resto do
+ * app circulam apenas as miniaturas.
+ */
+function imagensDosAnexos(orc: Orcamento): Map<string, string> {
+  const mapa = new Map<string, string>()
+  for (const a of orc.anexos ?? []) {
+    const dataUrl = anexosRepo.imagem(a.id)
+    if (dataUrl) mapa.set(a.id, dataUrl)
+  }
+  return mapa
+}
+
+function carregarOrcamento(id: string): Orcamento {
   const orc = orcamentosRepo.get(id)
   if (!orc) throw new Error('Orçamento não encontrado')
-  const empresa = empresaRepo.get()
-  return { html: gerarHtmlOrcamento(orc, empresa), orc }
+  return orc
 }
 
 export async function gerarPdf(id: string): Promise<DocumentoResultado> {
-  const { html, orc } = htmlDoOrcamento(id)
+  const orc = carregarOrcamento(id)
+  const imagens = imagensDosAnexos(orc)
+  // No PDF as fotos saem em tamanho cheio (a miniatura é só para a tela).
+  const orcComImagens: Orcamento = {
+    ...orc,
+    anexos: (orc.anexos ?? []).map((a) => ({ ...a, imagemDataUrl: imagens.get(a.id) ?? null }))
+  }
+  const html = gerarHtmlOrcamento(orcComImagens, empresaRepo.get(), { ajustarAssinatura: true })
 
   // Renderiza o HTML numa janela oculta e imprime para PDF (sem software externo).
   const tmpHtml = join(app.getPath('temp'), `orcamento-${Date.now()}.html`)
@@ -56,15 +76,9 @@ export async function gerarPdf(id: string): Promise<DocumentoResultado> {
 }
 
 export async function gerarDocx(id: string): Promise<DocumentoResultado> {
-  const orc = orcamentosRepo.get(id)
-  if (!orc) throw new Error('Orçamento não encontrado')
-  const html = gerarHtmlParaDocx(orc, empresaRepo.get())
-
-  const buffer = (await HTMLtoDOCX(html, undefined, {
-    orientation: 'portrait',
-    font: 'Calibri',
-    margins: { top: 1080, right: 1080, bottom: 1080, left: 1080 }
-  })) as Buffer
+  const orc = carregarOrcamento(id)
+  const doc = montarDocumentoDocx(orc, empresaRepo.get(), imagensDosAnexos(orc))
+  const buffer = await Packer.toBuffer(doc)
 
   const r = await dialog.showSaveDialog({
     title: 'Salvar DOCX',

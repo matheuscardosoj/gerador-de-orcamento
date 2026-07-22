@@ -11,8 +11,18 @@ files:
   - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  # `resources/` entra só via extraResources; sem esta exclusão o modelo de IA
+  # (>1 GB) seria copiado duas vezes e o NSIS estouraria o limite de memória.
+  - '!resources/**'
+extraResources:
+  # Runtime de IA (llama-server.exe + modelo GGUF), baixado por `npm run ia`.
+  - from: resources/ia
+    to: ia
+    filter:
+      - '**/*'
 asarUnpack:
-  - resources/**
+  # O .wasm do SQLite é lido do disco: fora do asar o carregamento é direto.
+  - '**/node_modules/node-sqlite3-wasm/**/*'
 win:
   signAndEditExecutable: false
   icon: build/icon.ico

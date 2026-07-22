@@ -1,8 +1,34 @@
-import { app, shell, BrowserWindow } from 'electron'
+import { app, shell, dialog, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import { getDb } from './db/store'
+import { abrirBanco, fecharBanco } from './db/sqlite'
+import { migrarJsonSeExistir } from './db/migrar-json'
+import { bancoVazio, semear } from './repositories'
+import { encerrarIA } from './ia'
 import { registrarIpc } from './ipc'
+
+/**
+ * Abre o banco e, quando ele ainda está vazio, importa o `banco.json` legado.
+ * Só semeia os dados iniciais se não houver nada a importar. Se a importação
+ * falhar, o JSON é preservado intacto (a transação sofre rollback) e uma nova
+ * tentativa acontece no próximo início — por isso o critério é "banco vazio",
+ * não "arquivo recém-criado".
+ */
+function iniciarBanco(): void {
+  abrirBanco()
+  if (!bancoVazio()) return
+  let importou = false
+  try {
+    importou = migrarJsonSeExistir()
+  } catch (e) {
+    dialog.showErrorBox(
+      'Falha ao importar os dados antigos',
+      `Não foi possível migrar o banco.json para o novo formato:\n\n${String(e)}\n\n` +
+        'O arquivo antigo foi preservado. O aplicativo vai abrir com os dados iniciais.'
+    )
+  }
+  if (!importou && bancoVazio()) semear()
+}
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -40,8 +66,8 @@ function createWindow(): void {
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.gerador.orcamentos')
 
-  // Inicializa o banco (cria arquivo e seeds na primeira execução) e registra o IPC.
-  getDb()
+  // Inicializa o banco (cria arquivo, migra o JSON ou semeia) e registra o IPC.
+  iniciarBanco()
   registrarIpc()
 
   app.on('browser-window-created', (_, window) => {
@@ -59,4 +85,10 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+// Encerra o servidor de IA e fecha o banco de forma limpa.
+app.on('before-quit', () => {
+  encerrarIA()
+  fecharBanco()
 })

@@ -9,6 +9,7 @@ import {
   Field,
   Input,
   NumberField,
+  Select,
   Textarea,
   SectionTitle,
   Checkbox,
@@ -18,10 +19,12 @@ import type {
   EmpresaConfig,
   ParametrosFinanceiros,
   ObservacaoPadrao,
-  FormaPagamentoPadrao
+  FormaPagamentoPadrao,
+  ConfigIA,
+  StatusIA
 } from '@shared/types'
 
-type Aba = 'empresa' | 'parametros' | 'observacoes' | 'pagamentos'
+type Aba = 'empresa' | 'parametros' | 'observacoes' | 'pagamentos' | 'numeracao' | 'ia'
 
 export function ConfiguracoesPage(): JSX.Element {
   const [aba, setAba] = useState<Aba>('empresa')
@@ -34,13 +37,17 @@ export function ConfiguracoesPage(): JSX.Element {
           { id: 'empresa', label: 'Empresa / Cabeçalho' },
           { id: 'parametros', label: 'Parâmetros financeiros' },
           { id: 'observacoes', label: 'Observações padrão' },
-          { id: 'pagamentos', label: 'Formas de pagamento' }
+          { id: 'pagamentos', label: 'Formas de pagamento' },
+          { id: 'numeracao', label: 'Numeração' },
+          { id: 'ia', label: 'IA local' }
         ]}
       />
       {aba === 'empresa' && <SecaoEmpresa />}
       {aba === 'parametros' && <SecaoParametros />}
       {aba === 'observacoes' && <SecaoObservacoes />}
       {aba === 'pagamentos' && <SecaoPagamentos />}
+      {aba === 'numeracao' && <SecaoNumeracao />}
+      {aba === 'ia' && <SecaoIA />}
     </PageShell>
   )
 }
@@ -479,5 +486,177 @@ function ItemPagamento({
         </Button>
       </div>
     </div>
+  )
+}
+
+// -------------------------------------------------------------------- IA local
+/**
+ * Origem do modelo usado no botão "Sugerir com IA" do editor. Tudo roda na
+ * própria máquina: ou o modelo que veio no instalador, ou um Ollama já instalado.
+ */
+function SecaoIA(): JSX.Element {
+  const { data } = useAsync(() => api.ia.get(), [])
+  const [form, setForm] = useState<ConfigIA | null>(null)
+  const [salvando, setSalvando] = useState(false)
+  const [ok, setOk] = useState(false)
+  const [status, setStatus] = useState<StatusIA | null>(null)
+  const [testando, setTestando] = useState(false)
+
+  useEffect(() => {
+    if (data) setForm(data)
+  }, [data])
+
+  if (!form) return <p className="text-sm text-slate-500">Carregando…</p>
+
+  const set = (patch: Partial<ConfigIA>): void => {
+    setForm({ ...form, ...patch })
+    setOk(false)
+    setStatus(null)
+  }
+
+  const salvar = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault()
+    setSalvando(true)
+    await api.ia.save(form)
+    setSalvando(false)
+    setOk(true)
+  }
+
+  const testar = async (): Promise<void> => {
+    setTestando(true)
+    try {
+      await api.ia.save(form)
+      setStatus(await api.ia.status())
+    } catch (e) {
+      setStatus({ modo: form.modo, disponivel: false, detalhe: String(e) })
+    } finally {
+      setTestando(false)
+    }
+  }
+
+  return (
+    <form onSubmit={salvar} className="space-y-5">
+      <Card className="p-6">
+        <SectionTitle
+          title="Sugestão de anotação por IA"
+          description="Usada só quando você clica em “Sugerir com IA” no editor. Nada é enviado para a internet."
+        />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field label="Origem do modelo">
+            <Select value={form.modo} onChange={(e) => set({ modo: e.target.value as ConfigIA['modo'] })}>
+              <option value="embutida">Modelo embutido no aplicativo</option>
+              <option value="ollama">Ollama instalado na máquina</option>
+              <option value="desligada">Desativada</option>
+            </Select>
+          </Field>
+          {form.modo === 'ollama' && (
+            <>
+              <Field label="Endereço do Ollama">
+                <Input value={form.urlOllama} onChange={(e) => set({ urlOllama: e.target.value })} />
+              </Field>
+              <Field label="Modelo" hint="Ex.: llama3.2:3b, qwen2.5:3b">
+                <Input value={form.modeloOllama} onChange={(e) => set({ modeloOllama: e.target.value })} />
+              </Field>
+            </>
+          )}
+        </div>
+
+        {status && (
+          <p
+            className={
+              status.disponivel
+                ? 'mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800'
+                : 'mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800'
+            }
+          >
+            {status.detalhe}
+          </p>
+        )}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={testar} disabled={testando}>
+            {testando ? 'Testando…' : 'Testar conexão'}
+          </Button>
+          <BotaoSalvar salvando={salvando} ok={ok} />
+        </div>
+      </Card>
+    </form>
+  )
+}
+
+// ------------------------------------------------------------------ Numeração
+/**
+ * Ajuste do contador de orçamentos. Serve principalmente para reaproveitar
+ * números depois de exclusões — embora excluir o orçamento de maior número já
+ * faça o contador recuar sozinho.
+ */
+function SecaoNumeracao(): JSX.Element {
+  const { data, reload } = useAsync(() => api.orcamentos.numeracao(), [])
+  const [proximo, setProximo] = useState<number | null>(null)
+  const [salvando, setSalvando] = useState(false)
+  const [ok, setOk] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (data) setProximo(data.proximoNumero)
+  }, [data])
+
+  if (!data || proximo === null) return <p className="text-sm text-slate-500">Carregando…</p>
+
+  const definir = (v: number): void => {
+    setProximo(v)
+    setOk(false)
+    setErro(null)
+  }
+
+  const salvar = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault()
+    setSalvando(true)
+    setErro(null)
+    const r = await api.orcamentos.definirProximoNumero(proximo)
+    setSalvando(false)
+    if (r.ok) {
+      setOk(true)
+      reload()
+    } else {
+      setErro(r.erro ?? 'Não foi possível definir o próximo número.')
+    }
+  }
+
+  return (
+    <form onSubmit={salvar}>
+      <Card className="p-6">
+        <SectionTitle
+          title="Numeração dos orçamentos"
+          description="Define o número que o próximo orçamento vai receber."
+        />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field
+            label="Próximo número"
+            hint="Números já usados são recusados para não haver dois orçamentos com o mesmo número."
+          >
+            <NumberField value={proximo} onChange={definir} min={1} step={1} />
+          </Field>
+          <div className="space-y-2 self-start md:pt-7">
+            <p className="text-sm text-slate-500">
+              Maior número em uso: <strong className="text-slate-700">{data.maiorEmUso || '—'}</strong> ·{' '}
+              Menor número livre: <strong className="text-slate-700">{data.menorLivre}</strong> ·{' '}
+              {data.totalOrcamentos} orçamento{data.totalOrcamentos === 1 ? '' : 's'}
+            </p>
+            {proximo !== data.menorLivre && (
+              <Button type="button" variant="outline" size="sm" onClick={() => definir(data.menorLivre)}>
+                Usar o menor número livre ({data.menorLivre})
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {erro && <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{erro}</p>}
+
+        <div className="mt-5 flex justify-end">
+          <BotaoSalvar salvando={salvando} ok={ok} />
+        </div>
+      </Card>
+    </form>
   )
 }

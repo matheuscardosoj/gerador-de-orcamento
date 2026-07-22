@@ -99,6 +99,32 @@ export interface ItemTexto {
   texto: string
 }
 
+/**
+ * Foto anexada ao orçamento. Opcionalmente vinculada a um item de serviço —
+ * nesse caso o documento faz uma referência discreta ao item correspondente.
+ *
+ * A imagem em tamanho cheio fica no banco (BLOB) e NUNCA trafega em lote pelo
+ * IPC: a UI e a prévia usam `miniaturaDataUrl`; PDF/DOCX leem o BLOB no main.
+ */
+export interface AnexoOrcamento {
+  id: string
+  /** Item de serviço referenciado, ou null para anexo solto. */
+  itemServicoId?: string | null
+  titulo: string
+  descricao: string
+  mime: string
+  /** Dimensões da imagem cheia, usadas para manter a proporção no documento. */
+  largura: number
+  altura: number
+  /** Miniatura (~320px) em data URL. Sempre presente ao ler do banco. */
+  miniaturaDataUrl?: string
+  /**
+   * Imagem cheia em data URL. Só é enviada do renderer para o main ao salvar
+   * um anexo novo; ao ler, vem vazia (o BLOB fica no banco).
+   */
+  imagemDataUrl?: string | null
+}
+
 export interface Orcamento {
   id: string
   /** Índice sequencial, começando em 1 (incrementa conforme o último criado). */
@@ -114,14 +140,35 @@ export interface Orcamento {
   materiais: ItemMaterial[]
   observacoes: ItemTexto[]
   pagamentos: ItemTexto[]
+  /** Fotos anexadas. Quando há alguma, o documento ganha uma seção em página nova. */
+  anexos: AnexoOrcamento[]
   prazoDias?: number | null
+  /** Anotação livre do usuário: identifica o orçamento na listagem, não sai no documento. */
+  observacaoInterna?: string
   valorTotal: number
   status: StatusOrcamento
   criadoEm: string
   atualizadoEm: string
 }
 
-/** Estrutura completa do banco em JSON. */
+/** Origem do modelo de linguagem usado para sugerir a anotação interna. */
+export type ModoIA = 'embutida' | 'ollama' | 'desligada'
+
+export interface ConfigIA {
+  modo: ModoIA
+  /** Usado quando modo = 'ollama'. */
+  urlOllama: string
+  modeloOllama: string
+}
+
+export interface StatusIA {
+  modo: ModoIA
+  disponivel: boolean
+  /** Descrição legível do estado (usada no botão "Testar conexão"). */
+  detalhe: string
+}
+
+/** Estrutura completa do banco em JSON (formato legado, ainda lido na migração). */
 export interface BancoDados {
   empresa: EmpresaConfig
   parametros: ParametrosFinanceiros
@@ -132,4 +179,5 @@ export interface BancoDados {
   orcamentos: Orcamento[]
   /** Contador sequencial persistente (auto-increment): nunca reutiliza números. */
   seqOrcamento: number
+  configIA: ConfigIA
 }

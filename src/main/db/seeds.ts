@@ -2,12 +2,21 @@ import { randomUUID } from 'crypto'
 import { LOGO_VS_DATAURL } from './logo-embutida'
 import type {
   BancoDados,
+  ConfigIA,
   EmpresaConfig,
   ParametrosFinanceiros,
   ServicoCatalogo,
   ObservacaoPadrao,
   FormaPagamentoPadrao
 } from '@shared/types'
+
+// Padrão: usa o modelo embutido no instalador. Fora do pacote (npm run dev sem
+// ter rodado `npm run ia`) o main cai automaticamente no Ollama, se existir.
+export const configIAPadrao: ConfigIA = {
+  modo: 'embutida',
+  urlOllama: 'http://localhost:11434',
+  modeloOllama: 'llama3.2:3b'
+}
 
 const empresa: EmpresaConfig = {
   nome: 'VS PRESTADORA DE SERVIÇOS',
@@ -172,6 +181,7 @@ export function bancoInicial(): BancoDados {
     observacoesPadrao,
     pagamentosPadrao,
     orcamentos: [],
-    seqOrcamento: 0
+    seqOrcamento: 0,
+    configIA: { ...configIAPadrao }
   }
 }

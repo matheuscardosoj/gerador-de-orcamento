@@ -8,9 +8,12 @@ import {
   servicosRepo,
   observacoesRepo,
   pagamentosRepo,
-  orcamentosRepo
+  orcamentosRepo,
+  anexosRepo,
+  configIARepo
 } from './repositories'
 import { gerarPdf, gerarDocx } from './documents'
+import { statusIA, sugerirObservacao } from './ia'
 
 async function selecionarLogo(): Promise<string | null> {
   const r = await dialog.showOpenDialog({
@@ -62,6 +65,16 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
   'orcamentos.update': (id, patch) => orcamentosRepo.update(id as string, patch as never),
   'orcamentos.remove': (id) => orcamentosRepo.remove(id as string),
   'orcamentos.duplicate': (id) => orcamentosRepo.duplicate(id as string),
+  'orcamentos.numeracao': () => orcamentosRepo.numeracao(),
+  'orcamentos.definirProximoNumero': (n) => orcamentosRepo.definirProximoNumero(n as number),
+  'orcamentos.alterarNumero': (id, n) => orcamentosRepo.alterarNumero(id as string, n as number),
+
+  'anexos.imagem': (id) => anexosRepo.imagem(id as string),
+
+  'ia.get': () => configIARepo.get(),
+  'ia.save': (patch) => configIARepo.save(patch as never),
+  'ia.status': () => statusIA(),
+  'ia.sugerirObservacao': (orc) => sugerirObservacao(orc as never),
 
   'logo.selecionar': () => selecionarLogo(),
 

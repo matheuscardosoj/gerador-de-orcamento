@@ -6,7 +6,9 @@ import type {
   ServicoCatalogo,
   ObservacaoPadrao,
   FormaPagamentoPadrao,
-  Orcamento
+  Orcamento,
+  ConfigIA,
+  StatusIA
 } from './types'
 
 export interface CrudApi<T, C> {
@@ -16,7 +18,33 @@ export interface CrudApi<T, C> {
   remove(id: string): Promise<void>
 }
 
-export type NovoOrcamento = Omit<Orcamento, 'id' | 'numero' | 'criadoEm' | 'atualizadoEm'>
+/**
+ * `numero` é opcional: só vem preenchido quando o usuário digitou um número
+ * específico no editor. Sem ele, o main usa o próximo número livre.
+ */
+export type NovoOrcamento = Omit<Orcamento, 'id' | 'numero' | 'criadoEm' | 'atualizadoEm'> & {
+  numero?: number
+}
+
+/**
+ * Resultado de uma operação de numeração. Conflito de número é validação, não
+ * erro de programa — por isso volta como dado, com a mensagem pronta para exibir.
+ */
+export interface ResultadoNumeracao {
+  ok: boolean
+  erro?: string
+  /** Sugestão de número livre, quando o pedido está ocupado. */
+  proximoLivre?: number
+}
+
+export interface InfoNumeracao {
+  /** Número que o próximo orçamento receberá. */
+  proximoNumero: number
+  maiorEmUso: number
+  /** Menor número ainda não usado (útil para fechar buracos na sequência). */
+  menorLivre: number
+  totalOrcamentos: number
+}
 
 export interface DocumentoResultado {
   /** Caminho do arquivo salvo, ou null se o usuário cancelou. */
@@ -44,6 +72,26 @@ export interface AppApi {
     update(id: string, patch: Partial<Orcamento>): Promise<Orcamento | null>
     remove(id: string): Promise<void>
     duplicate(id: string): Promise<Orcamento | null>
+    /** Panorama da numeração, usado na aba Numeração das Configurações. */
+    numeracao(): Promise<InfoNumeracao>
+    /** Define o número que o próximo orçamento receberá. */
+    definirProximoNumero(numero: number): Promise<ResultadoNumeracao>
+    /** Troca o número de um orçamento existente. Nada muda se `ok` for false. */
+    alterarNumero(
+      id: string,
+      numero: number
+    ): Promise<ResultadoNumeracao & { orcamento?: Orcamento }>
+  }
+  anexos: {
+    /** Imagem em tamanho cheio (data URL), carregada sob demanda. */
+    imagem(id: string): Promise<string | null>
+  }
+  ia: {
+    get(): Promise<ConfigIA>
+    save(patch: Partial<ConfigIA>): Promise<ConfigIA>
+    status(): Promise<StatusIA>
+    /** Gera uma sugestão de anotação interna a partir do orçamento em edição. */
+    sugerirObservacao(orc: Orcamento): Promise<string>
   }
   logo: {
     /** Abre um seletor de imagem e retorna a logo como data URL. */

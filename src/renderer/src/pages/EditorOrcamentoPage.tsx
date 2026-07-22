@@ -32,6 +32,7 @@ import type {
 } from '@shared/types'
 import { ServicoCalculoModal } from '../components/ServicoCalculoModal'
 import { PreviaModal } from '../components/PreviaModal'
+import { AnexosCard } from '../components/AnexosCard'
 import { novoId, type ResultadoServico } from '../components/tipos'
 
 interface Dados {
@@ -50,6 +51,8 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [previaAberta, setPreviaAberta] = useState(false)
+  // Número com que o orçamento foi carregado: só mexemos na numeração se mudou.
+  const [numeroOriginal, setNumeroOriginal] = useState<number | null>(null)
 
   useEffect(() => {
     let vivo = true
@@ -68,10 +71,14 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
 
       if (orcamentoId) {
         const existente = await api.orcamentos.get(orcamentoId)
-        if (vivo && existente) setOrc(existente)
+        if (vivo && existente) {
+          setOrc(existente)
+          setNumeroOriginal(existente.numero)
+        }
       } else {
         const numero = await api.orcamentos.proximoNumero()
         if (!vivo) return
+        setNumeroOriginal(numero)
         setOrc({
           id: '',
           numero,
@@ -85,7 +92,9 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
           materiais: [],
           observacoes: observacoesPadrao.filter((o) => o.padrao).map((o) => ({ id: novoId(), texto: o.texto })),
           pagamentos: pagamentosPadrao.filter((p) => p.padrao).map((p) => ({ id: novoId(), texto: p.texto })),
+          anexos: [],
           prazoDias: null,
+          observacaoInterna: '',
           valorTotal: 0,
           status: 'rascunho',
           criadoEm: new Date().toISOString(),
@@ -118,17 +127,41 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
     setErro(null)
     try {
       const payload = { ...orc, valorTotal: total }
+      const numeroMudou = numeroOriginal !== null && orc.numero !== numeroOriginal
       let salvo: Orcamento | null
+
       if (orc.id) {
+        // A troca de número vem primeiro: se o número estiver em uso, nada é
+        // salvo e o usuário vê a mensagem com a sugestão de número livre.
+        if (numeroMudou) {
+          const r = await api.orcamentos.alterarNumero(orc.id, orc.numero)
+          if (!r.ok) {
+            setErro(r.erro ?? 'Não foi possível alterar o número do orçamento.')
+            return null
+          }
+        }
         salvo = await api.orcamentos.update(orc.id, payload)
       } else {
-        const { id: _id, numero: _n, criadoEm: _c, atualizadoEm: _a, ...novo } = payload
-        salvo = await api.orcamentos.create(novo)
+        const { id: _id, numero, criadoEm: _c, atualizadoEm: _a, ...novo } = payload
+        // Só pede um número específico se o usuário mexeu no campo; senão o
+        // main escolhe o próximo livre no momento da criação.
+        salvo = await api.orcamentos.create(numeroMudou ? { ...novo, numero } : novo)
       }
-      if (salvo) setOrc(salvo)
+
+      if (salvo) {
+        setOrc(salvo)
+        setNumeroOriginal(salvo.numero)
+        // Orçamento novo com número já ocupado: o main usa o próximo livre em
+        // vez de perder o que foi digitado — mas o usuário precisa saber disso.
+        if (!orc.id && numeroMudou && salvo.numero !== orc.numero) {
+          setErro(
+            `O número ${orc.numero} já estava em uso. O orçamento foi salvo com o número ${salvo.numero}.`
+          )
+        }
+      }
       return salvo
     } catch (e) {
-      setErro(String(e))
+      setErro(String(e).replace(/^Error:\s*/, ''))
       return null
     } finally {
       setSalvando(false)
@@ -189,6 +222,11 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
           sugestoes={dados.pagamentosPadrao.map((p) => p.texto)}
           onChange={(pagamentos) => set({ pagamentos })}
         />
+        <AnexosCard
+          anexos={orc.anexos ?? []}
+          itensServico={orc.itensServico}
+          onChange={(anexos) => set({ anexos })}
+        />
       </div>
       {previaAberta && (
         <PreviaModal orc={{ ...orc, valorTotal: total }} empresa={dados.empresa} onClose={() => setPreviaAberta(false)} />
@@ -211,8 +249,8 @@ function DadosGeraisCard({
     <Card className="p-6">
       <SectionTitle title="Dados gerais" />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Field label="Número" hint="Índice sequencial automático">
-          <Input value={`Nº ${orc.numero}`} readOnly className="bg-slate-100" />
+        <Field label="Número" hint="Sugerido automaticamente; pode ser ajustado">
+          <NumberField value={orc.numero} onChange={(v) => set({ numero: v })} min={1} step={1} />
         </Field>
         <Field label="Data">
           <Input
@@ -270,8 +308,60 @@ function DadosGeraisCard({
         <Field label="Introdução / apresentação" hint="Parágrafo opcional antes dos serviços" className="md:col-span-3">
           <Textarea value={orc.introducao ?? ''} onChange={(e) => set({ introducao: e.target.value })} />
         </Field>
+        <AnotacaoInterna orc={orc} set={set} />
       </div>
     </Card>
+  )
+}
+
+/**
+ * Anotação livre que identifica o orçamento na listagem (e alimenta a busca).
+ * Não sai no documento. O botão preenche uma sugestão com a IA local; o texto
+ * continua totalmente editável — ou pode ser escrito do zero, sem usar a IA.
+ */
+function AnotacaoInterna({
+  orc,
+  set
+}: {
+  orc: Orcamento
+  set: (p: Partial<Orcamento>) => void
+}): JSX.Element {
+  const [gerando, setGerando] = useState(false)
+  const [aviso, setAviso] = useState<string | null>(null)
+
+  const sugerir = async (): Promise<void> => {
+    setGerando(true)
+    setAviso(null)
+    try {
+      const texto = await api.ia.sugerirObservacao(orc)
+      if (texto) set({ observacaoInterna: texto })
+      else setAviso('A IA não retornou nenhum texto.')
+    } catch (e) {
+      setAviso(String(e).replace(/^Error:\s*/, ''))
+    } finally {
+      setGerando(false)
+    }
+  }
+
+  return (
+    <Field
+      label="Anotação interna"
+      hint="Aparece só na listagem de orçamentos e na busca — não sai no documento."
+      className="md:col-span-3"
+    >
+      {aviso && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{aviso}</p>}
+      <div className="flex items-start gap-2">
+        <Textarea
+          value={orc.observacaoInterna ?? ''}
+          onChange={(e) => set({ observacaoInterna: e.target.value })}
+          placeholder="Ex.: Cercamento da fazenda do Sr. João, 1.200 m, aguardando retorno."
+          className="min-h-[64px]"
+        />
+        <Button variant="outline" className="mt-0.5 shrink-0" onClick={sugerir} disabled={gerando}>
+          {gerando ? 'Gerando…' : 'Sugerir com IA'}
+        </Button>
+      </div>
+    </Field>
   )
 }
 

@@ -1,6 +1,6 @@
 // Mock em memória da AppApi, usado apenas quando a aplicação roda FORA do Electron
 // (ex.: preview no navegador durante o desenvolvimento). No app real, window.api existe.
-import type { AppApi } from '@shared/api'
+import type { AppApi, ResultadoNumeracao } from '@shared/api'
 import type {
   BancoDados,
   Cliente,
@@ -58,13 +58,36 @@ function estadoInicial(): BancoDados {
       { id: uid(), texto: 'Via transferência bancária no Banco do Brasil, agência: 0221-6, conta: 59088-6.', padrao: true }
     ],
     orcamentos: [],
-    seqOrcamento: 0
+    seqOrcamento: 0,
+    configIA: { modo: 'desligada', urlOllama: 'http://localhost:11434', modeloOllama: 'llama3.2:3b' }
   }
 }
 
 export function criarMockApi(): AppApi {
   const db = estadoInicial()
   const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v))
+
+  // Espelho simplificado das regras de numeração do main (ver repositories.ts).
+  const ocupado = (n: number, ignorarId?: string): Orcamento | undefined =>
+    db.orcamentos.find((o) => o.numero === n && o.id !== ignorarId)
+  const proximoLivre = (de: number): number => {
+    let n = Math.max(1, de)
+    while (ocupado(n)) n++
+    return n
+  }
+  const validar = (n: number, ignorarId?: string): ResultadoNumeracao | null => {
+    if (!Number.isInteger(n) || n < 1 || n > 999999) {
+      return { ok: false, erro: 'O número deve ser um inteiro entre 1 e 999999.' }
+    }
+    const dono = ocupado(n, ignorarId)
+    if (!dono) return null
+    const livre = proximoLivre(n + 1)
+    return {
+      ok: false,
+      erro: `O número ${n} já é do orçamento de ${dono.destinatario.replace(/,$/, '')}. O próximo número livre é ${livre}.`,
+      proximoLivre: livre
+    }
+  }
 
   function crud<T extends { id: string }>(colecao: () => T[], setColecao: (v: T[]) => void) {
     return {
@@ -130,13 +153,15 @@ export function criarMockApi(): AppApi {
         const o = db.orcamentos.find((x) => x.id === id)
         return o ? clone(o) : null
       },
-      proximoNumero: async () => db.seqOrcamento + 1,
+      proximoNumero: async () => proximoLivre(db.seqOrcamento + 1),
       create: async (dto) => {
-        db.seqOrcamento += 1
+        const pedido = (dto as { numero?: number }).numero
+        const numero = pedido && !ocupado(pedido) ? pedido : proximoLivre(db.seqOrcamento + 1)
+        db.seqOrcamento = Math.max(numero, db.seqOrcamento)
         const o: Orcamento = {
           ...(dto as object as Orcamento),
           id: uid(),
-          numero: db.seqOrcamento,
+          numero,
           criadoEm: new Date().toISOString(),
           atualizadoEm: new Date().toISOString()
         }
@@ -150,20 +175,61 @@ export function criarMockApi(): AppApi {
         return clone(o)
       },
       remove: async (id) => {
+        const alvo = db.orcamentos.find((x) => x.id === id)
         db.orcamentos = db.orcamentos.filter((x) => x.id !== id)
+        if (alvo && alvo.numero === db.seqOrcamento) {
+          db.seqOrcamento = db.orcamentos.reduce((m, o) => Math.max(m, o.numero), 0)
+        }
       },
       duplicate: async (id) => {
         const o = db.orcamentos.find((x) => x.id === id)
         if (!o) return null
-        db.seqOrcamento += 1
-        const c: Orcamento = {
-          ...clone(o),
-          id: uid(),
-          numero: db.seqOrcamento,
-          status: 'rascunho'
-        }
+        const numero = proximoLivre(db.seqOrcamento + 1)
+        db.seqOrcamento = Math.max(numero, db.seqOrcamento)
+        const c: Orcamento = { ...clone(o), id: uid(), numero, status: 'rascunho' }
         db.orcamentos.push(c)
         return clone(c)
+      },
+      numeracao: async () => ({
+        proximoNumero: proximoLivre(db.seqOrcamento + 1),
+        maiorEmUso: db.orcamentos.reduce((m, o) => Math.max(m, o.numero), 0),
+        menorLivre: proximoLivre(1),
+        totalOrcamentos: db.orcamentos.length
+      }),
+      definirProximoNumero: async (n) => {
+        const erro = validar(n)
+        if (erro) return erro
+        db.seqOrcamento = n - 1
+        return { ok: true }
+      },
+      alterarNumero: async (id, n) => {
+        const o = db.orcamentos.find((x) => x.id === id)
+        if (!o) return { ok: false, erro: 'Orçamento não encontrado.' }
+        if (o.numero === n) return { ok: true, orcamento: clone(o) }
+        const erro = validar(n, id)
+        if (erro) return erro
+        o.numero = n
+        db.seqOrcamento = Math.max(n, db.seqOrcamento)
+        return { ok: true, orcamento: clone(o) }
+      }
+    },
+    anexos: {
+      // Fora do Electron não há BLOB: a miniatura já embutida no anexo basta.
+      imagem: async () => null
+    },
+    ia: {
+      get: async () => clone(db.configIA),
+      save: async (patch) => {
+        db.configIA = { ...db.configIA, ...patch }
+        return clone(db.configIA)
+      },
+      status: async () => ({
+        modo: db.configIA.modo,
+        disponivel: false,
+        detalhe: 'Sem IA local no preview fora do Electron.'
+      }),
+      sugerirObservacao: async () => {
+        throw new Error('Sugestão por IA indisponível no preview fora do Electron.')
       }
     },
     logo: {

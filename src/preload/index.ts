@@ -34,7 +34,19 @@ const api: AppApi = {
     create: (dto) => invoke('orcamentos.create', dto) as never,
     update: (id, patch) => invoke('orcamentos.update', id, patch) as never,
     remove: (id) => invoke('orcamentos.remove', id) as never,
-    duplicate: (id) => invoke('orcamentos.duplicate', id) as never
+    duplicate: (id) => invoke('orcamentos.duplicate', id) as never,
+    numeracao: () => invoke('orcamentos.numeracao') as never,
+    definirProximoNumero: (n) => invoke('orcamentos.definirProximoNumero', n) as never,
+    alterarNumero: (id, n) => invoke('orcamentos.alterarNumero', id, n) as never
+  },
+  anexos: {
+    imagem: (id) => invoke('anexos.imagem', id) as never
+  },
+  ia: {
+    get: () => invoke('ia.get') as never,
+    save: (patch) => invoke('ia.save', patch) as never,
+    status: () => invoke('ia.status') as never,
+    sugerirObservacao: (orc) => invoke('ia.sugerirObservacao', orc) as never
   },
   logo: {
     selecionar: () => invoke('logo.selecionar') as never

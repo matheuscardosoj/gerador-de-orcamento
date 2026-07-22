@@ -1,6 +1,6 @@
 // Gera o HTML do orçamento no layout das propostas reais da VS Prestadora.
 // Usado tanto na prévia (renderer) quanto na geração de PDF/DOCX (main).
-import type { EmpresaConfig, Orcamento } from '../types'
+import type { AnexoOrcamento, EmpresaConfig, Orcamento } from '../types'
 import { formatMoeda, formatDataExtenso } from '../format'
 import { valorPorExtenso } from '../extenso'
 
@@ -69,9 +69,82 @@ function lista(itens: string[]): string {
   return lis ? `<ul class="lista">${lis}</ul>` : ''
 }
 
+/**
+ * Rótulo da referência ao serviço vinculado ("Referente ao Item 2 — …").
+ * Compartilhado com o gerador de DOCX para os dois documentos ficarem iguais.
+ */
+export function referenciaDoAnexo(orc: Orcamento, itemServicoId?: string | null): string | null {
+  if (!itemServicoId) return null
+  const idx = orc.itensServico.findIndex((i) => i.id === itemServicoId)
+  if (idx < 0) return null
+  const descricao = orc.itensServico[idx].descricao.replace(/\s+/g, ' ').trim()
+  const resumo = descricao.length > 80 ? descricao.slice(0, 80) + '…' : descricao
+  return `Referente ao Item ${idx + 1} — ${resumo}`
+}
+
+/** Imagem a exibir: a cheia quando disponível (PDF), senão a miniatura (prévia). */
+function fonteDaImagem(a: AnexoOrcamento): string {
+  return a.imagemDataUrl || a.miniaturaDataUrl || ''
+}
+
+/** Seção de anexos: começa sempre numa página nova e só existe se houver fotos. */
+function secaoAnexos(orc: Orcamento): string {
+  const anexos = orc.anexos ?? []
+  if (anexos.length === 0) return ''
+  const figuras = anexos
+    .map((a) => {
+      const ref = referenciaDoAnexo(orc, a.itemServicoId)
+      const src = fonteDaImagem(a)
+      return `<figure class="anexo">
+        ${a.titulo ? `<p class="anexo-titulo">${esc(a.titulo)}</p>` : ''}
+        ${ref ? `<p class="anexo-ref">${esc(ref)}</p>` : ''}
+        ${src ? `<img class="anexo-img" src="${src}" alt="${esc(a.titulo)}">` : ''}
+        ${a.descricao ? `<figcaption class="anexo-desc">${nl2br(a.descricao)}</figcaption>` : ''}
+      </figure>`
+    })
+    .join('')
+  return `<section class="anexos"><h2 class="anexos-titulo">Anexos</h2>${figuras}</section>`
+}
+
 export interface OpcoesDocumento {
   fragmento?: boolean
+  /**
+   * Injeta o script que gruda a assinatura no rodapé da última página da
+   * proposta (ver `SCRIPT_ASSINATURA`). Usado só na geração do PDF.
+   */
+  ajustarAssinatura?: boolean
 }
+
+/** Altura útil da página A4 com as margens de 15 mm de cima e de baixo. */
+const ALTURA_UTIL_MM = 297 - 15 * 2
+
+/**
+ * `margin-top: auto` só encosta a assinatura no rodapé enquanto a proposta cabe
+ * em uma página; passando disso não há espaço livre para distribuir. Este script
+ * mede em que página a assinatura caiu e completa a distância que falta até o pé
+ * daquela página — deixando o PDF igual ao DOCX, onde a assinatura é um frame
+ * ancorado à margem inferior.
+ */
+const SCRIPT_ASSINATURA = `
+addEventListener('load', function () {
+  var rodape = document.querySelector('.rodape')
+  var proposta = document.querySelector('.proposta')
+  if (!rodape || !proposta) return
+
+  var regua = document.createElement('div')
+  regua.style.cssText = 'position:absolute;visibility:hidden;height:${ALTURA_UTIL_MM}mm'
+  document.body.appendChild(regua)
+  var alturaPagina = regua.offsetHeight
+  regua.remove()
+  if (!alturaPagina) return
+
+  var topoConteudo = proposta.getBoundingClientRect().top + scrollY
+  var topoRodape = rodape.getBoundingClientRect().top + scrollY - topoConteudo
+  var pagina = Math.floor(topoRodape / alturaPagina)
+  // 1px de folga: arredondamento não pode empurrar o bloco para a página seguinte.
+  var alvo = (pagina + 1) * alturaPagina - rodape.offsetHeight - 1
+  if (alvo > topoRodape) rodape.style.marginTop = alvo - topoRodape + 'px'
+})`
 
 export function gerarHtmlOrcamento(
   orc: Orcamento,
@@ -91,7 +164,7 @@ export function gerarHtmlOrcamento(
   const observacoesHtml = lista(orc.observacoes.map((o) => o.texto))
   const pagamentosHtml = lista(orc.pagamentos.map((p) => p.texto))
 
-  const corpo = `
+  const propostaHtml = `
     <header class="cabecalho">
       ${logo}
       <div class="empresa">
@@ -127,19 +200,28 @@ export function gerarHtmlOrcamento(
     ${materiaisHtml ? bloco('Materiais:', materiaisHtml) : ''}
     ${observacoesHtml ? bloco('Observações:', observacoesHtml) : ''}
     ${pagamentosHtml ? bloco('Forma de Pagamento:', pagamentosHtml) : ''}
+  `
 
-    <div class="rodape">
-      <div class="rodape-linha"></div>
-      <p class="rodape-nome">${esc(empresa.textoAssinatura || empresa.razaoSocial)}</p>
+  // A proposta fecha na assinatura; os anexos vêm depois, em página nova.
+  const corpo = `
+    <div class="proposta">
+      ${propostaHtml}
+      <div class="rodape">
+        <div class="rodape-linha"></div>
+        <p class="rodape-nome">${esc(empresa.textoAssinatura || empresa.razaoSocial)}</p>
+      </div>
     </div>
+    ${secaoAnexos(orc)}
   `
 
   const estilo = `
     * { box-sizing: border-box; }
     html, body { height: 100%; }
     body { margin: 0; font-family: Calibri, 'Segoe UI', Arial, sans-serif; color: #000; font-size: 11.5pt; line-height: 1.4; }
-    .pagina { padding: 15mm 14mm; min-height: 100vh; display: flex; flex-direction: column; }
-    .moldura { flex: 1 0 auto; display: flex; flex-direction: column; }
+    .pagina { padding: 15mm 14mm; }
+    /* Altura útil em mm (e não 100vh): fora da impressão, o vh vale a altura do
+       iframe da prévia, o que fazia a prévia mentir sobre onde a assinatura cai. */
+    .proposta { min-height: ${ALTURA_UTIL_MM}mm; display: flex; flex-direction: column; }
     .cabecalho { display: flex; align-items: flex-start; gap: 16px; }
     .logo { width: 108px; height: 108px; object-fit: contain; flex-shrink: 0; }
     .logo-vazia { display: flex; align-items: center; justify-content: center; border: 1px dashed #bbb; color: #999; font-weight: 700; font-size: 24px; border-radius: 8px; }
@@ -165,6 +247,15 @@ export function gerarHtmlOrcamento(
     .secao-titulo { font-weight: 700; margin: 0 0 1mm; }
     .lista { margin: 0; padding-left: 22px; }
     .lista li { margin: 0 0 1mm; text-align: justify; }
+    .anexos { page-break-before: always; margin: 0 0 4mm; }
+    .anexos-titulo { font-size: 14pt; font-weight: 700; text-align: center; margin: 0 0 6mm; }
+    .anexo { margin: 0 0 8mm; padding: 0; text-align: center; page-break-inside: avoid; }
+    .anexo-titulo { font-weight: 700; margin: 0 0 1mm; }
+    .anexo-ref { font-style: italic; color: #555; font-size: 9.5pt; margin: 0 0 2mm; }
+    /* Mesmos limites usados no DOCX (dimensoesAnexo), para os dois formatos
+       quebrarem as páginas nos mesmos pontos. */
+    .anexo-img { max-width: 150mm; max-height: 100mm; object-fit: contain; border: 1px solid #ccc; }
+    .anexo-desc { margin: 2mm 0 0; font-size: 10.5pt; text-align: center; }
     .rodape { margin-top: auto; padding-top: 12mm; text-align: center; page-break-inside: avoid; }
     .rodape-linha { border-top: 1px solid #000; width: 55%; margin: 0 auto 3px; }
     .rodape-nome { margin: 0; }
@@ -174,100 +265,11 @@ export function gerarHtmlOrcamento(
     return `<style>${estilo}</style><div class="pagina">${corpo}</div>`
   }
 
+  // O script não vai na prévia: o <iframe srcDoc> herda a CSP do renderer
+  // (`script-src 'self'`) e um script inline seria bloqueado ali.
+  const script = opts.ajustarAssinatura ? `<script>${SCRIPT_ASSINATURA}</script>` : ''
+
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Proposta ${esc(
     String(orc.numero)
-  )}</title><style>${estilo}</style></head><body><div class="pagina">${corpo}</div></body></html>`
-}
-
-// ---------------------------------------------------------------------------
-// Versão para DOCX: o html-to-docx não interpreta CSS de <style> nem flexbox,
-// então usamos ESTILOS INLINE e uma TABELA no cabeçalho para reproduzir o layout.
-// ---------------------------------------------------------------------------
-
-function servicosCartaDocx(orc: Orcamento): string {
-  return orc.itensServico
-    .map((i, idx) => {
-      const partes = [`<b>Item ${idx + 1} -</b> ${nl2br(i.descricao)}`]
-      if (i.quantidade > 1 && i.valorUnitario > 0) {
-        partes.push(`Valor por ${esc(i.unidade)}: ${formatMoeda(i.valorUnitario)}`)
-      }
-      partes.push(`Valor do item: ${formatMoeda(i.valorTotal)}`)
-      return `<p style="text-align:justify; margin:0 0 8px 0;">${partes.join(' / ')}</p>`
-    })
-    .join('')
-}
-
-function servicosTabelaDocx(orc: Orcamento): string {
-  const th = 'border:1px solid #666; padding:5px 7px; background-color:#eeeeee; font-weight:bold;'
-  const td = 'border:1px solid #666; padding:5px 7px;'
-  const linhas = orc.itensServico
-    .map(
-      (i, idx) => `<tr>
-        <td style="${td} text-align:center;">${idx + 1}</td>
-        <td style="${td}">${nl2br(i.descricao)}</td>
-        <td style="${td}">${esc(i.unidade)}</td>
-        <td style="${td} text-align:right;">${i.quantidade}</td>
-        <td style="${td} text-align:right;">${formatMoeda(i.valorUnitario)}</td>
-        <td style="${td} text-align:right;">${formatMoeda(i.valorTotal)}</td>
-      </tr>`
-    )
-    .join('')
-  return `<table style="width:100%; border-collapse:collapse; margin:0 0 10px 0;">
-    <tr>
-      <td style="${th} text-align:center;">Item</td><td style="${th}">Especificação</td>
-      <td style="${th}">Unid.</td><td style="${th} text-align:right;">Qtd</td>
-      <td style="${th} text-align:right;">Valor unit.</td><td style="${th} text-align:right;">Total</td>
-    </tr>
-    ${linhas}
-  </table>`
-}
-
-function listaDocx(titulo: string, itens: string[]): string {
-  const lis = itens.filter((t) => t && t.trim()).map((t) => `<li>${nl2br(t)}</li>`).join('')
-  if (!lis) return ''
-  return `<p style="font-weight:bold; margin:12px 0 2px 0;">${esc(titulo)}</p><ul style="margin:0;">${lis}</ul>`
-}
-
-export function gerarHtmlParaDocx(orc: Orcamento, empresa: EmpresaConfig): string {
-  const total = orc.itensServico.reduce((s, i) => s + (i.valorTotal || 0), 0)
-  const cidade = extrairCidade(empresa.endereco)
-  const logo = empresa.logoDataUrl
-    ? `<img src="${empresa.logoDataUrl}" width="96" height="96" alt="logo" />`
-    : ''
-
-  const servicos = orc.formato === 'tabela' ? servicosTabelaDocx(orc) : servicosCartaDocx(orc)
-  const materiais = listaDocx('Materiais:', orc.materiais.map((m) => `${m.quantidade} ${m.unidade} — ${m.especificacao}`))
-  const observacoes = listaDocx('Observações:', orc.observacoes.map((o) => o.texto))
-  const pagamentos = listaDocx('Forma de Pagamento:', orc.pagamentos.map((p) => p.texto))
-
-  const cel = 'vertical-align:middle; border-bottom:2px solid #000000; padding-bottom:6px;'
-
-  const corpo = `
-    <table style="width:100%; border-collapse:collapse;">
-      <tr>
-        <td style="${cel} width:120px; text-align:center;">${logo}</td>
-        <td style="${cel} text-align:center;">
-          <p style="font-weight:bold; font-size:13pt; margin:0;">${esc(empresa.nome)}</p>
-          <p style="margin:0;">${esc(empresa.endereco)}</p>
-          <p style="margin:0;">Fone: ${esc(empresa.telefones)}</p>
-          ${empresa.site ? `<p style="margin:0;">Site: ${esc(empresa.site)}</p>` : ''}
-          <p style="margin:0;">e-mail: ${esc(empresa.email)}</p>
-          <p style="margin:0;">CNPJ: ${esc(empresa.cnpj)}</p>
-        </td>
-      </tr>
-    </table>
-    <p style="margin:18px 0 0 0;">${esc(cidade)}, ${formatDataExtenso(orc.data)}</p>
-    ${orc.destinatario ? `<p style="margin:0 0 12px 0;">${nl2br(orc.destinatario)}</p>` : ''}
-    <h1 style="text-align:center; font-size:16pt; margin:10px 0 16px 0;">${esc(orc.titulo || 'Proposta de Serviço')}</h1>
-    ${orc.introducao ? `<p style="text-align:justify; margin:0 0 10px 0;">${nl2br(orc.introducao)}</p>` : ''}
-    ${servicos}
-    <p style="margin:12px 0;"><b>Valor total da proposta:</b> <span style="background-color:#fff275;">${formatMoeda(total)} (${valorPorExtenso(total)}).</span></p>
-    ${orc.prazoDias ? `<p style="margin:0 0 10px 0;">Estimativa de dias para conclusão do serviço: <b>${orc.prazoDias} dias</b>.</p>` : ''}
-    ${materiais}
-    ${observacoes}
-    ${pagamentos}
-    <p style="text-align:center; margin-top:56px;">_____________________________________<br/>${esc(empresa.textoAssinatura || empresa.razaoSocial)}</p>
-  `
-
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"></head><body style="font-family: Calibri, Arial, sans-serif; font-size: 11pt; color:#000000;">${corpo}</body></html>`
+  )}</title><style>${estilo}</style></head><body><div class="pagina">${corpo}</div>${script}</body></html>`
 }
