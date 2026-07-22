@@ -12,7 +12,7 @@ function createWindow(): void {
     minHeight: 680,
     show: false,
     autoHideMenuBar: true,
-    title: 'Gerador de Orçamentos — VS Prestadora',
+    title: 'Gerador de Orçamentos',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -38,7 +38,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  electronApp.setAppUserModelId('br.com.vsprestadora.gerador-orcamento')
+  electronApp.setAppUserModelId('com.gerador.orcamentos')
 
   // Inicializa o banco (cria arquivo e seeds na primeira execução) e registra o IPC.
   getDb()

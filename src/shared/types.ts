@@ -18,6 +18,8 @@ export interface EmpresaConfig {
   textoAssinatura: string
   /** Cor da faixa do rodapé (verde-petróleo por padrão). */
   corFaixaRodape: string
+  /** Qual nome exibir no menu do aplicativo: nome fantasia ou razão social. */
+  nomeExibicao: 'nome' | 'razaoSocial'
 }
 
 /** Parâmetros financeiros globais (singleton). Estende os encargos com os padrões de preço. */

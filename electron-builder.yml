@@ -1,8 +1,9 @@
-appId: br.com.vsprestadora.gerador-orcamento
-productName: Gerador de Orçamentos VS
+appId: com.gerador.orcamentos
+productName: Gerador de Orçamentos
 directories:
   output: release
   buildResources: build
+afterPack: ./scripts/afterPack.cjs
 files:
   - '!**/.vscode/*'
   - '!src/*'

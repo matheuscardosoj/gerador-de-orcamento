@@ -1,5 +1,7 @@
 import { NavProvider, useNav, type Rota } from './lib/nav'
 import { cn } from './ui/primitives'
+import { api } from './lib/api'
+import { useAsync } from './lib/hooks'
 import { HistoricoPage } from './pages/HistoricoPage'
 import { CadastrosPage } from './pages/CadastrosPage'
 import { ConfiguracoesPage } from './pages/ConfiguracoesPage'
@@ -13,12 +15,21 @@ const itens: Array<{ nome: Rota['nome']; label: string; icon: string }> = [
 
 function Sidebar(): JSX.Element {
   const { rota, navegar } = useNav()
+  // Recarrega o nome da empresa ao trocar de tela (reflete edições nas Configurações).
+  const { data: empresa } = useAsync(() => api.empresa.get(), [rota.nome])
+  const nomeEmpresa = empresa
+    ? empresa.nomeExibicao === 'razaoSocial'
+      ? empresa.razaoSocial
+      : empresa.nome
+    : ''
   return (
     <aside className="flex w-60 flex-col border-r border-slate-200 bg-white">
       <div className="border-b border-slate-200 px-5 py-5">
-        <div className="inline-flex items-center rounded-full bg-brand-teal px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
-          VS Prestadora
-        </div>
+        {nomeEmpresa && (
+          <div className="inline-flex max-w-full items-center truncate rounded-full bg-brand-teal px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+            {nomeEmpresa}
+          </div>
+        )}
         <h1 className="mt-2 text-sm font-semibold leading-tight text-slate-700">
           Gerador de Orçamentos
         </h1>

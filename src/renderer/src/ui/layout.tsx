@@ -49,7 +49,7 @@ export function Tabs<T extends string>({
   onChange: (id: T) => void
 }): JSX.Element {
   return (
-    <div className="mb-5 flex gap-1 overflow-x-auto border-b border-slate-200">
+    <div className="mb-5 flex flex-wrap gap-1 border-b border-slate-200">
       {tabs.map((t) => (
         <button
           key={t.id}

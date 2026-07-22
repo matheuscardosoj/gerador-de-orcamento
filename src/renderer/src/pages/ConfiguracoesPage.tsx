@@ -94,6 +94,16 @@ function SecaoEmpresa(): JSX.Element {
           <Field label="Razão social">
             <Input value={form.razaoSocial} onChange={(e) => set({ razaoSocial: e.target.value })} />
           </Field>
+          <Field label="Nome exibido no menu do app" hint="Escolha qual nome aparece na barra lateral">
+            <select
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/30"
+              value={form.nomeExibicao}
+              onChange={(e) => set({ nomeExibicao: e.target.value as EmpresaConfig['nomeExibicao'] })}
+            >
+              <option value="nome">Nome fantasia</option>
+              <option value="razaoSocial">Razão social</option>
+            </select>
+          </Field>
           <Field label="CNPJ">
             <Input value={form.cnpj} onChange={(e) => set({ cnpj: e.target.value })} />
           </Field>

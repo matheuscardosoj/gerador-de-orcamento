@@ -19,7 +19,8 @@ const empresa: EmpresaConfig = {
   cnpj: '04.871.989/0001-60',
   logoDataUrl: LOGO_VS_DATAURL,
   textoAssinatura: 'V S DE JESUS',
-  corFaixaRodape: '#0f6d6b'
+  corFaixaRodape: '#0f6d6b',
+  nomeExibicao: 'nome'
 }
 
 // Percentuais e custos padrão (aproximações de mercado, TODOS editáveis nas Configurações).

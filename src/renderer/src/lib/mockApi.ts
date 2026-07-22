@@ -24,7 +24,8 @@ function estadoInicial(): BancoDados {
       cnpj: '04.871.989/0001-60',
       logoDataUrl: null,
       textoAssinatura: 'V S DE JESUS',
-      corFaixaRodape: '#0f6d6b'
+      corFaixaRodape: '#0f6d6b',
+      nomeExibicao: 'nome'
     },
     parametros: {
       percentualFerias: 11.11,
