@@ -130,4 +130,6 @@ export interface BancoDados {
   observacoesPadrao: ObservacaoPadrao[]
   pagamentosPadrao: FormaPagamentoPadrao[]
   orcamentos: Orcamento[]
+  /** Contador sequencial persistente (auto-increment): nunca reutiliza números. */
+  seqOrcamento: number
 }

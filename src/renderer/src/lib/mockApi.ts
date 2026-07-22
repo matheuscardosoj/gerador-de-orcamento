@@ -57,7 +57,8 @@ function estadoInicial(): BancoDados {
     pagamentosPadrao: [
       { id: uid(), texto: 'Via transferência bancária no Banco do Brasil, agência: 0221-6, conta: 59088-6.', padrao: true }
     ],
-    orcamentos: []
+    orcamentos: [],
+    seqOrcamento: 0
   }
 }
 
@@ -129,12 +130,13 @@ export function criarMockApi(): AppApi {
         const o = db.orcamentos.find((x) => x.id === id)
         return o ? clone(o) : null
       },
-      proximoNumero: async () => db.orcamentos.reduce((m, o) => Math.max(m, o.numero || 0), 0) + 1,
+      proximoNumero: async () => db.seqOrcamento + 1,
       create: async (dto) => {
+        db.seqOrcamento += 1
         const o: Orcamento = {
           ...(dto as object as Orcamento),
           id: uid(),
-          numero: db.orcamentos.reduce((m, x) => Math.max(m, x.numero || 0), 0) + 1,
+          numero: db.seqOrcamento,
           criadoEm: new Date().toISOString(),
           atualizadoEm: new Date().toISOString()
         }
@@ -153,10 +155,11 @@ export function criarMockApi(): AppApi {
       duplicate: async (id) => {
         const o = db.orcamentos.find((x) => x.id === id)
         if (!o) return null
+        db.seqOrcamento += 1
         const c: Orcamento = {
           ...clone(o),
           id: uid(),
-          numero: db.orcamentos.reduce((m, x) => Math.max(m, x.numero || 0), 0) + 1,
+          numero: db.seqOrcamento,
           status: 'rascunho'
         }
         db.orcamentos.push(c)

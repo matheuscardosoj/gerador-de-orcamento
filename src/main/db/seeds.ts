@@ -171,6 +171,7 @@ export function bancoInicial(): BancoDados {
     servicos,
     observacoesPadrao,
     pagamentosPadrao,
-    orcamentos: []
+    orcamentos: [],
+    seqOrcamento: 0
   }
 }

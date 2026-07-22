@@ -122,21 +122,18 @@ export const pagamentosRepo = {
 }
 
 // -------------------------------------------------------------- Orçamentos
-/** Próximo índice = maior número existente + 1 (começa em 1). */
-function proximoIndice(orcamentos: Orcamento[]): number {
-  return orcamentos.reduce((max, o) => Math.max(max, o.numero || 0), 0) + 1
-}
-
 export const orcamentosRepo = {
   list: (): Orcamento[] =>
     [...getDb().orcamentos].sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)),
   get: (id: string): Orcamento | null => getDb().orcamentos.find((x) => x.id === id) ?? null,
-  proximoNumero: (): number => proximoIndice(getDb().orcamentos),
+  // Prévia do próximo número (não consome o contador).
+  proximoNumero: (): number => getDb().seqOrcamento + 1,
   create: (dto: Omit<Orcamento, 'id' | 'numero' | 'criadoEm' | 'atualizadoEm'>): Orcamento =>
     mutate((db) => {
+      db.seqOrcamento += 1
       const orc: Orcamento = {
         id: randomUUID(),
-        numero: proximoIndice(db.orcamentos),
+        numero: db.seqOrcamento,
         criadoEm: nowIso(),
         atualizadoEm: nowIso(),
         ...dto
@@ -159,10 +156,11 @@ export const orcamentosRepo = {
     mutate((db) => {
       const original = db.orcamentos.find((x) => x.id === id)
       if (!original) return null
+      db.seqOrcamento += 1
       const copia: Orcamento = {
         ...structuredClone(original),
         id: randomUUID(),
-        numero: proximoIndice(db.orcamentos),
+        numero: db.seqOrcamento,
         status: 'rascunho',
         criadoEm: nowIso(),
         atualizadoEm: nowIso()

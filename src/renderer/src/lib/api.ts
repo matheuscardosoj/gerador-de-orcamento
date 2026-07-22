@@ -9,6 +9,6 @@ import { criarMockApi } from './mockApi'
 export const api: AppApi = window.api ?? criarMockApi()
 
 // Exposto apenas em desenvolvimento para depuração no console do navegador.
-if (import.meta.env?.DEV) {
+if ((import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
   ;(window as unknown as { __api: AppApi }).__api = api
 }
