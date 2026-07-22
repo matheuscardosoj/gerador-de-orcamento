@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Icone } from '../ui/primitives'
 import { api } from '../lib/api'
 import { useAsync } from '../lib/hooks'
 import { useNav } from '../lib/nav'
@@ -215,7 +216,7 @@ function LinhaOrcamento({
               }
             }}
           >
-            🗑
+            <Icone>🗑</Icone>
           </Button>
         </div>
       </td>

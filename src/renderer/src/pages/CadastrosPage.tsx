@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Icone } from '../ui/primitives'
 import { api } from '../lib/api'
 import { useAsync } from '../lib/hooks'
 import { PageShell, Tabs } from '../ui/layout'
@@ -76,7 +77,7 @@ function SecaoClientes(): JSX.Element {
                   }
                 }}
               >
-                🗑
+                <Icone>🗑</Icone>
               </Button>
             </div>
           </div>
@@ -209,7 +210,7 @@ function SecaoServicos(): JSX.Element {
                   }
                 }}
               >
-                🗑
+                <Icone>🗑</Icone>
               </Button>
             </div>
           </div>

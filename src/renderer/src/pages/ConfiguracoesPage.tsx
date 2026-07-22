@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Icone } from '../ui/primitives'
 import { api } from '../lib/api'
 import { useAsync } from '../lib/hooks'
 import { PageShell, Tabs } from '../ui/layout'
@@ -376,7 +377,7 @@ function ItemObservacao({ obs, onChange }: { obs: ObservacaoPadrao; onChange: ()
             onChange()
           }}
         >
-          🗑
+          <Icone>🗑</Icone>
         </Button>
       </div>
     </div>
@@ -474,7 +475,7 @@ function ItemPagamento({
             onChange()
           }}
         >
-          🗑
+          <Icone>🗑</Icone>
         </Button>
       </div>
     </div>

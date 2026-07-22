@@ -1,5 +1,5 @@
 import { NavProvider, useNav, type Rota } from './lib/nav'
-import { cn } from './ui/primitives'
+import { cn, Icone } from './ui/primitives'
 import { api } from './lib/api'
 import { useAsync } from './lib/hooks'
 import { HistoricoPage } from './pages/HistoricoPage'
@@ -47,7 +47,7 @@ function Sidebar(): JSX.Element {
                 ativo ? 'bg-brand-teal/10 text-brand-tealDark' : 'text-slate-600 hover:bg-slate-100'
               )}
             >
-              <span aria-hidden>{item.icon}</span>
+              <Icone>{item.icon}</Icone>
               {item.label}
             </button>
           )

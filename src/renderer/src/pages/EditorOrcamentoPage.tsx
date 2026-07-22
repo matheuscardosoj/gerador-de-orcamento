@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Icone } from '../ui/primitives'
 import { api } from '../lib/api'
 import { useNav } from '../lib/nav'
 import { PageShell } from '../ui/layout'
@@ -550,7 +551,7 @@ function MateriaisCard({
                 placeholder="Especificação do material"
               />
               <Button variant="ghost" size="sm" className="text-slate-400" onClick={() => rem(m.id)}>
-                ✕
+                <Icone>✕</Icone>
               </Button>
             </div>
           ))}
@@ -602,7 +603,7 @@ function TextosCard({
               className="min-h-[52px]"
             />
             <Button variant="ghost" size="sm" className="mt-1 shrink-0 text-slate-400" onClick={() => rem(i.id)}>
-              ✕
+              <Icone>✕</Icone>
             </Button>
           </div>
         ))}

@@ -11,6 +11,31 @@ export function cn(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(' ')
 }
 
+// ------------------------------------------------------------------- Ícone
+/**
+ * Ícone padronizado da interface. Mantém todos os ícones no mesmo tamanho
+ * e com caixa fixa, para alinhamento consistente entre telas.
+ */
+export function Icone({
+  children,
+  className
+}: {
+  children: ReactNode
+  className?: string
+}): JSX.Element {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'inline-flex h-6 w-6 shrink-0 items-center justify-center text-[19px] leading-none',
+        className
+      )}
+    >
+      {children}
+    </span>
+  )
+}
+
 // ------------------------------------------------------------------ Button
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline'
 type ButtonSize = 'sm' | 'md'
@@ -249,7 +274,7 @@ export function Modal({
               className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
               aria-label="Fechar"
             >
-              ✕
+              <Icone>✕</Icone>
             </button>
           </div>
         )}

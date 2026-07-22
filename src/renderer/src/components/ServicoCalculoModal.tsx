@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Icone } from '../ui/primitives'
 import { calcularCustoServico, criarEntradaCalculo } from '@shared/calculo/engine'
 import type { EntradaCalculo, ModoAplicacao, ParametrosFinanceiros } from '@shared/types'
 import { formatMoeda } from '@shared/format'
@@ -87,7 +88,7 @@ export function ServicoCalculoModal({
         <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
           <h3 className="text-base font-semibold text-slate-800">Calcular custo do serviço</h3>
           <button onClick={onCancel} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100" aria-label="Fechar">
-            ✕
+            <Icone>✕</Icone>
           </button>
         </div>
 
@@ -364,7 +365,7 @@ function FerramentasBloco({ e, set }: BlocoProps): JSX.Element {
             <div className="flex items-center gap-1">
               <ModoSelect value={f.modo} onChange={(m) => upd(f.id, { modo: m })} />
               <Button size="sm" variant="ghost" onClick={() => rem(f.id)} className="text-slate-400">
-                ✕
+                <Icone>✕</Icone>
               </Button>
             </div>
           </div>
@@ -445,7 +446,7 @@ function AvulsosBloco({ e, set }: BlocoProps): JSX.Element {
             <div className="flex items-center gap-1">
               <ModoSelect value={a.modo} onChange={(m) => upd(a.id, { modo: m })} />
               <Button size="sm" variant="ghost" onClick={() => rem(a.id)} className={cn('text-slate-400')}>
-                ✕
+                <Icone>✕</Icone>
               </Button>
             </div>
           </div>
