@@ -63,6 +63,12 @@ o app tenta o Ollama automaticamente.
 
 ## Status
 
+**Versão 1.1.0** — custos flexíveis no cálculo do serviço: alimentação,
+combustível/deslocamento e estadia viraram listas (com descrição por item),
+a estadia aceita aluguel de imóvel por valor mensal × meses, e o vínculo CLT
+ficou independente da forma de pagamento (diária, valor fechado ou mensal),
+com os encargos incidindo sobre o salário registrado na carteira.
+
 **Versão 1.0.0** — primeira versão completa: cálculo de custo, histórico com busca,
 anexos com fotos, anotação por IA local, exportação PDF/DOCX e instalador
 autossuficiente.
