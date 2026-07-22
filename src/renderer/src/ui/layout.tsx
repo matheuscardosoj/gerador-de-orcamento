@@ -49,13 +49,13 @@ export function Tabs<T extends string>({
   onChange: (id: T) => void
 }): JSX.Element {
   return (
-    <div className="mb-5 flex gap-1 border-b border-slate-200">
+    <div className="mb-5 flex gap-1 overflow-x-auto border-b border-slate-200">
       {tabs.map((t) => (
         <button
           key={t.id}
           onClick={() => onChange(t.id)}
           className={cn(
-            '-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
+            '-mb-px whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
             atual === t.id
               ? 'border-brand-teal text-brand-tealDark'
               : 'border-transparent text-slate-500 hover:text-slate-700'
