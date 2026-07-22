@@ -4,38 +4,56 @@
 /** Modo de aplicação de um custo dentro do serviço. */
 export type ModoAplicacao = 'cheio' | 'diario'
 
-/** Regime de pagamento de um grupo de mão de obra. */
+/**
+ * Regime de pagamento de um grupo de mão de obra.
+ * @deprecated Substituído por `BaseMaoDeObra` + o vínculo `clt`. Mantido para ler
+ * entradas de cálculo salvas antes da 1.1 (ver `normalizarEntrada`).
+ */
 export type RegimeMaoDeObra = 'diaria' | 'valor_cheio' | 'clt'
+
+/** Como o pagamento da mão de obra é informado. */
+export type BaseMaoDeObra = 'diaria' | 'valor_cheio' | 'mensal'
 
 /** Como o imposto da nota entra na formação do preço. */
 export type ModoImposto = 'gross_up' | 'simples'
 
 /**
  * Grupo de mão de obra. Vários grupos podem coexistir (ex.: 3 diaristas + 2 CLT).
- * O significado de `valor` depende do regime:
+ * O significado de `valor` (o que é efetivamente pago ao funcionário) depende de `base`:
  *  - diaria      -> valor da diária por funcionário
  *  - valor_cheio -> valor fechado por funcionário para todo o serviço
- *  - clt         -> salário MENSAL por funcionário
+ *  - mensal      -> valor MENSAL por funcionário (rateado pelos dias do serviço)
+ * O vínculo CLT é independente da base: um funcionário de carteira assinada pode ser
+ * pago por diária. Os encargos incidem sempre sobre `salarioCarteira`.
  */
 export interface GrupoMaoDeObra {
   id: string
   descricao?: string
   qtdFuncionarios: number
-  regime: RegimeMaoDeObra
+  base: BaseMaoDeObra
   valor: number
+  /** Carteira assinada: habilita encargos, contratação e rescisão. */
+  clt?: boolean
+  /** Salário MENSAL registrado na carteira — base de cálculo dos encargos. */
+  salarioCarteira?: number
   /** CLT: houve contratação para este serviço (soma custo de contratação). */
   houveContratacao?: boolean
   /** CLT: será demitido ao fim do serviço (soma custo de rescisão / quebra de contrato). */
   demitidoAoFim?: boolean
+  /** @deprecated formato anterior à 1.1; lido por `normalizarEntrada`. */
+  regime?: RegimeMaoDeObra
 }
 
-/** Alimentação (almoço) dos funcionários. */
+/** Uma alimentação dos funcionários (café, almoço, janta…). */
 export interface CustoAlimentacao {
-  ativo: boolean
+  id: string
+  descricao?: string
   qtdPessoas: number
   valorRefeicao: number
   /** diario = por dia trabalhado; cheio = valor fechado. */
   modo: ModoAplicacao
+  /** @deprecated formato anterior à 1.1 (item único com liga/desliga). */
+  ativo?: boolean
 }
 
 /** Custo ligado a uma ferramenta: manutenção ou insumo/produto (gasolina, óleo). */
@@ -47,9 +65,13 @@ export interface CustoFerramenta {
   modo: ModoAplicacao
 }
 
-/** Combustível / deslocamento (calculado por consumo do veículo e preço do litro). */
+/**
+ * Combustível / deslocamento de um veículo (calculado por consumo e preço do litro).
+ * Vários podem coexistir quando o serviço usa mais de um carro.
+ */
 export interface CustoCombustivel {
-  ativo: boolean
+  id: string
+  descricao?: string
   /** cheio = distância total do serviço; diario = distância por dia (multiplicada por dias). */
   distanciaKm: number
   /** Consumo do veículo em km por litro. */
@@ -57,15 +79,31 @@ export interface CustoCombustivel {
   /** Preço do litro do combustível. */
   precoLitro: number
   modo: ModoAplicacao
+  /** @deprecated formato anterior à 1.1 (item único com liga/desliga). */
+  ativo?: boolean
 }
 
-/** Estadia / hospedagem. */
+/** Como a estadia é cobrada. */
+export type TipoEstadia = 'por_pessoa' | 'aluguel'
+
+/**
+ * Estadia / hospedagem. Em `por_pessoa` o custo depende de quantas pessoas ficam;
+ * em `aluguel` (casa alugada para a obra) depende só do valor mensal e dos meses.
+ */
 export interface CustoEstadia {
-  ativo: boolean
+  id: string
+  descricao?: string
+  tipo: TipoEstadia
   qtdPessoas: number
   valorPorPessoa: number
   /** diario = por noite (multiplica por dias); cheio = valor fechado. */
   modo: ModoAplicacao
+  /** Aluguel: valor mensal do imóvel. */
+  valorMensal?: number
+  /** Aluguel: quantidade de meses (aceita fração, ex.: 1,5). */
+  qtdMeses?: number
+  /** @deprecated formato anterior à 1.1 (item único com liga/desliga). */
+  ativo?: boolean
 }
 
 /** Custo avulso/personalizado (dá a maleabilidade). */
@@ -96,16 +134,22 @@ export interface ParametrosEncargos {
 export interface EntradaCalculo {
   dias: number
   maoDeObra: GrupoMaoDeObra[]
-  alimentacao: CustoAlimentacao
+  alimentacoes: CustoAlimentacao[]
   ferramentas: CustoFerramenta[]
-  combustivel: CustoCombustivel
-  estadia: CustoEstadia
+  combustiveis: CustoCombustivel[]
+  estadias: CustoEstadia[]
   avulsos: CustoAvulso[]
   margemLucroPercent: number
   emitirNota: boolean
   aliquotaNotaPercent: number
   modoImposto: ModoImposto
   parametros: ParametrosEncargos
+  /** @deprecated item único do formato anterior à 1.1; lido por `normalizarEntrada`. */
+  alimentacao?: CustoAlimentacao
+  /** @deprecated item único do formato anterior à 1.1; lido por `normalizarEntrada`. */
+  combustivel?: CustoCombustivel
+  /** @deprecated item único do formato anterior à 1.1; lido por `normalizarEntrada`. */
+  estadia?: CustoEstadia
 }
 
 /** Uma linha do detalhamento (breakdown) do custo. */

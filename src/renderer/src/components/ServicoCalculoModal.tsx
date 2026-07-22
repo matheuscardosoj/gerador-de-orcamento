@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Icone } from '../ui/primitives'
-import { calcularCustoServico, criarEntradaCalculo } from '@shared/calculo/engine'
+import { calcularCustoServico, criarEntradaCalculo, normalizarEntrada } from '@shared/calculo/engine'
 import type { EntradaCalculo, ModoAplicacao, ParametrosFinanceiros } from '@shared/types'
 import { formatMoeda } from '@shared/format'
 import { Button, Card, Checkbox, Field, Input, NumberField, Select, cn } from '../ui/primitives'
@@ -64,7 +64,9 @@ export function ServicoCalculoModal({
   const [descricao, setDescricao] = useState(descricaoInicial ?? '')
   const [unidade, setUnidade] = useState(unidadeInicial ?? 'serviço')
   const [quantidade, setQuantidade] = useState(quantidadeInicial ?? 1)
-  const [e, setE] = useState<EntradaCalculo>(entradaInicial ?? criarEntradaCalculo(parametros))
+  const [e, setE] = useState<EntradaCalculo>(() =>
+    normalizarEntrada(entradaInicial ?? criarEntradaCalculo(parametros))
+  )
 
   const set = (patch: Partial<EntradaCalculo>): void => setE((prev) => ({ ...prev, ...patch }))
   const resultado = useMemo(() => calcularCustoServico(e), [e])
@@ -115,9 +117,9 @@ export function ServicoCalculoModal({
             </Bloco>
 
             <MaoDeObraBloco e={e} set={set} />
-            <AlimentacaoBloco e={e} set={set} />
+            <AlimentacaoBloco e={e} set={set} parametros={parametros} />
             <FerramentasBloco e={e} set={set} />
-            <CombustivelBloco e={e} set={set} />
+            <CombustivelBloco e={e} set={set} parametros={parametros} />
             <EstadiaBloco e={e} set={set} />
             <AvulsosBloco e={e} set={set} />
 
@@ -223,7 +225,7 @@ function MaoDeObraBloco({ e, set }: BlocoProps): JSX.Element {
     set({
       maoDeObra: [
         ...e.maoDeObra,
-        { id: novoId(), qtdFuncionarios: 1, regime: 'diaria', valor: 0 }
+        { id: novoId(), qtdFuncionarios: 1, base: 'diaria', valor: 0 }
       ]
     })
   const upd = (id: string, patch: Partial<EntradaCalculo['maoDeObra'][number]>): void =>
@@ -243,48 +245,80 @@ function MaoDeObraBloco({ e, set }: BlocoProps): JSX.Element {
         {e.maoDeObra.length === 0 && <p className="text-xs text-slate-400">Nenhum grupo de mão de obra.</p>}
         {e.maoDeObra.map((g) => (
           <div key={g.id} className="rounded-lg border border-slate-200 p-3">
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+            <div className="mb-2 flex items-end gap-2">
+              <Field label="Descrição" className="flex-1">
+                <Input
+                  placeholder="Ex.: Diária a R$ 170 — equipe de cerca"
+                  value={g.descricao ?? ''}
+                  onChange={(ev) => upd(g.id, { descricao: ev.target.value })}
+                />
+              </Field>
+              <Button size="sm" variant="ghost" onClick={() => rem(g.id)} className="text-slate-400">
+                <Icone>✕</Icone>
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
               <Field label="Funcionários">
                 <NumberField value={g.qtdFuncionarios} onChange={(v) => upd(g.id, { qtdFuncionarios: v })} min={0} />
               </Field>
-              <Field label="Regime">
-                <Select value={g.regime} onChange={(ev) => upd(g.id, { regime: ev.target.value as typeof g.regime })}>
-                  <option value="diaria">Diária</option>
+              <Field label="Forma de pagamento">
+                <Select value={g.base} onChange={(ev) => upd(g.id, { base: ev.target.value as typeof g.base })}>
+                  <option value="diaria">Por diária</option>
                   <option value="valor_cheio">Valor fechado</option>
-                  <option value="clt">CLT (salário)</option>
+                  <option value="mensal">Valor mensal</option>
                 </Select>
               </Field>
               <Field
                 label={
-                  g.regime === 'diaria'
+                  g.base === 'diaria'
                     ? 'Valor da diária'
-                    : g.regime === 'clt'
-                      ? 'Salário mensal'
+                    : g.base === 'mensal'
+                      ? 'Valor mensal pago'
                       : 'Valor por func.'
                 }
               >
                 <NumberField value={g.valor} onChange={(v) => upd(g.id, { valor: v })} min={0} />
               </Field>
-              <div className="flex items-end">
-                <Button size="sm" variant="ghost" onClick={() => rem(g.id)} className="text-slate-400">
-                  Remover
-                </Button>
-              </div>
             </div>
-            {g.regime === 'clt' && (
-              <div className="mt-2 flex flex-wrap gap-4 border-t border-slate-100 pt-2">
-                <Checkbox
-                  label="Houve contratação"
-                  checked={!!g.houveContratacao}
-                  onChange={(v) => upd(g.id, { houveContratacao: v })}
-                />
-                <Checkbox
-                  label="Demitido ao fim (rescisão)"
-                  checked={!!g.demitidoAoFim}
-                  onChange={(v) => upd(g.id, { demitidoAoFim: v })}
-                />
-              </div>
-            )}
+            <div className="mt-2 border-t border-slate-100 pt-2">
+              <Checkbox
+                label="CLT (carteira assinada)"
+                checked={!!g.clt}
+                onChange={(v) =>
+                  upd(g.id, {
+                    clt: v,
+                    salarioCarteira:
+                      v && g.salarioCarteira === undefined && g.base === 'mensal' ? g.valor : g.salarioCarteira
+                  })
+                }
+              />
+              {g.clt && (
+                <div className="mt-2 space-y-2">
+                  <Field
+                    label="Salário registrado na carteira (mensal)"
+                    hint="Base dos encargos e da rescisão — pode diferir do valor pago"
+                  >
+                    <NumberField
+                      value={g.salarioCarteira ?? 0}
+                      onChange={(v) => upd(g.id, { salarioCarteira: v })}
+                      min={0}
+                    />
+                  </Field>
+                  <div className="flex flex-wrap gap-4">
+                    <Checkbox
+                      label="Houve contratação"
+                      checked={!!g.houveContratacao}
+                      onChange={(v) => upd(g.id, { houveContratacao: v })}
+                    />
+                    <Checkbox
+                      label="Demitido ao fim (rescisão)"
+                      checked={!!g.demitidoAoFim}
+                      onChange={(v) => upd(g.id, { demitidoAoFim: v })}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -292,40 +326,84 @@ function MaoDeObraBloco({ e, set }: BlocoProps): JSX.Element {
   )
 }
 
-function ToggleBloco({
-  titulo,
-  ativo,
-  onToggle,
-  children
+/** Cabeçalho de um item de lista: descrição livre + botão de remover. */
+function LinhaDescricao({
+  valor,
+  placeholder,
+  onChange,
+  onRemove
 }: {
-  titulo: string
-  ativo: boolean
-  onToggle: (v: boolean) => void
-  children: React.ReactNode
+  valor: string
+  placeholder: string
+  onChange: (v: string) => void
+  onRemove: () => void
 }): JSX.Element {
   return (
-    <Bloco titulo={titulo} acao={<Checkbox checked={ativo} onChange={onToggle} label={ativo ? 'incluído' : 'incluir'} />}>
-      {ativo ? children : <p className="text-xs text-slate-400">Não incluído no custo.</p>}
-    </Bloco>
+    <div className="mb-2 flex items-end gap-2">
+      <Field label="Descrição" className="flex-1">
+        <Input placeholder={placeholder} value={valor} onChange={(ev) => onChange(ev.target.value)} />
+      </Field>
+      <Button size="sm" variant="ghost" onClick={onRemove} className="text-slate-400">
+        <Icone>✕</Icone>
+      </Button>
+    </div>
   )
 }
 
-function AlimentacaoBloco({ e, set }: BlocoProps): JSX.Element {
-  const a = e.alimentacao
+function AlimentacaoBloco({ e, set, parametros }: BlocoProps & { parametros: ParametrosFinanceiros }): JSX.Element {
+  const add = (): void =>
+    set({
+      alimentacoes: [
+        ...e.alimentacoes,
+        {
+          id: novoId(),
+          descricao: '',
+          qtdPessoas: 0,
+          valorRefeicao: parametros.valorRefeicaoPadrao,
+          modo: 'diario'
+        }
+      ]
+    })
+  const upd = (id: string, patch: Partial<EntradaCalculo['alimentacoes'][number]>): void =>
+    set({ alimentacoes: e.alimentacoes.map((a) => (a.id === id ? { ...a, ...patch } : a)) })
+  const rem = (id: string): void => set({ alimentacoes: e.alimentacoes.filter((a) => a.id !== id) })
+
   return (
-    <ToggleBloco titulo="Alimentação (almoço)" ativo={a.ativo} onToggle={(v) => set({ alimentacao: { ...a, ativo: v } })}>
-      <div className="grid grid-cols-3 gap-3">
-        <Field label="Pessoas que almoçam">
-          <NumberField value={a.qtdPessoas} onChange={(v) => set({ alimentacao: { ...a, qtdPessoas: v } })} min={0} />
-        </Field>
-        <Field label="Valor por refeição">
-          <NumberField value={a.valorRefeicao} onChange={(v) => set({ alimentacao: { ...a, valorRefeicao: v } })} min={0} />
-        </Field>
-        <Field label="Aplicação">
-          <ModoSelect value={a.modo} onChange={(m) => set({ alimentacao: { ...a, modo: m } })} />
-        </Field>
+    <Bloco
+      titulo="Alimentação"
+      acao={
+        <Button size="sm" variant="outline" onClick={add}>
+          + Refeição
+        </Button>
+      }
+    >
+      <div className="space-y-3">
+        {e.alimentacoes.length === 0 && (
+          <p className="text-xs text-slate-400">Ex.: café da manhã, almoço, janta.</p>
+        )}
+        {e.alimentacoes.map((a) => (
+          <div key={a.id} className="rounded-lg border border-slate-200 p-3">
+            <LinhaDescricao
+              valor={a.descricao ?? ''}
+              placeholder="Ex.: Almoço na obra"
+              onChange={(v) => upd(a.id, { descricao: v })}
+              onRemove={() => rem(a.id)}
+            />
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Pessoas">
+                <NumberField value={a.qtdPessoas} onChange={(v) => upd(a.id, { qtdPessoas: v })} min={0} />
+              </Field>
+              <Field label="Valor por refeição">
+                <NumberField value={a.valorRefeicao} onChange={(v) => upd(a.id, { valorRefeicao: v })} min={0} />
+              </Field>
+              <Field label="Aplicação">
+                <ModoSelect value={a.modo} onChange={(m) => upd(a.id, { modo: m })} />
+              </Field>
+            </div>
+          </div>
+        ))}
       </div>
-    </ToggleBloco>
+    </Bloco>
   )
 }
 
@@ -375,49 +453,154 @@ function FerramentasBloco({ e, set }: BlocoProps): JSX.Element {
   )
 }
 
-function CombustivelBloco({ e, set }: BlocoProps): JSX.Element {
-  const c = e.combustivel
-  const dist = c.modo === 'diario' ? c.distanciaKm * (e.dias || 0) : c.distanciaKm
-  const litros = c.consumoKmL > 0 ? dist / c.consumoKmL : 0
+function CombustivelBloco({ e, set, parametros }: BlocoProps & { parametros: ParametrosFinanceiros }): JSX.Element {
+  const add = (): void =>
+    set({
+      combustiveis: [
+        ...e.combustiveis,
+        {
+          id: novoId(),
+          descricao: '',
+          distanciaKm: 0,
+          consumoKmL: parametros.consumoVeiculoPadrao,
+          precoLitro: parametros.precoCombustivelPadrao,
+          modo: 'cheio'
+        }
+      ]
+    })
+  const upd = (id: string, patch: Partial<EntradaCalculo['combustiveis'][number]>): void =>
+    set({ combustiveis: e.combustiveis.map((c) => (c.id === id ? { ...c, ...patch } : c)) })
+  const rem = (id: string): void => set({ combustiveis: e.combustiveis.filter((c) => c.id !== id) })
+
   return (
-    <ToggleBloco titulo="Combustível / deslocamento" ativo={c.ativo} onToggle={(v) => set({ combustivel: { ...c, ativo: v } })}>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Field label={c.modo === 'diario' ? 'Km por dia' : 'Km total'}>
-          <NumberField value={c.distanciaKm} onChange={(v) => set({ combustivel: { ...c, distanciaKm: v } })} min={0} />
-        </Field>
-        <Field label="Consumo (km/l)">
-          <NumberField value={c.consumoKmL} onChange={(v) => set({ combustivel: { ...c, consumoKmL: v } })} min={0} />
-        </Field>
-        <Field label="Preço do litro">
-          <NumberField value={c.precoLitro} onChange={(v) => set({ combustivel: { ...c, precoLitro: v } })} min={0} />
-        </Field>
-        <Field label="Aplicação">
-          <ModoSelect value={c.modo} onChange={(m) => set({ combustivel: { ...c, modo: m } })} />
-        </Field>
+    <Bloco
+      titulo="Combustível / deslocamento"
+      acao={
+        <Button size="sm" variant="outline" onClick={add}>
+          + Veículo
+        </Button>
+      }
+    >
+      <div className="space-y-3">
+        {e.combustiveis.length === 0 && (
+          <p className="text-xs text-slate-400">Um item por veículo usado no serviço.</p>
+        )}
+        {e.combustiveis.map((c) => {
+          const dist = c.modo === 'diario' ? c.distanciaKm * (e.dias || 0) : c.distanciaKm
+          const litros = c.consumoKmL > 0 ? dist / c.consumoKmL : 0
+          return (
+            <div key={c.id} className="rounded-lg border border-slate-200 p-3">
+              <LinhaDescricao
+                valor={c.descricao ?? ''}
+                placeholder="Ex.: Caminhonete da equipe"
+                onChange={(v) => upd(c.id, { descricao: v })}
+                onRemove={() => rem(c.id)}
+              />
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                <Field label={c.modo === 'diario' ? 'Km por dia' : 'Km total'}>
+                  <NumberField value={c.distanciaKm} onChange={(v) => upd(c.id, { distanciaKm: v })} min={0} />
+                </Field>
+                <Field label="Consumo (km/l)">
+                  <NumberField value={c.consumoKmL} onChange={(v) => upd(c.id, { consumoKmL: v })} min={0} />
+                </Field>
+                <Field label="Preço do litro">
+                  <NumberField value={c.precoLitro} onChange={(v) => upd(c.id, { precoLitro: v })} min={0} />
+                </Field>
+                <Field label="Aplicação">
+                  <ModoSelect value={c.modo} onChange={(m) => upd(c.id, { modo: m })} />
+                </Field>
+              </div>
+              <p className="mt-2 text-xs text-slate-400">
+                {dist} km ÷ {c.consumoKmL || 0} km/l = {litros.toFixed(1)} litros
+              </p>
+            </div>
+          )
+        })}
       </div>
-      <p className="mt-2 text-xs text-slate-400">
-        {dist} km ÷ {c.consumoKmL || 0} km/l = {litros.toFixed(1)} litros
-      </p>
-    </ToggleBloco>
+    </Bloco>
   )
 }
 
 function EstadiaBloco({ e, set }: BlocoProps): JSX.Element {
-  const s = e.estadia
+  const add = (): void =>
+    set({
+      estadias: [
+        ...e.estadias,
+        {
+          id: novoId(),
+          descricao: '',
+          tipo: 'por_pessoa',
+          qtdPessoas: 0,
+          valorPorPessoa: 0,
+          modo: 'diario',
+          valorMensal: 0,
+          qtdMeses: 1
+        }
+      ]
+    })
+  const upd = (id: string, patch: Partial<EntradaCalculo['estadias'][number]>): void =>
+    set({ estadias: e.estadias.map((s) => (s.id === id ? { ...s, ...patch } : s)) })
+  const rem = (id: string): void => set({ estadias: e.estadias.filter((s) => s.id !== id) })
+
   return (
-    <ToggleBloco titulo="Estadia / hospedagem" ativo={s.ativo} onToggle={(v) => set({ estadia: { ...s, ativo: v } })}>
-      <div className="grid grid-cols-3 gap-3">
-        <Field label="Pessoas">
-          <NumberField value={s.qtdPessoas} onChange={(v) => set({ estadia: { ...s, qtdPessoas: v } })} min={0} />
-        </Field>
-        <Field label="Valor por pessoa">
-          <NumberField value={s.valorPorPessoa} onChange={(v) => set({ estadia: { ...s, valorPorPessoa: v } })} min={0} />
-        </Field>
-        <Field label="Aplicação">
-          <ModoSelect value={s.modo} onChange={(m) => set({ estadia: { ...s, modo: m } })} />
-        </Field>
+    <Bloco
+      titulo="Estadia / hospedagem"
+      acao={
+        <Button size="sm" variant="outline" onClick={add}>
+          + Estadia
+        </Button>
+      }
+    >
+      <div className="space-y-3">
+        {e.estadias.length === 0 && (
+          <p className="text-xs text-slate-400">Ex.: hotel por pessoa, casa alugada por mês.</p>
+        )}
+        {e.estadias.map((s) => (
+          <div key={s.id} className="rounded-lg border border-slate-200 p-3">
+            <LinhaDescricao
+              valor={s.descricao ?? ''}
+              placeholder="Ex.: Casa alugada em Itaberaí"
+              onChange={(v) => upd(s.id, { descricao: v })}
+              onRemove={() => rem(s.id)}
+            />
+            <div className={cn('grid gap-3', s.tipo === 'aluguel' ? 'grid-cols-3' : 'grid-cols-2 md:grid-cols-4')}>
+              <Field label="Tipo">
+                <Select value={s.tipo} onChange={(ev) => upd(s.id, { tipo: ev.target.value as typeof s.tipo })}>
+                  <option value="por_pessoa">Por pessoa</option>
+                  <option value="aluguel">Aluguel de imóvel</option>
+                </Select>
+              </Field>
+              {s.tipo === 'aluguel' ? (
+                <>
+                  <Field label="Valor mensal">
+                    <NumberField value={s.valorMensal ?? 0} onChange={(v) => upd(s.id, { valorMensal: v })} min={0} />
+                  </Field>
+                  <Field label="Meses" hint="Aceita fração (ex.: 1,5)">
+                    <NumberField value={s.qtdMeses ?? 0} onChange={(v) => upd(s.id, { qtdMeses: v })} min={0} />
+                  </Field>
+                </>
+              ) : (
+                <>
+                  <Field label="Pessoas">
+                    <NumberField value={s.qtdPessoas} onChange={(v) => upd(s.id, { qtdPessoas: v })} min={0} />
+                  </Field>
+                  <Field label="Valor por pessoa">
+                    <NumberField
+                      value={s.valorPorPessoa}
+                      onChange={(v) => upd(s.id, { valorPorPessoa: v })}
+                      min={0}
+                    />
+                  </Field>
+                  <Field label="Aplicação">
+                    <ModoSelect value={s.modo} onChange={(m) => upd(s.id, { modo: m })} />
+                  </Field>
+                </>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
-    </ToggleBloco>
+    </Bloco>
   )
 }
 
