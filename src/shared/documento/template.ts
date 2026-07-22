@@ -174,8 +174,8 @@ export function gerarHtmlOrcamento(
     return `<style>${estilo}</style><div class="pagina">${corpo}</div>`
   }
 
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(
-    orc.numero
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Proposta ${esc(
+    String(orc.numero)
   )}</title><style>${estilo}</style></head><body><div class="pagina">${corpo}</div></body></html>`
 }
 

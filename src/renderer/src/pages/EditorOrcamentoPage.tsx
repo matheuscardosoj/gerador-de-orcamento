@@ -210,8 +210,8 @@ function DadosGeraisCard({
     <Card className="p-6">
       <SectionTitle title="Dados gerais" />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Field label="Número">
-          <Input value={orc.numero} onChange={(e) => set({ numero: e.target.value })} />
+        <Field label="Número" hint="Índice sequencial automático">
+          <Input value={`Nº ${orc.numero}`} readOnly className="bg-slate-100" />
         </Field>
         <Field label="Data">
           <Input

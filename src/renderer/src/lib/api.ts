@@ -7,3 +7,8 @@ import { criarMockApi } from './mockApi'
  * existe e usamos um mock em memória.
  */
 export const api: AppApi = window.api ?? criarMockApi()
+
+// Exposto apenas em desenvolvimento para depuração no console do navegador.
+if (import.meta.env?.DEV) {
+  ;(window as unknown as { __api: AppApi }).__api = api
+}

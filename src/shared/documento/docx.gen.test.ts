@@ -19,7 +19,7 @@ const empresa: EmpresaConfig = {
 
 const orc: Orcamento = {
   id: '1',
-  numero: '0001/2026',
+  numero: 1,
   data: new Date('2026-05-04T12:00:00').toISOString(),
   clienteId: null,
   destinatario: 'A TMG,',

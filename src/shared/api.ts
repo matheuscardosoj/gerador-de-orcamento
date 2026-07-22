@@ -39,7 +39,7 @@ export interface AppApi {
   orcamentos: {
     list(): Promise<Orcamento[]>
     get(id: string): Promise<Orcamento | null>
-    proximoNumero(): Promise<string>
+    proximoNumero(): Promise<number>
     create(dto: NovoOrcamento): Promise<Orcamento>
     update(id: string, patch: Partial<Orcamento>): Promise<Orcamento | null>
     remove(id: string): Promise<void>

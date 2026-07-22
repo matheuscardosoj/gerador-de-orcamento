@@ -8,12 +8,11 @@ import type { DocumentoResultado } from '@shared/api'
 import type { Orcamento } from '@shared/types'
 
 function nomeBase(orc: Orcamento): string {
-  const num = orc.numero.replace(/\//g, '-')
   const dest = (orc.destinatario || '')
     .replace(/[^\wÀ-ú\s-]/g, '')
     .trim()
     .slice(0, 40)
-  return `Proposta ${num}${dest ? ' - ' + dest : ''}`
+  return `Proposta ${orc.numero}${dest ? ' - ' + dest : ''}`
 }
 
 function htmlDoOrcamento(id: string): { html: string; orc: Orcamento } {

@@ -101,7 +101,8 @@ export interface ItemTexto {
 
 export interface Orcamento {
   id: string
-  numero: string
+  /** Índice sequencial, começando em 1 (incrementa conforme o último criado). */
+  numero: number
   data: string
   clienteId?: string | null
   /** Texto do destinatário renderizado no documento (ex.: "A TMG,"). */
@@ -129,5 +130,4 @@ export interface BancoDados {
   observacoesPadrao: ObservacaoPadrao[]
   pagamentosPadrao: FormaPagamentoPadrao[]
   orcamentos: Orcamento[]
-  contadorOrcamento: number
 }

@@ -23,7 +23,7 @@ export function PreviaModal({
             Fechar
           </Button>
         </div>
-        <iframe title="Prévia" srcDoc={html} className="h-full w-full flex-1 border-0 bg-slate-200" />
+        <iframe title="Prévia" srcDoc={html} className="h-full w-full flex-1 border-0 bg-white" />
       </div>
     </div>
   )
