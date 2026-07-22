@@ -1,6 +1,6 @@
 import { it, expect } from 'vitest'
 import HTMLtoDOCX from '@turbodocx/html-to-docx'
-import { gerarHtmlOrcamento } from './template'
+import { gerarHtmlParaDocx } from './template'
 import type { EmpresaConfig, Orcamento } from '../types'
 
 const empresa: EmpresaConfig = {
@@ -40,7 +40,7 @@ const orc: Orcamento = {
 }
 
 it('gera um DOCX não vazio a partir do template', async () => {
-  const html = gerarHtmlOrcamento(orc, empresa)
+  const html = gerarHtmlParaDocx(orc, empresa)
   const buffer = (await HTMLtoDOCX(html, undefined, { orientation: 'portrait' })) as Buffer
   expect(buffer.length).toBeGreaterThan(2000)
   // Assinatura ZIP (docx é um zip: bytes "PK")

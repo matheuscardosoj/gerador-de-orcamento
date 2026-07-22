@@ -3,7 +3,7 @@ import { writeFile, unlink } from 'fs/promises'
 import { join } from 'path'
 import HTMLtoDOCX from '@turbodocx/html-to-docx'
 import { orcamentosRepo, empresaRepo } from './repositories'
-import { gerarHtmlOrcamento } from '@shared/documento/template'
+import { gerarHtmlOrcamento, gerarHtmlParaDocx } from '@shared/documento/template'
 import type { DocumentoResultado } from '@shared/api'
 import type { Orcamento } from '@shared/types'
 
@@ -57,11 +57,14 @@ export async function gerarPdf(id: string): Promise<DocumentoResultado> {
 }
 
 export async function gerarDocx(id: string): Promise<DocumentoResultado> {
-  const { html, orc } = htmlDoOrcamento(id)
+  const orc = orcamentosRepo.get(id)
+  if (!orc) throw new Error('Orçamento não encontrado')
+  const html = gerarHtmlParaDocx(orc, empresaRepo.get())
 
   const buffer = (await HTMLtoDOCX(html, undefined, {
     orientation: 'portrait',
-    margins: { top: 720, right: 720, bottom: 720, left: 720 }
+    font: 'Calibri',
+    margins: { top: 1080, right: 1080, bottom: 1080, left: 1080 }
   })) as Buffer
 
   const r = await dialog.showSaveDialog({

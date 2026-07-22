@@ -178,3 +178,96 @@ export function gerarHtmlOrcamento(
     orc.numero
   )}</title><style>${estilo}</style></head><body><div class="pagina">${corpo}</div></body></html>`
 }
+
+// ---------------------------------------------------------------------------
+// Versão para DOCX: o html-to-docx não interpreta CSS de <style> nem flexbox,
+// então usamos ESTILOS INLINE e uma TABELA no cabeçalho para reproduzir o layout.
+// ---------------------------------------------------------------------------
+
+function servicosCartaDocx(orc: Orcamento): string {
+  return orc.itensServico
+    .map((i, idx) => {
+      const partes = [`<b>Item ${idx + 1} -</b> ${nl2br(i.descricao)}`]
+      if (i.quantidade > 1 && i.valorUnitario > 0) {
+        partes.push(`Valor por ${esc(i.unidade)}: ${formatMoeda(i.valorUnitario)}`)
+      }
+      partes.push(`Valor do item: ${formatMoeda(i.valorTotal)}`)
+      return `<p style="text-align:justify; margin:0 0 8px 0;">${partes.join(' / ')}</p>`
+    })
+    .join('')
+}
+
+function servicosTabelaDocx(orc: Orcamento): string {
+  const th = 'border:1px solid #666; padding:5px 7px; background-color:#eeeeee; font-weight:bold;'
+  const td = 'border:1px solid #666; padding:5px 7px;'
+  const linhas = orc.itensServico
+    .map(
+      (i, idx) => `<tr>
+        <td style="${td} text-align:center;">${idx + 1}</td>
+        <td style="${td}">${nl2br(i.descricao)}</td>
+        <td style="${td}">${esc(i.unidade)}</td>
+        <td style="${td} text-align:right;">${i.quantidade}</td>
+        <td style="${td} text-align:right;">${formatMoeda(i.valorUnitario)}</td>
+        <td style="${td} text-align:right;">${formatMoeda(i.valorTotal)}</td>
+      </tr>`
+    )
+    .join('')
+  return `<table style="width:100%; border-collapse:collapse; margin:0 0 10px 0;">
+    <tr>
+      <td style="${th} text-align:center;">Item</td><td style="${th}">Especificação</td>
+      <td style="${th}">Unid.</td><td style="${th} text-align:right;">Qtd</td>
+      <td style="${th} text-align:right;">Valor unit.</td><td style="${th} text-align:right;">Total</td>
+    </tr>
+    ${linhas}
+  </table>`
+}
+
+function listaDocx(titulo: string, itens: string[]): string {
+  const lis = itens.filter((t) => t && t.trim()).map((t) => `<li>${nl2br(t)}</li>`).join('')
+  if (!lis) return ''
+  return `<p style="font-weight:bold; margin:12px 0 2px 0;">${esc(titulo)}</p><ul style="margin:0;">${lis}</ul>`
+}
+
+export function gerarHtmlParaDocx(orc: Orcamento, empresa: EmpresaConfig): string {
+  const total = orc.itensServico.reduce((s, i) => s + (i.valorTotal || 0), 0)
+  const cidade = extrairCidade(empresa.endereco)
+  const logo = empresa.logoDataUrl
+    ? `<img src="${empresa.logoDataUrl}" width="96" height="96" alt="logo" />`
+    : ''
+
+  const servicos = orc.formato === 'tabela' ? servicosTabelaDocx(orc) : servicosCartaDocx(orc)
+  const materiais = listaDocx('Materiais:', orc.materiais.map((m) => `${m.quantidade} ${m.unidade} — ${m.especificacao}`))
+  const observacoes = listaDocx('Observações:', orc.observacoes.map((o) => o.texto))
+  const pagamentos = listaDocx('Forma de Pagamento:', orc.pagamentos.map((p) => p.texto))
+
+  const cel = 'vertical-align:middle; border-bottom:2px solid #000000; padding-bottom:6px;'
+
+  const corpo = `
+    <table style="width:100%; border-collapse:collapse;">
+      <tr>
+        <td style="${cel} width:120px; text-align:center;">${logo}</td>
+        <td style="${cel} text-align:center;">
+          <p style="font-weight:bold; font-size:13pt; margin:0;">${esc(empresa.nome)}</p>
+          <p style="margin:0;">${esc(empresa.endereco)}</p>
+          <p style="margin:0;">Fone: ${esc(empresa.telefones)}</p>
+          ${empresa.site ? `<p style="margin:0;">Site: ${esc(empresa.site)}</p>` : ''}
+          <p style="margin:0;">e-mail: ${esc(empresa.email)}</p>
+          <p style="margin:0;">CNPJ: ${esc(empresa.cnpj)}</p>
+        </td>
+      </tr>
+    </table>
+    <p style="margin:18px 0 0 0;">${esc(cidade)}, ${formatDataExtenso(orc.data)}</p>
+    ${orc.destinatario ? `<p style="margin:0 0 12px 0;">${nl2br(orc.destinatario)}</p>` : ''}
+    <h1 style="text-align:center; font-size:16pt; margin:10px 0 16px 0;">${esc(orc.titulo || 'Proposta de Serviço')}</h1>
+    ${orc.introducao ? `<p style="text-align:justify; margin:0 0 10px 0;">${nl2br(orc.introducao)}</p>` : ''}
+    ${servicos}
+    <p style="margin:12px 0;"><b>Valor total da proposta:</b> <span style="background-color:#fff275;">${formatMoeda(total)} (${valorPorExtenso(total)}).</span></p>
+    ${orc.prazoDias ? `<p style="margin:0 0 10px 0;">Estimativa de dias para conclusão do serviço: <b>${orc.prazoDias} dias</b>.</p>` : ''}
+    ${materiais}
+    ${observacoes}
+    ${pagamentos}
+    <p style="text-align:center; margin-top:56px;">_____________________________________<br/>${esc(empresa.textoAssinatura || empresa.razaoSocial)}</p>
+  `
+
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"></head><body style="font-family: Calibri, Arial, sans-serif; font-size: 11pt; color:#000000;">${corpo}</body></html>`
+}

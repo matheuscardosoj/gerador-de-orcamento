@@ -226,6 +226,14 @@ function DadosGeraisCard({
             <option value="tabela">Tabela (colunas)</option>
           </Select>
         </Field>
+        <Field label="Status">
+          <Select value={orc.status} onChange={(e) => set({ status: e.target.value as Orcamento['status'] })}>
+            <option value="rascunho">Rascunho</option>
+            <option value="enviado">Enviado</option>
+            <option value="aprovado">Aprovado</option>
+            <option value="recusado">Recusado</option>
+          </Select>
+        </Field>
         <Field label="Cliente cadastrado" hint="Preenche o destinatário" className="md:col-span-1">
           <Select
             value={orc.clienteId ?? ''}
