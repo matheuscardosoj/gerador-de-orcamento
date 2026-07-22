@@ -106,51 +106,14 @@ function secaoAnexos(orc: Orcamento): string {
   return `<section class="anexos"><h2 class="anexos-titulo">Anexos</h2>${figuras}</section>`
 }
 
-export interface OpcoesDocumento {
-  fragmento?: boolean
-  /**
-   * Injeta o script que gruda a assinatura no rodapé da última página da
-   * proposta (ver `SCRIPT_ASSINATURA`). Usado só na geração do PDF.
-   */
-  ajustarAssinatura?: boolean
-}
-
-/** Altura útil da página A4 com as margens de 15 mm de cima e de baixo. */
+/**
+ * Altura útil da página A4 com as margens de 15 mm de cima e de baixo. Mesma
+ * conta feita (independentemente, em px) por `paginarDocumento` — o motor de
+ * paginação que reorganiza este HTML em folhas antes de exibir/imprimir.
+ */
 const ALTURA_UTIL_MM = 297 - 15 * 2
 
-/**
- * `margin-top: auto` só encosta a assinatura no rodapé enquanto a proposta cabe
- * em uma página; passando disso não há espaço livre para distribuir. Este script
- * mede em que página a assinatura caiu e completa a distância que falta até o pé
- * daquela página — deixando o PDF igual ao DOCX, onde a assinatura é um frame
- * ancorado à margem inferior.
- */
-const SCRIPT_ASSINATURA = `
-addEventListener('load', function () {
-  var rodape = document.querySelector('.rodape')
-  var proposta = document.querySelector('.proposta')
-  if (!rodape || !proposta) return
-
-  var regua = document.createElement('div')
-  regua.style.cssText = 'position:absolute;visibility:hidden;height:${ALTURA_UTIL_MM}mm'
-  document.body.appendChild(regua)
-  var alturaPagina = regua.offsetHeight
-  regua.remove()
-  if (!alturaPagina) return
-
-  var topoConteudo = proposta.getBoundingClientRect().top + scrollY
-  var topoRodape = rodape.getBoundingClientRect().top + scrollY - topoConteudo
-  var pagina = Math.floor(topoRodape / alturaPagina)
-  // 1px de folga: arredondamento não pode empurrar o bloco para a página seguinte.
-  var alvo = (pagina + 1) * alturaPagina - rodape.offsetHeight - 1
-  if (alvo > topoRodape) rodape.style.marginTop = alvo - topoRodape + 'px'
-})`
-
-export function gerarHtmlOrcamento(
-  orc: Orcamento,
-  empresa: EmpresaConfig,
-  opts: OpcoesDocumento = {}
-): string {
+export function gerarHtmlOrcamento(orc: Orcamento, empresa: EmpresaConfig): string {
   const total = orc.itensServico.reduce((s, i) => s + (i.valorTotal || 0), 0)
   const cidade = extrairCidade(empresa.endereco)
   const logo = empresa.logoDataUrl
@@ -216,12 +179,29 @@ export function gerarHtmlOrcamento(
 
   const estilo = `
     * { box-sizing: border-box; }
-    html, body { height: 100%; }
-    body { margin: 0; font-family: Calibri, 'Segoe UI', Arial, sans-serif; color: #000; font-size: 11.5pt; line-height: 1.4; }
-    .pagina { padding: 15mm 14mm; }
-    /* Altura útil em mm (e não 100vh): fora da impressão, o vh vale a altura do
-       iframe da prévia, o que fazia a prévia mentir sobre onde a assinatura cai. */
+    /* Escondido até paginarDocumento reorganizar o conteúdo em folhas —
+       evita piscar o bloco único original antes da reorganização. */
+    body { margin: 0; visibility: hidden; font-family: Calibri, 'Segoe UI', Arial, sans-serif; color: #000; font-size: 11.5pt; line-height: 1.4; }
+    /* Cada folha é uma caixa A4 autocontida (altura fixa, não min-height): o
+       conteúdo já vem garantido caber por construção do motor de paginação,
+       então nenhuma folha precisa se fragmentar entre páginas de impressão —
+       eliminando a ambiguidade de padding em caixas fragmentadas do Chromium. */
+    .pagina { width: 210mm; height: 297mm; padding: 15mm 14mm; box-sizing: border-box; position: relative; }
     .proposta { min-height: ${ALTURA_UTIL_MM}mm; display: flex; flex-direction: column; }
+    @media screen {
+      /* Fundo e folha brancos; a separação entre as folhas fica por conta da
+         sombra e da linha sutil — sem elas, folhas brancas sobre fundo branco
+         não teriam limite visível. */
+      body { background: #fff; padding: 24px 0; }
+      /* outline (e não border): como .pagina é border-box, uma borda comeria
+         2px da área útil na tela e a prévia mediria diferente do PDF. */
+      .pagina { background: #fff; margin: 0 auto 24px; outline: 1px solid #e2e8f0; box-shadow: 0 2px 10px rgba(15,23,42,.10); }
+    }
+    @media print {
+      .pagina { box-shadow: none; margin: 0; page-break-after: always; }
+      .pagina:last-child { page-break-after: auto; }
+    }
+    @page { size: A4; margin: 0; }
     .cabecalho { display: flex; align-items: flex-start; gap: 16px; }
     .logo { width: 108px; height: 108px; object-fit: contain; flex-shrink: 0; }
     .logo-vazia { display: flex; align-items: center; justify-content: center; border: 1px dashed #bbb; color: #999; font-weight: 700; font-size: 24px; border-radius: 8px; }
@@ -247,7 +227,9 @@ export function gerarHtmlOrcamento(
     .secao-titulo { font-weight: 700; margin: 0 0 1mm; }
     .lista { margin: 0; padding-left: 22px; }
     .lista li { margin: 0 0 1mm; text-align: justify; }
-    .anexos { page-break-before: always; margin: 0 0 4mm; }
+    /* A quebra de página antes dos anexos vem de cada .pagina ser sua própria
+       folha (ver @media print acima) — paginarDocumento já os separa em folhas. */
+    .anexos { margin: 0 0 4mm; }
     .anexos-titulo { font-size: 14pt; font-weight: 700; text-align: center; margin: 0 0 6mm; }
     .anexo { margin: 0 0 8mm; padding: 0; text-align: center; page-break-inside: avoid; }
     .anexo-titulo { font-weight: 700; margin: 0 0 1mm; }
@@ -261,15 +243,10 @@ export function gerarHtmlOrcamento(
     .rodape-nome { margin: 0; }
   `
 
-  if (opts.fragmento) {
-    return `<style>${estilo}</style><div class="pagina">${corpo}</div>`
-  }
-
-  // O script não vai na prévia: o <iframe srcDoc> herda a CSP do renderer
-  // (`script-src 'self'`) e um script inline seria bloqueado ali.
-  const script = opts.ajustarAssinatura ? `<script>${SCRIPT_ASSINATURA}</script>` : ''
-
+  // A paginação em folhas A4 (motor único em `paginar.ts`) é sempre feita por
+  // quem consome este HTML — a prévia chama `paginarDocumento` sobre o
+  // `contentDocument` do iframe; o PDF injeta a mesma função na janela oculta.
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Proposta ${esc(
     String(orc.numero)
-  )}</title><style>${estilo}</style></head><body><div class="pagina">${corpo}</div>${script}</body></html>`
+  )}</title><style>${estilo}</style></head><body><div class="pagina">${corpo}</div></body></html>`
 }

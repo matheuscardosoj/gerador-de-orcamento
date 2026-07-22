@@ -4,6 +4,7 @@ import { join } from 'path'
 import { Packer } from 'docx'
 import { orcamentosRepo, empresaRepo, anexosRepo } from './repositories'
 import { gerarHtmlOrcamento } from '@shared/documento/template'
+import { paginarDocumento } from '@shared/documento/paginar'
 import { montarDocumentoDocx } from '@shared/documento/docx'
 import type { DocumentoResultado } from '@shared/api'
 import type { Orcamento } from '@shared/types'
@@ -43,7 +44,7 @@ export async function gerarPdf(id: string): Promise<DocumentoResultado> {
     ...orc,
     anexos: (orc.anexos ?? []).map((a) => ({ ...a, imagemDataUrl: imagens.get(a.id) ?? null }))
   }
-  const html = gerarHtmlOrcamento(orcComImagens, empresaRepo.get(), { ajustarAssinatura: true })
+  const html = gerarHtmlOrcamento(orcComImagens, empresaRepo.get())
 
   // Renderiza o HTML numa janela oculta e imprime para PDF (sem software externo).
   const tmpHtml = join(app.getPath('temp'), `orcamento-${Date.now()}.html`)
@@ -55,10 +56,16 @@ export async function gerarPdf(id: string): Promise<DocumentoResultado> {
   })
   try {
     await win.loadFile(tmpHtml)
+    // O processo main não tem DOM (Node.js): a função de paginação é injetada
+    // por código-fonte na janela — esse HTML temporário não declara CSP, então
+    // a injeção não esbarra em nenhuma restrição.
+    await win.webContents.executeJavaScript(`(${paginarDocumento.toString()})(document)`)
     const pdf = await win.webContents.printToPDF({
-      pageSize: 'A4',
       printBackground: true,
-      margins: { top: 0, bottom: 0, left: 0, right: 0 }
+      // O tamanho e a margem de cada folha vêm do `@page` do próprio CSS,
+      // já que `paginarDocumento` monta cada `.pagina` como uma folha A4
+      // autocontida (210×297mm com padding próprio, margem zero no @page).
+      preferCSSPageSize: true
     })
 
     const r = await dialog.showSaveDialog({
