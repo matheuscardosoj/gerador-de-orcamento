@@ -136,9 +136,10 @@ export function gerarHtmlOrcamento(
 
   const estilo = `
     * { box-sizing: border-box; }
+    html, body { height: 100%; }
     body { margin: 0; font-family: Calibri, 'Segoe UI', Arial, sans-serif; color: #000; font-size: 11.5pt; line-height: 1.4; }
-    .pagina { padding: 16mm 15mm; }
-    .moldura { min-height: 244mm; display: flex; flex-direction: column; }
+    .pagina { padding: 15mm 14mm; min-height: 100vh; display: flex; flex-direction: column; }
+    .moldura { flex: 1 0 auto; display: flex; flex-direction: column; }
     .cabecalho { display: flex; align-items: flex-start; gap: 16px; }
     .logo { width: 108px; height: 108px; object-fit: contain; flex-shrink: 0; }
     .logo-vazia { display: flex; align-items: center; justify-content: center; border: 1px dashed #bbb; color: #999; font-weight: 700; font-size: 24px; border-radius: 8px; }
@@ -164,10 +165,9 @@ export function gerarHtmlOrcamento(
     .secao-titulo { font-weight: 700; margin: 0 0 1mm; }
     .lista { margin: 0; padding-left: 22px; }
     .lista li { margin: 0 0 1mm; text-align: justify; }
-    .rodape { margin-top: auto; padding-top: 16mm; text-align: center; }
+    .rodape { margin-top: auto; padding-top: 12mm; text-align: center; page-break-inside: avoid; }
     .rodape-linha { border-top: 1px solid #000; width: 55%; margin: 0 auto 3px; }
     .rodape-nome { margin: 0; }
-    @media print { .pagina { padding: 15mm 14mm; } }
   `
 
   if (opts.fragmento) {
