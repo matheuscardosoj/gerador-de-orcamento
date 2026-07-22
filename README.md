@@ -39,6 +39,14 @@ versões anteriores é importado automaticamente na primeira execução e arquiv
 O **DOCX** é montado diretamente em OOXML (biblioteca `docx`, em `src/shared/documento/docx.ts`),
 espelhando as mesmas medidas do HTML que gera o PDF — por isso os dois saem iguais.
 
+O **PDF e a prévia** compartilham um único motor de paginação
+(`src/shared/documento/paginar.ts`): ele distribui o conteúdo em folhas A4
+autocontidas antes de imprimir ou exibir, em vez de depender da fragmentação de
+página do Chromium. A função é autocontida de propósito — o processo main a injeta
+por `.toString()` na janela oculta do PDF, e o renderer a importa e chama sobre o
+`contentDocument` do iframe da prévia. Por isso a prévia mostra exatamente a mesma
+paginação do PDF gerado.
+
 ## IA local
 
 O botão “Sugerir com IA” (anotação interna do orçamento) usa um modelo que roda **na
@@ -55,4 +63,6 @@ o app tenta o Ollama automaticamente.
 
 ## Status
 
-Em desenvolvimento — ver plano de fases no repositório.
+**Versão 1.0.0** — primeira versão completa: cálculo de custo, histórico com busca,
+anexos com fotos, anotação por IA local, exportação PDF/DOCX e instalador
+autossuficiente.
