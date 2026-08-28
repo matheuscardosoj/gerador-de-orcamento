@@ -7,6 +7,9 @@ afterPack: ./scripts/afterPack.cjs
 files:
   - '!**/.vscode/*'
   - '!src/*'
+  # Artefatos de builds anteriores nunca fazem parte do aplicativo. Sem esta
+  # regra, um instalador candidato poderia embutir a própria pasta release.
+  - '!release/**'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
   - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
