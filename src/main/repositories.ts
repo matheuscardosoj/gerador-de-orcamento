@@ -110,6 +110,7 @@ const paraCliente = (l: Linha): Cliente => ({
   tratamento: texto(l.tratamento),
   contato: textoOuNulo(l.contato) ?? undefined,
   observacao: textoOuNulo(l.observacao) ?? undefined,
+  ativo: paraBool(l.ativo),
   criadoEm: texto(l.criado_em)
 })
 
@@ -127,12 +128,13 @@ export const clientesRepo = {
       nome: dto.nome,
       tratamento: dto.tratamento,
       contato: dto.contato,
-      observacao: dto.observacao
+      observacao: dto.observacao,
+      ativo: dto.ativo ?? true
     }
     run(
-      `INSERT INTO clientes (id, nome, tratamento, contato, observacao, criado_em)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [cliente.id, cliente.nome, cliente.tratamento, cliente.contato ?? null, cliente.observacao ?? null, cliente.criadoEm]
+      `INSERT INTO clientes (id, nome, tratamento, contato, observacao, ativo, criado_em)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [cliente.id, cliente.nome, cliente.tratamento, cliente.contato ?? null, cliente.observacao ?? null, bool(cliente.ativo), cliente.criadoEm]
     )
     return cliente
   },
@@ -141,12 +143,20 @@ export const clientesRepo = {
     if (!atual) return null
     const novo = { ...atual, ...patch, id }
     run(
-      `UPDATE clientes SET nome = ?, tratamento = ?, contato = ?, observacao = ? WHERE id = ?`,
-      [novo.nome, novo.tratamento, novo.contato ?? null, novo.observacao ?? null, id]
+      `UPDATE clientes SET nome = ?, tratamento = ?, contato = ?, observacao = ?, ativo = ? WHERE id = ?`,
+      [novo.nome, novo.tratamento, novo.contato ?? null, novo.observacao ?? null, bool(novo.ativo), id]
     )
     return novo
   },
   remove: (id: string): void => {
+    const uso = get(
+      `SELECT 1 AS usado FROM orcamentos WHERE cliente_id = ?
+       UNION ALL SELECT 1 AS usado FROM relatorios WHERE cliente_id = ? LIMIT 1`,
+      [id, id]
+    )
+    if (uso) {
+      throw new Error('Este cliente já foi usado em documentos e não pode ser excluído. Marque-o como inativo.')
+    }
     run('DELETE FROM clientes WHERE id = ?', [id])
   }
 }
@@ -321,12 +331,14 @@ function paraAnexo(l: Linha): AnexoOrcamento {
  */
 function paraOrcamento(l: Linha, filhos: boolean, comMiniaturas = filhos): Orcamento {
   const id = texto(l.id)
+  const clienteId = textoOuNulo(l.cliente_id)
+  const cliente = clienteId ? clientesRepo.get(clienteId) : null
   return {
     id,
     numero: numero(l.numero),
     data: texto(l.data),
-    clienteId: textoOuNulo(l.cliente_id),
-    destinatario: normalizarDestinatario(texto(l.destinatario)),
+    clienteId,
+    destinatario: cliente ? cliente.nome : normalizarDestinatario(texto(l.destinatario)),
     formato: texto(l.formato) as FormatoOrcamento,
     titulo: texto(l.titulo),
     introducao: textoOuNulo(l.introducao) ?? '',
@@ -741,6 +753,8 @@ function paraAnexoRelatorio(l: Linha): AnexoRelatorio {
 
 function paraRelatorio(l: Linha, filhos: boolean, comMiniaturas = filhos): Relatorio {
   const id = texto(l.id)
+  const clienteId = textoOuNulo(l.cliente_id)
+  const cliente = clienteId ? clientesRepo.get(clienteId) : null
   const itensServico = filhos
     ? all('SELECT * FROM relatorio_itens_servico WHERE relatorio_id = ? ORDER BY ordem', [id]).map(paraItemServico)
     : []
@@ -756,8 +770,8 @@ function paraRelatorio(l: Linha, filhos: boolean, comMiniaturas = filhos): Relat
     id,
     numero: numero(l.numero),
     data: texto(l.data),
-    clienteId: textoOuNulo(l.cliente_id),
-    destinatario: normalizarDestinatario(texto(l.destinatario)),
+    clienteId,
+    destinatario: cliente ? cliente.nome : normalizarDestinatario(texto(l.destinatario)),
     formato: texto(l.formato) as FormatoOrcamento,
     titulo: texto(l.titulo) || 'Relatório de Serviço',
     introducao: textoOuNulo(l.introducao) ?? '',
@@ -965,10 +979,12 @@ export const relatoriosRepo = {
     }),
 
   create: (
-    dto: Omit<Relatorio, 'id' | 'numero' | 'criadoEm' | 'atualizadoEm'> & { numero?: number }
+    dto: Omit<Relatorio, 'id' | 'numero' | 'criadoEm' | 'atualizadoEm'> & { numero?: number },
+    original?: { numero?: number; criadoEm?: string; atualizadoEm?: string }
   ): Relatorio =>
     tx(() => {
-      const numeroRel = dto.numero && !donoDoNumeroRelatorio(dto.numero) ? dto.numero : proximoNumeroRelatorio()
+      const pedido = original?.numero ?? dto.numero
+      const numeroRel = pedido && !donoDoNumeroRelatorio(pedido) ? pedido : proximoNumeroRelatorio()
       gravarConfig('seqRelatorio', Math.max(numeroRel, seqRelatorioAtual()))
       const totais = calcularTotaisRelatorio(dto.itensServico, dto.adiantamentos, dto.reembolsos)
       const agora = nowIso()
@@ -978,8 +994,8 @@ export const relatoriosRepo = {
         totais,
         id: randomUUID(),
         numero: numeroRel,
-        criadoEm: agora,
-        atualizadoEm: agora
+        criadoEm: original?.criadoEm ?? agora,
+        atualizadoEm: original?.atualizadoEm ?? agora
       }
       run(
         `INSERT INTO relatorios

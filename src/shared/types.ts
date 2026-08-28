@@ -41,6 +41,8 @@ export interface Cliente {
   tratamento: string
   contato?: string
   observacao?: string
+  /** Clientes inativos ficam fora das sugestões, mas preservam o histórico. */
+  ativo: boolean
   criadoEm: string
 }
 

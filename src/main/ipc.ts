@@ -1,4 +1,4 @@
-import { ipcMain, dialog } from 'electron'
+import { app, ipcMain, dialog } from 'electron'
 import { readFileSync } from 'fs'
 import { extname } from 'path'
 import {
@@ -16,6 +16,7 @@ import {
 } from './repositories'
 import { gerarPdf, gerarDocx, gerarRelatorioPdf, gerarRelatorioDocx } from './documents'
 import { statusIA, sugerirObservacao } from './ia'
+import { exportarDados, importarDados } from './dados'
 
 async function selecionarLogo(): Promise<string | null> {
   const r = await dialog.showOpenDialog({
@@ -34,6 +35,7 @@ async function selecionarLogo(): Promise<string | null> {
 // Mapa canal -> função. Registrado em loop via ipcMain.handle.
 // A geração de documentos (documentos.*) é registrada na Fase 5.
 const handlers: Record<string, (...args: unknown[]) => unknown> = {
+  'aplicativo.versao': () => app.getVersion(),
   'empresa.get': () => empresaRepo.get(),
   'empresa.save': (patch) => empresaRepo.save(patch as never),
 
@@ -95,7 +97,9 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
   'documentos.gerarPdf': (id) => gerarPdf(id as string),
   'documentos.gerarDocx': (id) => gerarDocx(id as string),
   'documentos.gerarRelatorioPdf': (id) => gerarRelatorioPdf(id as string),
-  'documentos.gerarRelatorioDocx': (id) => gerarRelatorioDocx(id as string)
+  'documentos.gerarRelatorioDocx': (id) => gerarRelatorioDocx(id as string),
+  'dados.exportar': () => exportarDados(),
+  'dados.importar': (modo) => importarDados(modo as 'restaurar' | 'mesclar')
 }
 
 export function registrarIpc(): void {

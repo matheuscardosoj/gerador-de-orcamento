@@ -15,6 +15,7 @@ function crud<T, C>(dominio: string): CrudApi<T, C> {
 }
 
 const api: AppApi = {
+  aplicativo: { versao: () => invoke('aplicativo.versao') as never },
   empresa: {
     get: () => invoke('empresa.get') as never,
     save: (patch) => invoke('empresa.save', patch) as never
@@ -71,6 +72,10 @@ const api: AppApi = {
     gerarDocx: (id) => invoke('documentos.gerarDocx', id) as never,
     gerarRelatorioPdf: (id) => invoke('documentos.gerarRelatorioPdf', id) as never,
     gerarRelatorioDocx: (id) => invoke('documentos.gerarRelatorioDocx', id) as never
+  },
+  dados: {
+    exportar: () => invoke('dados.exportar') as never,
+    importar: (modo) => invoke('dados.importar', modo) as never
   }
 }
 

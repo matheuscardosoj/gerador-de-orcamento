@@ -198,7 +198,24 @@ const v2 = (d: Database): void => {
   `)
 }
 
-const MIGRACOES: Array<(d: Database) => void> = [v1, v2]
+/** Clientes já usados não são apagados: podem apenas sair das sugestões. */
+const v3 = (d: Database): void => {
+  d.exec(`ALTER TABLE clientes ADD COLUMN ativo INTEGER NOT NULL DEFAULT 1;`)
+}
+
+/** Evita duplicação quando o mesmo backup é mesclado mais de uma vez. */
+const v4 = (d: Database): void => {
+  d.exec(`
+    CREATE TABLE importacoes_documentos (
+      tipo TEXT NOT NULL,
+      origem_id TEXT NOT NULL,
+      documento_id TEXT NOT NULL,
+      PRIMARY KEY (tipo, origem_id)
+    );
+  `)
+}
+
+const MIGRACOES: Array<(d: Database) => void> = [v1, v2, v3, v4]
 
 export function aplicarMigracoes(d: Database): void {
   const linha = d.get('PRAGMA user_version') as { user_version?: number } | null

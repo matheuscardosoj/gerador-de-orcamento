@@ -7,6 +7,12 @@ import { bancoVazio, semear } from './repositories'
 import { encerrarIA } from './ia'
 import { registrarIpc } from './ipc'
 
+// Usado só por testes automatizados e validações de pacote. Nunca é definido
+// pelo instalador, portanto o perfil normal do usuário continua inalterado.
+if (process.env.GERADOR_USER_DATA_DIR) {
+  app.setPath('userData', process.env.GERADOR_USER_DATA_DIR)
+}
+
 const temTrava = app.requestSingleInstanceLock()
 if (!temTrava) app.quit()
 

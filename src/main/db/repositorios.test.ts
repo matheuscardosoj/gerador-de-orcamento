@@ -104,6 +104,19 @@ it('gera relatório independente da proposta, com totais financeiros próprios',
   expect(repos.orcamentosRepo.get(proposta.id)!.valorTotal).toBe(800)
 })
 
+it('mantém a numeração dos relatórios independente e devolve o último número excluído', () => {
+  const proposta = repos.orcamentosRepo.list().find((o) => o.numero === 1)!
+  const primeiro = repos.relatoriosRepo.criarDeOrcamento(proposta.id)!
+  const segundo = repos.relatoriosRepo.criarDeOrcamento(proposta.id)!
+  expect([primeiro.numero, segundo.numero]).toEqual([2, 3])
+
+  repos.relatoriosRepo.remove(segundo.id)
+  expect(repos.relatoriosRepo.proximoNumero()).toBe(3)
+  expect(repos.relatoriosRepo.definirProximoNumero(1).ok).toBe(false)
+  expect(repos.relatoriosRepo.definirProximoNumero(9).ok).toBe(true)
+  expect(repos.relatoriosRepo.proximoNumero()).toBe(9)
+})
+
 /** Orçamento mínimo para os testes de numeração. */
 function novoOrcamento(destinatario = 'A Fazenda Boa Vista,', numero?: number): Orcamento {
   return repos.orcamentosRepo.create({
@@ -274,4 +287,11 @@ it('salva e relê a configuração de IA', () => {
   expect(repos.configIARepo.get().modeloOllama).toBe('qwen2.5:3b')
   // Campos não informados permanecem.
   expect(repos.configIARepo.get().urlOllama).toBe('http://localhost:11434')
+})
+
+it('não permite excluir cliente usado e permite inativá-lo', () => {
+  const cliente = repos.clientesRepo.get('cli-1')!
+  expect(() => repos.clientesRepo.remove(cliente.id)).toThrow('não pode ser excluído')
+  const inativo = repos.clientesRepo.update(cliente.id, { ativo: false })!
+  expect(inativo.ativo).toBe(false)
 })

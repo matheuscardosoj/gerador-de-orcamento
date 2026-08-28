@@ -56,7 +56,19 @@ export interface DocumentoResultado {
   caminho: string | null
 }
 
+export interface ResultadoImportacaoDados {
+  modo: 'restaurar' | 'mesclar'
+  backupAntes: string
+  importados: Record<string, number>
+  ignorados: Record<string, number>
+  renumerados: { orcamentos: number; relatorios: number }
+  reiniciarNecessario: boolean
+}
+
 export interface AppApi {
+  aplicativo: {
+    versao(): Promise<string>
+  }
   empresa: {
     get(): Promise<EmpresaConfig>
     save(patch: Partial<EmpresaConfig>): Promise<EmpresaConfig>
@@ -122,5 +134,9 @@ export interface AppApi {
     gerarDocx(orcamentoId: string): Promise<DocumentoResultado>
     gerarRelatorioPdf(relatorioId: string): Promise<DocumentoResultado>
     gerarRelatorioDocx(relatorioId: string): Promise<DocumentoResultado>
+  }
+  dados: {
+    exportar(): Promise<{ caminho: string | null }>
+    importar(modo: 'restaurar' | 'mesclar'): Promise<ResultadoImportacaoDados | null>
   }
 }
