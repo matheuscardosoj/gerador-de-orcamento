@@ -215,6 +215,8 @@ export interface Relatorio {
   observacoes: ItemTexto[]
   pagamentos: ItemTexto[]
   anexos: AnexoRelatorio[]
+  /** Anotação interna: aparece no histórico e pode ser sugerida pela IA; não sai no documento. */
+  observacaoInterna?: string
   status: StatusRelatorio
   origemOrcamento?: OrigemOrcamentoRelatorio | null
   totais: TotaisRelatorio

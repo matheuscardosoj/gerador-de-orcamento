@@ -8,7 +8,7 @@ import { normalizarDestinatario } from '@shared/documento/comum'
 import type { AnexoRelatorio, LancamentoRelatorio, Orcamento, Relatorio } from '@shared/types'
 import { novoId } from '../components/tipos'
 import { PreviaRelatorioModal } from '../components/PreviaRelatorioModal'
-import { ServicosCard, TextosCard, type Dados } from './EditorOrcamentoPage'
+import { AnotacaoInterna, ServicosCard, TextosCard, type Dados } from './EditorOrcamentoPage'
 import { arquivosParaAnexos } from '../lib/imagens'
 
 type Base = Pick<Dados, 'empresa' | 'parametros' | 'clientes' | 'servicos' | 'observacoesPadrao' | 'pagamentosPadrao'>
@@ -26,7 +26,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
       const numero = await api.relatorios.proximoNumero()
       if (!vivo) return
       setNumeroOriginal(numero)
-      setRel({ id: '', numero, data: agora(), clienteId: null, destinatario: '', formato: 'tabela', titulo: 'Relatório de Serviço', introducao: '', itensServico: [], adiantamentos: [], reembolsos: [], observacoes: observacoesPadrao.filter(x => x.padrao && (x.aplicacao === 'ambos' || x.aplicacao === 'relatorio')).map(x => ({ id: novoId(), texto: x.texto, origemPadraoId: x.id })), pagamentos: pagamentosPadrao.filter(x => x.padrao && (x.aplicacao === 'ambos' || x.aplicacao === 'relatorio')).map(x => ({ id: novoId(), texto: x.texto, origemPadraoId: x.id })), anexos: [], status: 'rascunho', origemOrcamento: null, totais: calcularTotaisRelatorio([], [], []), criadoEm: agora(), atualizadoEm: agora() })
+      setRel({ id: '', numero, data: agora(), clienteId: null, destinatario: '', formato: 'tabela', titulo: 'Relatório de Serviço', introducao: '', itensServico: [], adiantamentos: [], reembolsos: [], observacoes: observacoesPadrao.filter(x => x.padrao && (x.aplicacao === 'ambos' || x.aplicacao === 'relatorio')).map(x => ({ id: novoId(), texto: x.texto, origemPadraoId: x.id })), pagamentos: pagamentosPadrao.filter(x => x.padrao && (x.aplicacao === 'ambos' || x.aplicacao === 'relatorio')).map(x => ({ id: novoId(), texto: x.texto, origemPadraoId: x.id })), anexos: [], observacaoInterna: '', status: 'rascunho', origemOrcamento: null, totais: calcularTotaisRelatorio([], [], []), criadoEm: agora(), atualizadoEm: agora() })
     })()
     return () => { vivo = false }
   }, [relatorioId])
@@ -68,7 +68,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
     }
   }
   if(!dados||!rel||!totais)return <p className="p-8 text-sm text-slate-500">Carregando…</p>
-  const orcAdaptado:Orcamento={...rel,materiais:[],prazoDias:null,observacaoInterna:'',valorTotal:totais.servicos,status:'rascunho'}
+  const orcAdaptado:Orcamento={...rel,materiais:[],prazoDias:null,valorTotal:totais.servicos,status:'rascunho'}
   const acoes = (
     <div className="flex gap-2">
       <Button variant="outline" onClick={() => setPrevia(true)}>Prévia</Button>
@@ -91,6 +91,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
           <Field label="Destinatário (sem vírgula)" className="md:col-span-3"><Input value={rel.destinatario} onChange={(e) => set({ destinatario: normalizarDestinatario(e.target.value) })} /></Field>
           <Field label="Título" className="md:col-span-3"><Input value={rel.titulo} onChange={(e) => set({ titulo: e.target.value })} /></Field>
           <Field label="Introdução" className="md:col-span-3"><Textarea value={rel.introducao ?? ''} onChange={(e) => set({ introducao: e.target.value })} /></Field>
+          <AnotacaoInterna orc={orcAdaptado} set={(patch) => set({ observacaoInterna: patch.observacaoInterna })} />
         </div>
       </Card>
       <div className="space-y-6">

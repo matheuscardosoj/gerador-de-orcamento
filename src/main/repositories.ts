@@ -792,6 +792,7 @@ function paraRelatorio(l: Linha, filhos: boolean, comMiniaturas = filhos): Relat
           [id]
         ).map(paraAnexoRelatorio)
       : [],
+    observacaoInterna: textoOuNulo(l.observacao_interna) ?? '',
     status: texto(l.status) as StatusRelatorio,
     origemOrcamento: origemId
       ? {
@@ -999,13 +1000,13 @@ export const relatoriosRepo = {
       }
       run(
         `INSERT INTO relatorios
-           (id, numero, data, cliente_id, destinatario, formato, titulo, introducao, status,
+           (id, numero, data, cliente_id, destinatario, formato, titulo, introducao, observacao_interna, status,
             origem_orcamento_id, origem_orcamento_numero, origem_orcamento_cliente,
             total_servicos, total_adiantamentos, total_reembolsos, saldo, criado_em, atualizado_em)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           rel.id, rel.numero, rel.data, rel.clienteId ?? null, rel.destinatario, rel.formato, rel.titulo,
-          rel.introducao ?? null, rel.status, rel.origemOrcamento?.id ?? null,
+          rel.introducao ?? null, rel.observacaoInterna ?? null, rel.status, rel.origemOrcamento?.id ?? null,
           rel.origemOrcamento?.numero ?? null, rel.origemOrcamento?.cliente ?? null,
           totais.servicos, totais.adiantamentos, totais.reembolsos, totais.saldo, rel.criadoEm, rel.atualizadoEm
         ]
@@ -1022,11 +1023,11 @@ export const relatoriosRepo = {
       novo.destinatario = normalizarDestinatario(novo.destinatario)
       novo.totais = calcularTotaisRelatorio(novo.itensServico, novo.adiantamentos, novo.reembolsos)
       run(
-        `UPDATE relatorios SET data = ?, cliente_id = ?, destinatario = ?, formato = ?, titulo = ?, introducao = ?,
+        `UPDATE relatorios SET data = ?, cliente_id = ?, destinatario = ?, formato = ?, titulo = ?, introducao = ?, observacao_interna = ?,
            status = ?, origem_orcamento_id = ?, origem_orcamento_numero = ?, origem_orcamento_cliente = ?,
            total_servicos = ?, total_adiantamentos = ?, total_reembolsos = ?, saldo = ?, atualizado_em = ? WHERE id = ?`,
         [
-          novo.data, novo.clienteId ?? null, novo.destinatario, novo.formato, novo.titulo, novo.introducao ?? null,
+          novo.data, novo.clienteId ?? null, novo.destinatario, novo.formato, novo.titulo, novo.introducao ?? null, novo.observacaoInterna ?? null,
           novo.status, novo.origemOrcamento?.id ?? null, novo.origemOrcamento?.numero ?? null,
           novo.origemOrcamento?.cliente ?? null, novo.totais.servicos, novo.totais.adiantamentos,
           novo.totais.reembolsos, novo.totais.saldo, novo.atualizadoEm, id
@@ -1082,6 +1083,7 @@ export const relatoriosRepo = {
         observacoes: copiarTextos(orc.observacoes, idsObsAmbos),
         pagamentos: copiarTextos(orc.pagamentos, idsPagAmbos),
         anexos: [],
+        observacaoInterna: '',
         status: 'rascunho',
         origemOrcamento: {
           id: orc.id,

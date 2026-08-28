@@ -330,7 +330,7 @@ function DadosGeraisCard({
  * Não sai no documento. O botão preenche uma sugestão com a IA local; o texto
  * continua totalmente editável — ou pode ser escrito do zero, sem usar a IA.
  */
-function AnotacaoInterna({
+export function AnotacaoInterna({
   orc,
   set
 }: {

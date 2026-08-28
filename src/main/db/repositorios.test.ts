@@ -98,9 +98,11 @@ it('gera relatório independente da proposta, com totais financeiros próprios',
   expect(relatorio.itensServico).toEqual(expect.arrayContaining([expect.objectContaining({ descricao: 'Cerca', valorTotal: 800 })]))
   const atualizado = repos.relatoriosRepo.update(relatorio.id, {
     adiantamentos: [{ id: 'a1', descricao: 'Sinal', valor: 100 }],
-    reembolsos: [{ id: 'r1', descricao: 'Combustível', valor: 25 }]
+    reembolsos: [{ id: 'r1', descricao: 'Combustível', valor: 25 }],
+    observacaoInterna: 'Serviço concluído; falta conferir o reembolso.'
   })!
   expect(atualizado.totais.saldo).toBe(725)
+  expect(repos.relatoriosRepo.get(relatorio.id)?.observacaoInterna).toContain('reembolso')
   expect(repos.orcamentosRepo.get(proposta.id)!.valorTotal).toBe(800)
 })
 

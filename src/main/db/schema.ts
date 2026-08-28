@@ -215,7 +215,12 @@ const v4 = (d: Database): void => {
   `)
 }
 
-const MIGRACOES: Array<(d: Database) => void> = [v1, v2, v3, v4]
+/** Anotação interna dos relatórios, independente do conteúdo exportado. */
+const v5 = (d: Database): void => {
+  d.exec(`ALTER TABLE relatorios ADD COLUMN observacao_interna TEXT;`)
+}
+
+const MIGRACOES: Array<(d: Database) => void> = [v1, v2, v3, v4, v5]
 
 export function aplicarMigracoes(d: Database): void {
   const linha = d.get('PRAGMA user_version') as { user_version?: number } | null
