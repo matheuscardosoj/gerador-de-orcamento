@@ -10,6 +10,9 @@ files:
   # Artefatos de builds anteriores nunca fazem parte do aplicativo. Sem esta
   # regra, um instalador candidato poderia embutir a própria pasta release.
   - '!release/**'
+  # Saídas temporárias de testes e validações também não pertencem ao aplicativo.
+  # Elas podem conter uma cópia completa da instalação e dobrar o instalador.
+  - '!output/**'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
   - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
