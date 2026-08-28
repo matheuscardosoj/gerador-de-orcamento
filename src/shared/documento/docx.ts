@@ -25,7 +25,8 @@ import type { IParagraphOptions, IRunOptions, ParagraphChild } from 'docx'
 import { formatMoeda, formatDataExtenso } from '../format'
 import { valorPorExtenso } from '../extenso'
 import { referenciaDoAnexo } from './template'
-import type { EmpresaConfig, Orcamento } from '../types'
+import { destinatarioNoDocumento } from './comum'
+import type { AnexoRelatorio, EmpresaConfig, Orcamento, Relatorio } from '../types'
 
 // ------------------------------------------------------------- Constantes
 const FONTE = 'Calibri'
@@ -354,7 +355,7 @@ export function montarDocumentoDocx(
     })
   )
   if (orc.destinatario) {
-    corpo.push(p(orc.destinatario, { spacing: { line: ENTRELINHA, after: mm(6) } }))
+    corpo.push(p(destinatarioNoDocumento(orc.destinatario), { spacing: { line: ENTRELINHA, after: mm(6) } }))
   }
 
   corpo.push(
@@ -455,5 +456,99 @@ export function montarDocumentoDocx(
         children: corpo
       }
     ]
+  })
+}
+
+function referenciaAnexoRelatorio(rel: Relatorio, anexo: AnexoRelatorio): string | null {
+  if (!anexo.referenciaId || anexo.referenciaTipo === 'solto') return null
+  if (anexo.referenciaTipo === 'servico') {
+    const idx = rel.itensServico.findIndex((i) => i.id === anexo.referenciaId)
+    return idx >= 0 ? `Referente ao Item ${idx + 1} - ${rel.itensServico[idx].descricao}` : null
+  }
+  const itens = anexo.referenciaTipo === 'adiantamento' ? rel.adiantamentos : rel.reembolsos
+  const idx = itens.findIndex((i) => i.id === anexo.referenciaId)
+  const rotulo = anexo.referenciaTipo === 'adiantamento' ? 'Adiantamento' : 'Reembolso'
+  return idx >= 0 ? `${rotulo} ${idx + 1} - ${itens[idx].descricao}` : null
+}
+
+function apendiceRelatorioDocx(
+  rel: Relatorio,
+  titulo: string,
+  anexos: AnexoRelatorio[],
+  imagens: Map<string, string>
+): Paragraph[] {
+  if (!anexos.length) return []
+  const blocos: Paragraph[] = [
+    new Paragraph({
+      children: [new PageBreak(), new TextRun({ text: titulo, bold: true, size: 28 })],
+      alignment: AlignmentType.CENTER,
+      spacing: { line: ENTRELINHA, after: mm(6) }
+    })
+  ]
+  for (const a of anexos) {
+    if (a.titulo) blocos.push(p(a.titulo, { alignment: AlignmentType.CENTER, spacing: { after: mm(1) } }, { bold: true }))
+    const ref = referenciaAnexoRelatorio(rel, a)
+    if (ref) blocos.push(p(ref, { alignment: AlignmentType.CENTER, spacing: { after: mm(2) } }, { italics: true, color: '555555', size: 19 }))
+    const img = imagemDeDataUrl(imagens.get(a.id) ?? a.imagemDataUrl ?? a.miniaturaDataUrl)
+    if (img) {
+      blocos.push(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { after: mm(2) },
+        children: [new ImageRun({ type: img.tipo, data: img.data, transformation: dimensoesAnexo(a.largura, a.altura) })]
+      }))
+    }
+    if (a.descricao) blocos.push(p(a.descricao, { alignment: AlignmentType.CENTER, spacing: { after: mm(8) } }, { size: MIUDO }))
+  }
+  return blocos
+}
+
+/** Monta o relatório com o mesmo sistema visual da proposta e resumo financeiro próprio. */
+export function montarDocumentoRelatorioDocx(
+  rel: Relatorio,
+  empresa: EmpresaConfig,
+  imagens: Map<string, string> = new Map()
+): Document {
+  const cidade = extrairCidade(empresa.endereco)
+  const base: Orcamento = {
+    id: rel.id, numero: rel.numero, data: rel.data, clienteId: rel.clienteId,
+    destinatario: rel.destinatario, formato: rel.formato, titulo: rel.titulo,
+    introducao: rel.introducao, itensServico: rel.itensServico, materiais: [],
+    observacoes: rel.observacoes, pagamentos: rel.pagamentos, anexos: [], prazoDias: null,
+    observacaoInterna: '', valorTotal: rel.totais.servicos, status: 'rascunho',
+    criadoEm: rel.criadoEm, atualizadoEm: rel.atualizadoEm
+  }
+  const corpo: (Paragraph | Table)[] = [cabecalho(empresa)]
+  corpo.push(p(`${cidade}, ${formatDataExtenso(rel.data)}`, { spacing: { line: ENTRELINHA, before: mm(12), after: 0 } }))
+  if (rel.destinatario) corpo.push(p(destinatarioNoDocumento(rel.destinatario), { spacing: { line: ENTRELINHA, after: mm(6) } }))
+  corpo.push(p(rel.titulo || 'Relatório de Serviço', { alignment: AlignmentType.CENTER, spacing: { before: mm(4), after: mm(8) } }, { bold: true, size: 32 }))
+  if (rel.introducao) corpo.push(p(rel.introducao, { alignment: AlignmentType.BOTH, spacing: { after: mm(4) } }))
+  if (rel.formato === 'tabela') {
+    corpo.push(servicosTabela(base))
+    corpo.push(new Paragraph({ spacing: { after: mm(4) }, children: [] }))
+  } else corpo.push(...servicosCarta(base))
+  corpo.push(new Paragraph({
+    spacing: { line: ENTRELINHA, before: mm(5), after: mm(3) },
+    children: [new TextRun({ text: 'Valor total dos serviços: ', bold: true }), new TextRun({ text: formatMoeda(rel.totais.servicos) })]
+  }))
+  corpo.push(...blocoLista('Adiantamentos:', rel.adiantamentos.map((i) => `- ${formatMoeda(i.valor)}${i.descricao ? ` - ${i.descricao}` : ''}`)))
+  corpo.push(...blocoLista('Reembolsos:', rel.reembolsos.map((i) => `+ ${formatMoeda(i.valor)}${i.descricao ? ` - ${i.descricao}` : ''}`)))
+  corpo.push(new Paragraph({
+    spacing: { line: ENTRELINHA, before: mm(5), after: mm(5) },
+    children: [
+      new TextRun({ text: `Valor a ${rel.totais.tipoSaldo === 'devolver' ? 'devolver' : 'receber'}: `, bold: true }),
+      new TextRun({ text: `${formatMoeda(rel.totais.valorFinal)} (${valorPorExtenso(rel.totais.valorFinal)}).`, shading: { fill: AMARELO } })
+    ]
+  }))
+  corpo.push(...blocoLista('Observações:', rel.observacoes.map((i) => i.texto)))
+  corpo.push(...blocoLista('Forma de Pagamento:', rel.pagamentos.map((i) => i.texto)))
+  corpo.push(new Paragraph({ spacing: { before: mm(12), after: 0 }, children: [] }))
+  corpo.push(...assinatura(empresa))
+  corpo.push(...apendiceRelatorioDocx(rel, 'Fotos dos serviços', rel.anexos.filter((a) => a.referenciaTipo === 'servico' || a.referenciaTipo === 'solto'), imagens))
+  corpo.push(...apendiceRelatorioDocx(rel, 'Comprovantes de adiantamentos', rel.anexos.filter((a) => a.referenciaTipo === 'adiantamento'), imagens))
+  corpo.push(...apendiceRelatorioDocx(rel, 'Comprovantes de reembolsos', rel.anexos.filter((a) => a.referenciaTipo === 'reembolso'), imagens))
+  return new Document({
+    styles: { default: { document: { run: { font: FONTE, size: CORPO, color: '000000' }, paragraph: { spacing: { line: ENTRELINHA, after: 0 } } } } },
+    numbering: { config: [{ reference: 'marcadores', levels: [{ level: 0, format: LevelFormat.BULLET, text: '•', alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 400, hanging: 200 } } } }] }] },
+    sections: [{ properties: { page: { size: { width: mm(210), height: mm(297) }, margin: { top: mm(15), bottom: mm(15), left: mm(14), right: mm(14) } } }, children: corpo }]
   })
 }

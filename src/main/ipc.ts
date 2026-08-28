@@ -9,10 +9,12 @@ import {
   observacoesRepo,
   pagamentosRepo,
   orcamentosRepo,
+  relatoriosRepo,
   anexosRepo,
+  anexosRelatorioRepo,
   configIARepo
 } from './repositories'
-import { gerarPdf, gerarDocx } from './documents'
+import { gerarPdf, gerarDocx, gerarRelatorioPdf, gerarRelatorioDocx } from './documents'
 import { statusIA, sugerirObservacao } from './ia'
 
 async function selecionarLogo(): Promise<string | null> {
@@ -69,7 +71,19 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
   'orcamentos.definirProximoNumero': (n) => orcamentosRepo.definirProximoNumero(n as number),
   'orcamentos.alterarNumero': (id, n) => orcamentosRepo.alterarNumero(id as string, n as number),
 
+  'relatorios.list': () => relatoriosRepo.list(),
+  'relatorios.get': (id) => relatoriosRepo.get(id as string),
+  'relatorios.proximoNumero': () => relatoriosRepo.proximoNumero(),
+  'relatorios.create': (dto) => relatoriosRepo.create(dto as never),
+  'relatorios.update': (id, patch) => relatoriosRepo.update(id as string, patch as never),
+  'relatorios.remove': (id) => relatoriosRepo.remove(id as string),
+  'relatorios.numeracao': () => relatoriosRepo.numeracao(),
+  'relatorios.definirProximoNumero': (n) => relatoriosRepo.definirProximoNumero(n as number),
+  'relatorios.alterarNumero': (id, n) => relatoriosRepo.alterarNumero(id as string, n as number),
+  'relatorios.criarDeOrcamento': (id) => relatoriosRepo.criarDeOrcamento(id as string),
+
   'anexos.imagem': (id) => anexosRepo.imagem(id as string),
+  'anexosRelatorio.imagem': (id) => anexosRelatorioRepo.imagem(id as string),
 
   'ia.get': () => configIARepo.get(),
   'ia.save': (patch) => configIARepo.save(patch as never),
@@ -79,7 +93,9 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
   'logo.selecionar': () => selecionarLogo(),
 
   'documentos.gerarPdf': (id) => gerarPdf(id as string),
-  'documentos.gerarDocx': (id) => gerarDocx(id as string)
+  'documentos.gerarDocx': (id) => gerarDocx(id as string),
+  'documentos.gerarRelatorioPdf': (id) => gerarRelatorioPdf(id as string),
+  'documentos.gerarRelatorioDocx': (id) => gerarRelatorioDocx(id as string)
 }
 
 export function registrarIpc(): void {

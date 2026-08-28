@@ -53,17 +53,22 @@ export interface ServicoCatalogo {
   precoReferencia: number | null
 }
 
+/** Define em quais editores um texto cadastrado pode ser usado. */
+export type AplicacaoTextoPadrao = 'ambos' | 'orcamento' | 'relatorio'
+
 export interface ObservacaoPadrao {
   id: string
   texto: string
   /** Se vem marcada por padrão em novos orçamentos. */
   padrao: boolean
+  aplicacao: AplicacaoTextoPadrao
 }
 
 export interface FormaPagamentoPadrao {
   id: string
   texto: string
   padrao: boolean
+  aplicacao: AplicacaoTextoPadrao
 }
 
 export type FormatoOrcamento = 'carta' | 'tabela'
@@ -97,6 +102,8 @@ export interface ItemMaterial {
 export interface ItemTexto {
   id: string
   texto: string
+  /** Preserva a origem para filtrar textos ao converter proposta em relatório. */
+  origemPadraoId?: string | null
 }
 
 /**
@@ -151,6 +158,68 @@ export interface Orcamento {
   atualizadoEm: string
 }
 
+export type StatusRelatorio = 'rascunho' | 'emitido' | 'pago'
+export type TipoLancamentoRelatorio = 'adiantamento' | 'reembolso'
+export type TipoReferenciaAnexoRelatorio = 'servico' | TipoLancamentoRelatorio | 'solto'
+
+export interface LancamentoRelatorio {
+  id: string
+  descricao: string
+  valor: number
+}
+
+/** Foto do relatório, vinculável a serviço, adiantamento ou reembolso. */
+export interface AnexoRelatorio {
+  id: string
+  referenciaTipo: TipoReferenciaAnexoRelatorio
+  referenciaId?: string | null
+  titulo: string
+  descricao: string
+  mime: string
+  largura: number
+  altura: number
+  miniaturaDataUrl?: string
+  imagemDataUrl?: string | null
+}
+
+/** Snapshot sem vínculo vivo com a proposta que originou o relatório. */
+export interface OrigemOrcamentoRelatorio {
+  id: string
+  numero: number
+  cliente: string
+}
+
+export interface TotaisRelatorio {
+  servicos: number
+  adiantamentos: number
+  reembolsos: number
+  saldo: number
+  valorFinal: number
+  tipoSaldo: 'receber' | 'devolver'
+}
+
+export interface Relatorio {
+  id: string
+  numero: number
+  data: string
+  clienteId?: string | null
+  destinatario: string
+  formato: FormatoOrcamento
+  titulo: string
+  introducao?: string
+  itensServico: ItemServico[]
+  adiantamentos: LancamentoRelatorio[]
+  reembolsos: LancamentoRelatorio[]
+  observacoes: ItemTexto[]
+  pagamentos: ItemTexto[]
+  anexos: AnexoRelatorio[]
+  status: StatusRelatorio
+  origemOrcamento?: OrigemOrcamentoRelatorio | null
+  totais: TotaisRelatorio
+  criadoEm: string
+  atualizadoEm: string
+}
+
 /** Origem do modelo de linguagem usado para sugerir a anotação interna. */
 export type ModoIA = 'embutida' | 'ollama' | 'desligada'
 
@@ -177,7 +246,9 @@ export interface BancoDados {
   observacoesPadrao: ObservacaoPadrao[]
   pagamentosPadrao: FormaPagamentoPadrao[]
   orcamentos: Orcamento[]
+  relatorios?: Relatorio[]
   /** Contador sequencial persistente (auto-increment): nunca reutiliza números. */
   seqOrcamento: number
+  seqRelatorio?: number
   configIA: ConfigIA
 }

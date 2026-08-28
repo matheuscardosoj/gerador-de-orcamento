@@ -39,8 +39,23 @@ const api: AppApi = {
     definirProximoNumero: (n) => invoke('orcamentos.definirProximoNumero', n) as never,
     alterarNumero: (id, n) => invoke('orcamentos.alterarNumero', id, n) as never
   },
+  relatorios: {
+    list: () => invoke('relatorios.list') as never,
+    get: (id) => invoke('relatorios.get', id) as never,
+    proximoNumero: () => invoke('relatorios.proximoNumero') as never,
+    create: (dto) => invoke('relatorios.create', dto) as never,
+    update: (id, patch) => invoke('relatorios.update', id, patch) as never,
+    remove: (id) => invoke('relatorios.remove', id) as never,
+    numeracao: () => invoke('relatorios.numeracao') as never,
+    definirProximoNumero: (n) => invoke('relatorios.definirProximoNumero', n) as never,
+    alterarNumero: (id, n) => invoke('relatorios.alterarNumero', id, n) as never,
+    criarDeOrcamento: (id) => invoke('relatorios.criarDeOrcamento', id) as never
+  },
   anexos: {
     imagem: (id) => invoke('anexos.imagem', id) as never
+  },
+  anexosRelatorio: {
+    imagem: (id) => invoke('anexosRelatorio.imagem', id) as never
   },
   ia: {
     get: () => invoke('ia.get') as never,
@@ -53,7 +68,9 @@ const api: AppApi = {
   },
   documentos: {
     gerarPdf: (id) => invoke('documentos.gerarPdf', id) as never,
-    gerarDocx: (id) => invoke('documentos.gerarDocx', id) as never
+    gerarDocx: (id) => invoke('documentos.gerarDocx', id) as never,
+    gerarRelatorioPdf: (id) => invoke('documentos.gerarRelatorioPdf', id) as never,
+    gerarRelatorioDocx: (id) => invoke('documentos.gerarRelatorioDocx', id) as never
   }
 }
 

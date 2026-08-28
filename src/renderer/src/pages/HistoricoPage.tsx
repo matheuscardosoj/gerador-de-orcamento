@@ -134,7 +134,7 @@ export function HistoricoPage(): JSX.Element {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {visiveis.map((o) => (
-                  <LinhaOrcamento key={o.id} o={o} onAbrir={() => navegar({ nome: 'editor', orcamentoId: o.id })} onMudou={reload} />
+                  <LinhaOrcamento key={o.id} o={o} onAbrir={() => navegar({ nome: 'editor', orcamentoId: o.id })} onRelatorio={(id) => navegar({ nome: 'editorRelatorio', relatorioId: id })} onMudou={reload} />
                 ))}
               </tbody>
             </table>
@@ -176,10 +176,12 @@ function ThOrd({
 function LinhaOrcamento({
   o,
   onAbrir,
+  onRelatorio,
   onMudou
 }: {
   o: Orcamento
   onAbrir: () => void
+  onRelatorio: (id: string) => void
   onMudou: () => void
 }): JSX.Element {
   return (
@@ -202,6 +204,12 @@ function LinhaOrcamento({
         <div className="flex justify-end gap-1">
           <Button size="sm" variant="ghost" onClick={onAbrir}>
             Abrir
+          </Button>
+          <Button size="sm" variant="ghost" onClick={async () => {
+            const r = await api.relatorios.criarDeOrcamento(o.id)
+            if (r) onRelatorio(r.id)
+          }}>
+            Gerar relatório
           </Button>
           <Button
             size="sm"

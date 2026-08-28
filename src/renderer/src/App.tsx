@@ -6,9 +6,12 @@ import { HistoricoPage } from './pages/HistoricoPage'
 import { CadastrosPage } from './pages/CadastrosPage'
 import { ConfiguracoesPage } from './pages/ConfiguracoesPage'
 import { EditorOrcamentoPage } from './pages/EditorOrcamentoPage'
+import { HistoricoRelatoriosPage } from './pages/HistoricoRelatoriosPage'
+import { EditorRelatorioPage } from './pages/EditorRelatorioPage'
 
 const itens: Array<{ nome: Rota['nome']; label: string; icon: string }> = [
   { nome: 'historico', label: 'Orçamentos', icon: '📄' },
+  { nome: 'historicoRelatorios', label: 'Relatórios', icon: '📋' },
   { nome: 'cadastros', label: 'Cadastros', icon: '📇' },
   { nome: 'configuracoes', label: 'Configurações', icon: '⚙️' }
 ]
@@ -37,7 +40,7 @@ function Sidebar(): JSX.Element {
       <nav className="flex-1 space-y-1 p-3">
         {itens.map((item) => {
           const ativo =
-            rota.nome === item.nome || (item.nome === 'historico' && rota.nome === 'editor')
+            rota.nome === item.nome || (item.nome === 'historico' && rota.nome === 'editor') || (item.nome === 'historicoRelatorios' && rota.nome === 'editorRelatorio')
           return (
             <button
               key={item.nome}
@@ -67,6 +70,10 @@ function Conteudo(): JSX.Element {
       return <HistoricoPage />
     case 'editor':
       return <EditorOrcamentoPage orcamentoId={rota.orcamentoId} />
+    case 'historicoRelatorios':
+      return <HistoricoRelatoriosPage />
+    case 'editorRelatorio':
+      return <EditorRelatorioPage relatorioId={rota.relatorioId} />
     case 'cadastros':
       return <CadastrosPage />
     case 'configuracoes':

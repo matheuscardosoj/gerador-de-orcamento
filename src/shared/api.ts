@@ -7,6 +7,7 @@ import type {
   ObservacaoPadrao,
   FormaPagamentoPadrao,
   Orcamento,
+  Relatorio,
   ConfigIA,
   StatusIA
 } from './types'
@@ -23,6 +24,10 @@ export interface CrudApi<T, C> {
  * específico no editor. Sem ele, o main usa o próximo número livre.
  */
 export type NovoOrcamento = Omit<Orcamento, 'id' | 'numero' | 'criadoEm' | 'atualizadoEm'> & {
+  numero?: number
+}
+
+export type NovoRelatorio = Omit<Relatorio, 'id' | 'numero' | 'criadoEm' | 'atualizadoEm'> & {
   numero?: number
 }
 
@@ -82,8 +87,23 @@ export interface AppApi {
       numero: number
     ): Promise<ResultadoNumeracao & { orcamento?: Orcamento }>
   }
+  relatorios: {
+    list(): Promise<Relatorio[]>
+    get(id: string): Promise<Relatorio | null>
+    proximoNumero(): Promise<number>
+    create(dto: NovoRelatorio): Promise<Relatorio>
+    update(id: string, patch: Partial<Relatorio>): Promise<Relatorio | null>
+    remove(id: string): Promise<void>
+    numeracao(): Promise<InfoNumeracao>
+    definirProximoNumero(numero: number): Promise<ResultadoNumeracao>
+    alterarNumero(id: string, numero: number): Promise<ResultadoNumeracao & { relatorio?: Relatorio }>
+    criarDeOrcamento(orcamentoId: string): Promise<Relatorio | null>
+  }
   anexos: {
     /** Imagem em tamanho cheio (data URL), carregada sob demanda. */
+    imagem(id: string): Promise<string | null>
+  }
+  anexosRelatorio: {
     imagem(id: string): Promise<string | null>
   }
   ia: {
@@ -100,5 +120,7 @@ export interface AppApi {
   documentos: {
     gerarPdf(orcamentoId: string): Promise<DocumentoResultado>
     gerarDocx(orcamentoId: string): Promise<DocumentoResultado>
+    gerarRelatorioPdf(relatorioId: string): Promise<DocumentoResultado>
+    gerarRelatorioDocx(relatorioId: string): Promise<DocumentoResultado>
   }
 }

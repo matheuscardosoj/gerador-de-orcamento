@@ -117,13 +117,101 @@ const v1 = (d: Database): void => {
   `)
 }
 
-const MIGRACOES: Array<(d: Database) => void> = [v1]
+const v2 = (d: Database): void => {
+  d.exec(`
+    ALTER TABLE observacoes_padrao ADD COLUMN aplicacao TEXT NOT NULL DEFAULT 'orcamento';
+    ALTER TABLE pagamentos_padrao ADD COLUMN aplicacao TEXT NOT NULL DEFAULT 'orcamento';
+    ALTER TABLE orcamento_textos ADD COLUMN origem_padrao_id TEXT;
+
+    CREATE TABLE relatorios (
+      id TEXT PRIMARY KEY,
+      numero INTEGER NOT NULL UNIQUE,
+      data TEXT NOT NULL,
+      cliente_id TEXT REFERENCES clientes(id) ON DELETE SET NULL,
+      destinatario TEXT NOT NULL DEFAULT '',
+      formato TEXT NOT NULL DEFAULT 'carta',
+      titulo TEXT NOT NULL DEFAULT 'Relatório de Serviço',
+      introducao TEXT,
+      status TEXT NOT NULL DEFAULT 'rascunho',
+      origem_orcamento_id TEXT,
+      origem_orcamento_numero INTEGER,
+      origem_orcamento_cliente TEXT,
+      total_servicos REAL NOT NULL DEFAULT 0,
+      total_adiantamentos REAL NOT NULL DEFAULT 0,
+      total_reembolsos REAL NOT NULL DEFAULT 0,
+      saldo REAL NOT NULL DEFAULT 0,
+      criado_em TEXT NOT NULL,
+      atualizado_em TEXT NOT NULL
+    );
+
+    CREATE TABLE relatorio_itens_servico (
+      id TEXT NOT NULL,
+      relatorio_id TEXT NOT NULL REFERENCES relatorios(id) ON DELETE CASCADE,
+      ordem INTEGER NOT NULL DEFAULT 0,
+      servico_id TEXT,
+      descricao TEXT NOT NULL DEFAULT '',
+      unidade TEXT NOT NULL DEFAULT '',
+      quantidade REAL NOT NULL DEFAULT 0,
+      valor_unitario REAL NOT NULL DEFAULT 0,
+      valor_total REAL NOT NULL DEFAULT 0,
+      calculo_json TEXT,
+      PRIMARY KEY (relatorio_id, id)
+    );
+
+    CREATE TABLE relatorio_lancamentos (
+      id TEXT NOT NULL,
+      relatorio_id TEXT NOT NULL REFERENCES relatorios(id) ON DELETE CASCADE,
+      tipo TEXT NOT NULL,
+      ordem INTEGER NOT NULL DEFAULT 0,
+      descricao TEXT NOT NULL DEFAULT '',
+      valor REAL NOT NULL DEFAULT 0,
+      PRIMARY KEY (relatorio_id, id)
+    );
+
+    CREATE TABLE relatorio_textos (
+      id TEXT NOT NULL,
+      relatorio_id TEXT NOT NULL REFERENCES relatorios(id) ON DELETE CASCADE,
+      tipo TEXT NOT NULL,
+      ordem INTEGER NOT NULL DEFAULT 0,
+      texto TEXT NOT NULL DEFAULT '',
+      origem_padrao_id TEXT,
+      PRIMARY KEY (relatorio_id, id)
+    );
+
+    CREATE TABLE relatorio_anexos (
+      id TEXT PRIMARY KEY,
+      relatorio_id TEXT NOT NULL REFERENCES relatorios(id) ON DELETE CASCADE,
+      referencia_tipo TEXT NOT NULL DEFAULT 'solto',
+      referencia_id TEXT,
+      ordem INTEGER NOT NULL DEFAULT 0,
+      titulo TEXT NOT NULL DEFAULT '',
+      descricao TEXT NOT NULL DEFAULT '',
+      mime TEXT NOT NULL DEFAULT 'image/jpeg',
+      largura INTEGER NOT NULL DEFAULT 0,
+      altura INTEGER NOT NULL DEFAULT 0,
+      imagem BLOB,
+      miniatura BLOB
+    );
+
+    CREATE INDEX idx_relatorios_criado ON relatorios(criado_em);
+    CREATE INDEX idx_relatorio_anexos_relatorio ON relatorio_anexos(relatorio_id);
+  `)
+}
+
+const MIGRACOES: Array<(d: Database) => void> = [v1, v2]
 
 export function aplicarMigracoes(d: Database): void {
   const linha = d.get('PRAGMA user_version') as { user_version?: number } | null
   const versao = Number(linha?.user_version ?? 0)
   for (let i = versao; i < MIGRACOES.length; i++) {
-    MIGRACOES[i](d)
-    d.run(`PRAGMA user_version = ${i + 1}`)
+    d.run('BEGIN')
+    try {
+      MIGRACOES[i](d)
+      d.run(`PRAGMA user_version = ${i + 1}`)
+      d.run('COMMIT')
+    } catch (e) {
+      d.run('ROLLBACK')
+      throw e
+    }
   }
 }

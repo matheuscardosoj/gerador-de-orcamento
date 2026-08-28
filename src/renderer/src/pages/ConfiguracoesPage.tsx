@@ -24,6 +24,12 @@ import type {
   StatusIA
 } from '@shared/types'
 
+const aplicacoes = [
+  { valor: 'ambos', rotulo: 'Orçamento e relatório' },
+  { valor: 'orcamento', rotulo: 'Somente orçamento' },
+  { valor: 'relatorio', rotulo: 'Somente relatório' }
+] as const
+
 type Aba = 'empresa' | 'parametros' | 'observacoes' | 'pagamentos' | 'numeracao' | 'ia'
 
 export function ConfiguracoesPage(): JSX.Element {
@@ -305,7 +311,7 @@ function SecaoObservacoes(): JSX.Element {
 
   const adicionar = async (): Promise<void> => {
     if (!novo.trim()) return
-    await api.observacoes.create({ texto: novo.trim(), padrao: true })
+    await api.observacoes.create({ texto: novo.trim(), padrao: true, aplicacao: 'ambos' })
     setNovo('')
     reload()
   }
@@ -314,7 +320,7 @@ function SecaoObservacoes(): JSX.Element {
     <Card className="p-6">
       <SectionTitle
         title="Observações padrão"
-        description="As marcadas como padrão já vêm selecionadas em novos orçamentos"
+        description="Defina onde o texto pode ser usado e se ele entra automaticamente em documentos novos"
       />
       <div className="mb-4 flex gap-2">
         <Textarea
@@ -352,6 +358,7 @@ function ItemObservacao({ obs, onChange }: { obs: ObservacaoPadrao; onChange: ()
   return (
     <div className="flex items-start gap-3 rounded-lg border border-slate-200 p-3">
       <Checkbox
+        label="incluir automaticamente"
         checked={obs.padrao}
         onChange={async (v) => {
           await api.observacoes.update(obs.id, { padrao: v })
@@ -365,6 +372,16 @@ function ItemObservacao({ obs, onChange }: { obs: ObservacaoPadrao; onChange: ()
           <p className="text-sm text-slate-700">{obs.texto}</p>
         )}
       </div>
+      <Select
+        value={obs.aplicacao}
+        onChange={async (e) => {
+          await api.observacoes.update(obs.id, { aplicacao: e.target.value as ObservacaoPadrao['aplicacao'] })
+          onChange()
+        }}
+        className="w-48 shrink-0"
+      >
+        {aplicacoes.map((a) => <option key={a.valor} value={a.valor}>{a.rotulo}</option>)}
+      </Select>
       <div className="flex shrink-0 gap-1">
         {editando ? (
           <Button type="button" size="sm" onClick={salvar}>
@@ -398,7 +415,7 @@ function SecaoPagamentos(): JSX.Element {
 
   const adicionar = async (): Promise<void> => {
     if (!novo.trim()) return
-    await api.pagamentos.create({ texto: novo.trim(), padrao: false })
+    await api.pagamentos.create({ texto: novo.trim(), padrao: false, aplicacao: 'ambos' })
     setNovo('')
     reload()
   }
@@ -407,7 +424,7 @@ function SecaoPagamentos(): JSX.Element {
     <Card className="p-6">
       <SectionTitle
         title="Formas de pagamento padrão"
-        description="A marcada como padrão sempre aparece em novos orçamentos"
+        description="Defina onde o texto pode ser usado e se ele entra automaticamente em documentos novos"
       />
       <div className="mb-4 flex gap-2">
         <Textarea
@@ -449,7 +466,7 @@ function ItemPagamento({
   return (
     <div className="flex items-start gap-3 rounded-lg border border-slate-200 p-3">
       <Checkbox
-        label="padrão"
+        label="incluir automaticamente"
         checked={pag.padrao}
         onChange={async (v) => {
           await api.pagamentos.update(pag.id, { padrao: v })
@@ -463,6 +480,16 @@ function ItemPagamento({
           <p className="text-sm text-slate-700">{pag.texto}</p>
         )}
       </div>
+      <Select
+        value={pag.aplicacao}
+        onChange={async (e) => {
+          await api.pagamentos.update(pag.id, { aplicacao: e.target.value as FormaPagamentoPadrao['aplicacao'] })
+          onChange()
+        }}
+        className="w-48 shrink-0"
+      >
+        {aplicacoes.map((a) => <option key={a.valor} value={a.valor}>{a.rotulo}</option>)}
+      </Select>
       <div className="flex shrink-0 gap-1">
         {editando ? (
           <Button type="button" size="sm" onClick={salvar}>

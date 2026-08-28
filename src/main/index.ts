@@ -7,6 +7,9 @@ import { bancoVazio, semear } from './repositories'
 import { encerrarIA } from './ia'
 import { registrarIpc } from './ipc'
 
+const temTrava = app.requestSingleInstanceLock()
+if (!temTrava) app.quit()
+
 /**
  * Abre o banco e, quando ele ainda está vazio, importa o `banco.json` legado.
  * Só semeia os dados iniciais se não houver nada a importar. Se a importação
@@ -63,11 +66,20 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
+if (temTrava) app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.gerador.orcamentos')
 
   // Inicializa o banco (cria arquivo, migra o JSON ou semeia) e registra o IPC.
-  iniciarBanco()
+  try {
+    iniciarBanco()
+  } catch (e) {
+    dialog.showErrorBox(
+      'Não foi possível atualizar o banco de dados',
+      `${String(e).replace(/^Error:\s*/, '')}\n\nNenhum dado novo foi gravado. O aplicativo será encerrado.`
+    )
+    app.quit()
+    return
+  }
   registrarIpc()
 
   app.on('browser-window-created', (_, window) => {
@@ -79,6 +91,13 @@ app.whenReady().then(() => {
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
+
+app.on('second-instance', () => {
+  const win = BrowserWindow.getAllWindows()[0]
+  if (!win) return
+  if (win.isMinimized()) win.restore()
+  win.focus()
 })
 
 app.on('window-all-closed', () => {

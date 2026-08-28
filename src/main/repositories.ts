@@ -19,9 +19,18 @@ import type {
   ConfigIA,
   CalculoServico,
   FormatoOrcamento,
-  StatusOrcamento
+  StatusOrcamento,
+  Relatorio,
+  LancamentoRelatorio,
+  AnexoRelatorio,
+  StatusRelatorio,
+  TipoLancamentoRelatorio,
+  TipoReferenciaAnexoRelatorio,
+  AplicacaoTextoPadrao
 } from '@shared/types'
 import type { InfoNumeracao, ResultadoNumeracao } from '@shared/api'
+import { calcularTotaisRelatorio } from '@shared/relatorio'
+import { normalizarDestinatario } from '@shared/documento/comum'
 
 const nowIso = (): string => new Date().toISOString()
 
@@ -192,7 +201,12 @@ function repoTextoPadrao<T extends ObservacaoPadrao | FormaPagamentoPadrao>(
   update(id: string, patch: Partial<T>): T | null
   remove(id: string): void
 } {
-  const mapear = (l: Linha): T => ({ id: texto(l.id), texto: texto(l.texto), padrao: paraBool(l.padrao) }) as T
+  const mapear = (l: Linha): T => ({
+    id: texto(l.id),
+    texto: texto(l.texto),
+    padrao: paraBool(l.padrao),
+    aplicacao: (texto(l.aplicacao) || 'orcamento') as AplicacaoTextoPadrao
+  }) as T
 
   return {
     list: () => all(`SELECT * FROM ${tabela} ORDER BY ordem, rowid`).map(mapear),
@@ -203,10 +217,11 @@ function repoTextoPadrao<T extends ObservacaoPadrao | FormaPagamentoPadrao>(
     create: (dto) => {
       const item = { ...dto, id: dto.id ?? randomUUID() } as T
       const proxima = get(`SELECT COALESCE(MAX(ordem), -1) + 1 AS proxima FROM ${tabela}`)
-      run(`INSERT INTO ${tabela} (id, texto, padrao, ordem) VALUES (?, ?, ?, ?)`, [
+      run(`INSERT INTO ${tabela} (id, texto, padrao, aplicacao, ordem) VALUES (?, ?, ?, ?, ?)`, [
         item.id,
         item.texto,
         bool(item.padrao),
+        item.aplicacao ?? 'orcamento',
         numero(proxima?.proxima)
       ])
       return item
@@ -215,7 +230,12 @@ function repoTextoPadrao<T extends ObservacaoPadrao | FormaPagamentoPadrao>(
       const atual = get(`SELECT * FROM ${tabela} WHERE id = ?`, [id])
       if (!atual) return null
       const novo = { ...mapear(atual), ...patch, id } as T
-      run(`UPDATE ${tabela} SET texto = ?, padrao = ? WHERE id = ?`, [novo.texto, bool(novo.padrao), id])
+      run(`UPDATE ${tabela} SET texto = ?, padrao = ?, aplicacao = ? WHERE id = ?`, [
+        novo.texto,
+        bool(novo.padrao),
+        novo.aplicacao,
+        id
+      ])
       return novo
     },
     remove: (id) => {
@@ -257,7 +277,11 @@ const paraMaterial = (l: Linha): ItemMaterial => ({
   especificacao: texto(l.especificacao)
 })
 
-const paraTexto = (l: Linha): ItemTexto => ({ id: texto(l.id), texto: texto(l.texto) })
+const paraTexto = (l: Linha): ItemTexto => ({
+  id: texto(l.id),
+  texto: texto(l.texto),
+  origemPadraoId: textoOuNulo(l.origem_padrao_id)
+})
 
 /** Converte o BLOB do banco em data URL (usada pela miniatura e pelo modo ampliado). */
 function blobParaDataUrl(blob: unknown, mime: string): string | undefined {
@@ -302,7 +326,7 @@ function paraOrcamento(l: Linha, filhos: boolean, comMiniaturas = filhos): Orcam
     numero: numero(l.numero),
     data: texto(l.data),
     clienteId: textoOuNulo(l.cliente_id),
-    destinatario: texto(l.destinatario),
+    destinatario: normalizarDestinatario(texto(l.destinatario)),
     formato: texto(l.formato) as FormatoOrcamento,
     titulo: texto(l.titulo),
     introducao: textoOuNulo(l.introducao) ?? '',
@@ -371,12 +395,13 @@ function gravarFilhos(orcamentoId: string, orc: Orcamento): void {
 
   const gravarTextos = (itens: ItemTexto[], tipo: 'observacao' | 'pagamento'): void =>
     itens.forEach((t, ordem) => {
-      run(`INSERT INTO orcamento_textos (id, orcamento_id, tipo, ordem, texto) VALUES (?, ?, ?, ?, ?)`, [
+      run(`INSERT INTO orcamento_textos (id, orcamento_id, tipo, ordem, texto, origem_padrao_id) VALUES (?, ?, ?, ?, ?, ?)`, [
         t.id || randomUUID(),
         orcamentoId,
         tipo,
         ordem,
-        t.texto
+        t.texto,
+        t.origemPadraoId ?? null
       ])
     })
   gravarTextos(orc.observacoes ?? [], 'observacao')
@@ -576,7 +601,7 @@ export const orcamentosRepo = {
           orc.numero,
           orc.data,
           orc.clienteId ?? null,
-          orc.destinatario,
+          normalizarDestinatario(orc.destinatario),
           orc.formato,
           orc.titulo,
           orc.introducao ?? null,
@@ -604,7 +629,7 @@ export const orcamentosRepo = {
         [
           novo.data,
           novo.clienteId ?? null,
-          novo.destinatario,
+          normalizarDestinatario(novo.destinatario),
           novo.formato,
           novo.titulo,
           novo.introducao ?? null,
@@ -692,6 +717,375 @@ export const orcamentosRepo = {
     })
 }
 
+// --------------------------------------------------------------- Relatórios
+
+const paraLancamentoRelatorio = (l: Linha): LancamentoRelatorio => ({
+  id: texto(l.id),
+  descricao: texto(l.descricao),
+  valor: numero(l.valor)
+})
+
+function paraAnexoRelatorio(l: Linha): AnexoRelatorio {
+  return {
+    id: texto(l.id),
+    referenciaTipo: (texto(l.referencia_tipo) || 'solto') as TipoReferenciaAnexoRelatorio,
+    referenciaId: textoOuNulo(l.referencia_id),
+    titulo: texto(l.titulo),
+    descricao: texto(l.descricao),
+    mime: texto(l.mime) || 'image/jpeg',
+    largura: numero(l.largura),
+    altura: numero(l.altura),
+    miniaturaDataUrl: blobParaDataUrl(l.miniatura, texto(l.mime) || 'image/jpeg')
+  }
+}
+
+function paraRelatorio(l: Linha, filhos: boolean, comMiniaturas = filhos): Relatorio {
+  const id = texto(l.id)
+  const itensServico = filhos
+    ? all('SELECT * FROM relatorio_itens_servico WHERE relatorio_id = ? ORDER BY ordem', [id]).map(paraItemServico)
+    : []
+  const adiantamentos = filhos
+    ? all(`SELECT * FROM relatorio_lancamentos WHERE relatorio_id = ? AND tipo = 'adiantamento' ORDER BY ordem`, [id]).map(paraLancamentoRelatorio)
+    : []
+  const reembolsos = filhos
+    ? all(`SELECT * FROM relatorio_lancamentos WHERE relatorio_id = ? AND tipo = 'reembolso' ORDER BY ordem`, [id]).map(paraLancamentoRelatorio)
+    : []
+  const origemId = textoOuNulo(l.origem_orcamento_id)
+  const saldo = numero(l.saldo)
+  return {
+    id,
+    numero: numero(l.numero),
+    data: texto(l.data),
+    clienteId: textoOuNulo(l.cliente_id),
+    destinatario: normalizarDestinatario(texto(l.destinatario)),
+    formato: texto(l.formato) as FormatoOrcamento,
+    titulo: texto(l.titulo) || 'Relatório de Serviço',
+    introducao: textoOuNulo(l.introducao) ?? '',
+    itensServico,
+    adiantamentos,
+    reembolsos,
+    observacoes: filhos
+      ? all(`SELECT * FROM relatorio_textos WHERE relatorio_id = ? AND tipo = 'observacao' ORDER BY ordem`, [id]).map(paraTexto)
+      : [],
+    pagamentos: filhos
+      ? all(`SELECT * FROM relatorio_textos WHERE relatorio_id = ? AND tipo = 'pagamento' ORDER BY ordem`, [id]).map(paraTexto)
+      : [],
+    anexos: filhos
+      ? all(
+          `SELECT id, referencia_tipo, referencia_id, ordem, titulo, descricao, mime, largura, altura
+                  ${comMiniaturas ? ', miniatura' : ''}
+           FROM relatorio_anexos WHERE relatorio_id = ? ORDER BY ordem`,
+          [id]
+        ).map(paraAnexoRelatorio)
+      : [],
+    status: texto(l.status) as StatusRelatorio,
+    origemOrcamento: origemId
+      ? {
+          id: origemId,
+          numero: numero(l.origem_orcamento_numero),
+          cliente: texto(l.origem_orcamento_cliente)
+        }
+      : null,
+    totais: {
+      servicos: numero(l.total_servicos),
+      adiantamentos: numero(l.total_adiantamentos),
+      reembolsos: numero(l.total_reembolsos),
+      saldo,
+      valorFinal: Math.abs(saldo),
+      tipoSaldo: saldo < 0 ? 'devolver' : 'receber'
+    },
+    criadoEm: texto(l.criado_em),
+    atualizadoEm: texto(l.atualizado_em)
+  }
+}
+
+function gravarAnexosRelatorio(relatorioId: string, anexos: AnexoRelatorio[]): void {
+  const existentes = new Set(
+    all('SELECT id FROM relatorio_anexos WHERE relatorio_id = ?', [relatorioId]).map((l) => texto(l.id))
+  )
+  const mantidos = new Set<string>()
+  anexos.forEach((a, ordem) => {
+    const id = a.id || randomUUID()
+    mantidos.add(id)
+    const imagem = dataUrlParaBuffer(a.imagemDataUrl)
+    const miniatura = dataUrlParaBuffer(a.miniaturaDataUrl)
+    if (existentes.has(id)) {
+      run(
+        `UPDATE relatorio_anexos SET referencia_tipo = ?, referencia_id = ?, ordem = ?, titulo = ?, descricao = ? WHERE id = ?`,
+        [a.referenciaTipo, a.referenciaId ?? null, ordem, a.titulo, a.descricao, id]
+      )
+      if (imagem) {
+        run(`UPDATE relatorio_anexos SET imagem = ?, miniatura = ?, mime = ?, largura = ?, altura = ? WHERE id = ?`, [
+          imagem,
+          miniatura,
+          a.mime,
+          a.largura,
+          a.altura,
+          id
+        ])
+      }
+    } else {
+      run(
+        `INSERT INTO relatorio_anexos
+           (id, relatorio_id, referencia_tipo, referencia_id, ordem, titulo, descricao, mime, largura, altura, imagem, miniatura)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          relatorioId,
+          a.referenciaTipo,
+          a.referenciaId ?? null,
+          ordem,
+          a.titulo,
+          a.descricao,
+          a.mime,
+          a.largura,
+          a.altura,
+          imagem,
+          miniatura
+        ]
+      )
+    }
+  })
+  existentes.forEach((id) => {
+    if (!mantidos.has(id)) run('DELETE FROM relatorio_anexos WHERE id = ?', [id])
+  })
+}
+
+function gravarFilhosRelatorio(relatorioId: string, rel: Relatorio): void {
+  run('DELETE FROM relatorio_itens_servico WHERE relatorio_id = ?', [relatorioId])
+  run('DELETE FROM relatorio_lancamentos WHERE relatorio_id = ?', [relatorioId])
+  run('DELETE FROM relatorio_textos WHERE relatorio_id = ?', [relatorioId])
+
+  rel.itensServico.forEach((i, ordem) => {
+    run(
+      `INSERT INTO relatorio_itens_servico
+         (id, relatorio_id, ordem, servico_id, descricao, unidade, quantidade, valor_unitario, valor_total, calculo_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        i.id || randomUUID(), relatorioId, ordem, i.servicoId ?? null, i.descricao, i.unidade,
+        i.quantidade, i.valorUnitario, i.valorTotal, i.calculo ? JSON.stringify(i.calculo) : null
+      ]
+    )
+  })
+
+  const gravarLancamentos = (itens: LancamentoRelatorio[], tipo: TipoLancamentoRelatorio): void =>
+    itens.forEach((i, ordem) => {
+      run(
+        `INSERT INTO relatorio_lancamentos (id, relatorio_id, tipo, ordem, descricao, valor) VALUES (?, ?, ?, ?, ?, ?)`,
+        [i.id || randomUUID(), relatorioId, tipo, ordem, i.descricao, i.valor]
+      )
+    })
+  gravarLancamentos(rel.adiantamentos ?? [], 'adiantamento')
+  gravarLancamentos(rel.reembolsos ?? [], 'reembolso')
+
+  const gravarTextos = (itens: ItemTexto[], tipo: 'observacao' | 'pagamento'): void =>
+    itens.forEach((i, ordem) => {
+      run(
+        `INSERT INTO relatorio_textos (id, relatorio_id, tipo, ordem, texto, origem_padrao_id) VALUES (?, ?, ?, ?, ?, ?)`,
+        [i.id || randomUUID(), relatorioId, tipo, ordem, i.texto, i.origemPadraoId ?? null]
+      )
+    })
+  gravarTextos(rel.observacoes ?? [], 'observacao')
+  gravarTextos(rel.pagamentos ?? [], 'pagamento')
+  gravarAnexosRelatorio(relatorioId, rel.anexos ?? [])
+}
+
+function seqRelatorioAtual(): number {
+  const l = get('SELECT valor FROM configuracoes WHERE chave = ?', ['seqRelatorio'])
+  return Number(l?.valor ?? 0)
+}
+
+function donoDoNumeroRelatorio(n: number, ignorarId?: string): Linha | null {
+  return ignorarId
+    ? get('SELECT id, destinatario FROM relatorios WHERE numero = ? AND id <> ?', [n, ignorarId])
+    : get('SELECT id, destinatario FROM relatorios WHERE numero = ?', [n])
+}
+
+function numeroRelatorioLivreAPartirDe(de: number): number {
+  let n = Math.max(1, de)
+  while (n <= NUMERO_MAXIMO && donoDoNumeroRelatorio(n)) n++
+  return n
+}
+
+function proximoNumeroRelatorio(): number {
+  return numeroRelatorioLivreAPartirDe(seqRelatorioAtual() + 1)
+}
+
+function validarNumeroRelatorio(n: number, ignorarId?: string): ResultadoNumeracao | null {
+  if (!Number.isInteger(n) || n < 1 || n > NUMERO_MAXIMO) {
+    return { ok: false, erro: `O número deve ser um inteiro entre 1 e ${NUMERO_MAXIMO}.` }
+  }
+  const dono = donoDoNumeroRelatorio(n, ignorarId)
+  if (!dono) return null
+  return {
+    ok: false,
+    erro: `O número ${n} já pertence a outro relatório. O próximo número livre é ${numeroRelatorioLivreAPartirDe(n + 1)}.`,
+    proximoLivre: numeroRelatorioLivreAPartirDe(n + 1)
+  }
+}
+
+export const relatoriosRepo = {
+  list: (): Relatorio[] =>
+    all('SELECT * FROM relatorios ORDER BY criado_em DESC').map((l) => paraRelatorio(l, true, false)),
+
+  get: (id: string): Relatorio | null => {
+    const l = get('SELECT * FROM relatorios WHERE id = ?', [id])
+    return l ? paraRelatorio(l, true) : null
+  },
+
+  proximoNumero: (): number => proximoNumeroRelatorio(),
+
+  numeracao: (): InfoNumeracao => {
+    const agregado = get('SELECT COALESCE(MAX(numero), 0) AS maior, COUNT(*) AS total FROM relatorios')
+    return {
+      proximoNumero: proximoNumeroRelatorio(),
+      maiorEmUso: numero(agregado?.maior),
+      menorLivre: numeroRelatorioLivreAPartirDe(1),
+      totalOrcamentos: numero(agregado?.total)
+    }
+  },
+
+  definirProximoNumero: (n: number): ResultadoNumeracao => {
+    const invalido = validarNumeroRelatorio(n)
+    if (invalido) return invalido
+    gravarConfig('seqRelatorio', n - 1)
+    return { ok: true }
+  },
+
+  alterarNumero: (id: string, n: number): ResultadoNumeracao & { relatorio?: Relatorio } =>
+    tx(() => {
+      const atual = relatoriosRepo.get(id)
+      if (!atual) return { ok: false, erro: 'Relatório não encontrado.' }
+      if (atual.numero === n) return { ok: true, relatorio: atual }
+      const invalido = validarNumeroRelatorio(n, id)
+      if (invalido) return invalido
+      run('UPDATE relatorios SET numero = ?, atualizado_em = ? WHERE id = ?', [n, nowIso(), id])
+      if (n > seqRelatorioAtual()) gravarConfig('seqRelatorio', n)
+      return { ok: true, relatorio: relatoriosRepo.get(id) as Relatorio }
+    }),
+
+  create: (
+    dto: Omit<Relatorio, 'id' | 'numero' | 'criadoEm' | 'atualizadoEm'> & { numero?: number }
+  ): Relatorio =>
+    tx(() => {
+      const numeroRel = dto.numero && !donoDoNumeroRelatorio(dto.numero) ? dto.numero : proximoNumeroRelatorio()
+      gravarConfig('seqRelatorio', Math.max(numeroRel, seqRelatorioAtual()))
+      const totais = calcularTotaisRelatorio(dto.itensServico, dto.adiantamentos, dto.reembolsos)
+      const agora = nowIso()
+      const rel: Relatorio = {
+        ...dto,
+        destinatario: normalizarDestinatario(dto.destinatario),
+        totais,
+        id: randomUUID(),
+        numero: numeroRel,
+        criadoEm: agora,
+        atualizadoEm: agora
+      }
+      run(
+        `INSERT INTO relatorios
+           (id, numero, data, cliente_id, destinatario, formato, titulo, introducao, status,
+            origem_orcamento_id, origem_orcamento_numero, origem_orcamento_cliente,
+            total_servicos, total_adiantamentos, total_reembolsos, saldo, criado_em, atualizado_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          rel.id, rel.numero, rel.data, rel.clienteId ?? null, rel.destinatario, rel.formato, rel.titulo,
+          rel.introducao ?? null, rel.status, rel.origemOrcamento?.id ?? null,
+          rel.origemOrcamento?.numero ?? null, rel.origemOrcamento?.cliente ?? null,
+          totais.servicos, totais.adiantamentos, totais.reembolsos, totais.saldo, rel.criadoEm, rel.atualizadoEm
+        ]
+      )
+      gravarFilhosRelatorio(rel.id, rel)
+      return relatoriosRepo.get(rel.id) as Relatorio
+    }),
+
+  update: (id: string, patch: Partial<Relatorio>): Relatorio | null =>
+    tx(() => {
+      const atual = relatoriosRepo.get(id)
+      if (!atual) return null
+      const novo = { ...atual, ...patch, id, atualizadoEm: nowIso() }
+      novo.destinatario = normalizarDestinatario(novo.destinatario)
+      novo.totais = calcularTotaisRelatorio(novo.itensServico, novo.adiantamentos, novo.reembolsos)
+      run(
+        `UPDATE relatorios SET data = ?, cliente_id = ?, destinatario = ?, formato = ?, titulo = ?, introducao = ?,
+           status = ?, origem_orcamento_id = ?, origem_orcamento_numero = ?, origem_orcamento_cliente = ?,
+           total_servicos = ?, total_adiantamentos = ?, total_reembolsos = ?, saldo = ?, atualizado_em = ? WHERE id = ?`,
+        [
+          novo.data, novo.clienteId ?? null, novo.destinatario, novo.formato, novo.titulo, novo.introducao ?? null,
+          novo.status, novo.origemOrcamento?.id ?? null, novo.origemOrcamento?.numero ?? null,
+          novo.origemOrcamento?.cliente ?? null, novo.totais.servicos, novo.totais.adiantamentos,
+          novo.totais.reembolsos, novo.totais.saldo, novo.atualizadoEm, id
+        ]
+      )
+      gravarFilhosRelatorio(id, novo)
+      return relatoriosRepo.get(id)
+    }),
+
+  remove: (id: string): void =>
+    tx(() => {
+      const alvo = get('SELECT numero FROM relatorios WHERE id = ?', [id])
+      if (!alvo) return
+      const excluido = numero(alvo.numero)
+      run('DELETE FROM relatorios WHERE id = ?', [id])
+      if (excluido === seqRelatorioAtual()) {
+        const restante = get('SELECT COALESCE(MAX(numero), 0) AS maior FROM relatorios')
+        gravarConfig('seqRelatorio', numero(restante?.maior))
+      }
+    }),
+
+  criarDeOrcamento: (orcamentoId: string): Relatorio | null =>
+    tx(() => {
+      const orc = orcamentosRepo.get(orcamentoId)
+      if (!orc) return null
+      const mapaItens = new Map<string, string>()
+      const itensServico = orc.itensServico.map((i) => {
+        const id = randomUUID()
+        mapaItens.set(i.id, id)
+        return { ...i, id, calculo: i.calculo ? structuredClone(i.calculo) : null }
+      })
+      const idsObsAmbos = new Set(
+        observacoesRepo.list().filter((o) => o.aplicacao === 'ambos').map((o) => o.id)
+      )
+      const idsPagAmbos = new Set(
+        pagamentosRepo.list().filter((p) => p.aplicacao === 'ambos').map((p) => p.id)
+      )
+      const copiarTextos = (itens: ItemTexto[], permitidos: Set<string>): ItemTexto[] =>
+        itens
+          .filter((i) => Boolean(i.origemPadraoId && permitidos.has(i.origemPadraoId)))
+          .map((i) => ({ ...i, id: randomUUID() }))
+      const cliente = orc.clienteId ? clientesRepo.get(orc.clienteId)?.nome : null
+      const rel = relatoriosRepo.create({
+        data: nowIso(),
+        clienteId: orc.clienteId ?? null,
+        destinatario: normalizarDestinatario(orc.destinatario),
+        formato: orc.formato,
+        titulo: 'Relatório de Serviço',
+        introducao: orc.introducao ?? '',
+        itensServico,
+        adiantamentos: [],
+        reembolsos: [],
+        observacoes: copiarTextos(orc.observacoes, idsObsAmbos),
+        pagamentos: copiarTextos(orc.pagamentos, idsPagAmbos),
+        anexos: [],
+        status: 'rascunho',
+        origemOrcamento: {
+          id: orc.id,
+          numero: orc.numero,
+          cliente: cliente ?? normalizarDestinatario(orc.destinatario)
+        },
+        totais: calcularTotaisRelatorio(itensServico, [], [])
+      })
+      orc.anexos.filter((a) => a.itemServicoId && mapaItens.has(a.itemServicoId)).forEach((a, ordem) => {
+        run(
+          `INSERT INTO relatorio_anexos
+             (id, relatorio_id, referencia_tipo, referencia_id, ordem, titulo, descricao, mime, largura, altura, imagem, miniatura)
+           SELECT ?, ?, 'servico', ?, ?, titulo, descricao, mime, largura, altura, imagem, miniatura FROM anexos WHERE id = ?`,
+          [randomUUID(), rel.id, mapaItens.get(a.itemServicoId as string), ordem, a.id]
+        )
+      })
+      return relatoriosRepo.get(rel.id)
+    })
+}
+
 // -------------------------------------------------------------- Anexos (BLOB)
 export const anexosRepo = {
   /** Imagem em tamanho cheio, sob demanda (visualização ampliada na tela). */
@@ -703,6 +1097,19 @@ export const anexosRepo = {
   /** Bytes crus, usados pelo gerador de DOCX. */
   buffer: (id: string): Buffer | null => {
     const l = get('SELECT imagem FROM anexos WHERE id = ?', [id])
+    if (!l?.imagem) return null
+    return Buffer.from(l.imagem as Uint8Array)
+  }
+}
+
+export const anexosRelatorioRepo = {
+  imagem: (id: string): string | null => {
+    const l = get('SELECT imagem, mime FROM relatorio_anexos WHERE id = ?', [id])
+    if (!l) return null
+    return blobParaDataUrl(l.imagem, texto(l.mime) || 'image/jpeg') ?? null
+  },
+  buffer: (id: string): Buffer | null => {
+    const l = get('SELECT imagem FROM relatorio_anexos WHERE id = ?', [id])
     if (!l?.imagem) return null
     return Buffer.from(l.imagem as Uint8Array)
   }

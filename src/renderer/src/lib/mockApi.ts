@@ -7,8 +7,10 @@ import type {
   ServicoCatalogo,
   ObservacaoPadrao,
   FormaPagamentoPadrao,
-  Orcamento
+  Orcamento,
+  Relatorio
 } from '@shared/types'
+import { calcularTotaisRelatorio } from '@shared/relatorio'
 
 const uid = (): string => Math.random().toString(36).slice(2)
 
@@ -51,14 +53,16 @@ function estadoInicial(): BancoDados {
       { id: uid(), nome: 'Reformas Simples', descricaoPadrao: 'Manutenção e reparos pontuais.', unidade: 'serviço', precoReferencia: null }
     ],
     observacoesPadrao: [
-      { id: uid(), texto: 'Neste valor estão inclusas a mão de obra e as tributações necessárias. Os materiais são por conta da contratante.', padrao: true },
-      { id: uid(), texto: 'Caso a proposta seja aprovada, favor informar sobre o início do serviço com 15 dias úteis de antecedência.', padrao: true }
+      { id: uid(), texto: 'Neste valor estão inclusas a mão de obra e as tributações necessárias. Os materiais são por conta da contratante.', padrao: true, aplicacao: 'orcamento' },
+      { id: uid(), texto: 'Caso a proposta seja aprovada, favor informar sobre o início do serviço com 15 dias úteis de antecedência.', padrao: true, aplicacao: 'orcamento' }
     ],
     pagamentosPadrao: [
-      { id: uid(), texto: 'Via transferência bancária no Banco do Brasil, agência: 0221-6, conta: 59088-6.', padrao: true }
+      { id: uid(), texto: 'Via transferência bancária no Banco do Brasil, agência: 0221-6, conta: 59088-6.', padrao: true, aplicacao: 'orcamento' }
     ],
     orcamentos: [],
+    relatorios: [],
     seqOrcamento: 0,
+    seqRelatorio: 0,
     configIA: { modo: 'desligada', urlOllama: 'http://localhost:11434', modeloOllama: 'llama3.2:3b' }
   }
 }
@@ -213,10 +217,50 @@ export function criarMockApi(): AppApi {
         return { ok: true, orcamento: clone(o) }
       }
     },
+    relatorios: {
+      list: async () => clone(db.relatorios ?? []),
+      get: async (id) => clone((db.relatorios ?? []).find((x) => x.id === id) ?? null),
+      proximoNumero: async () => (db.seqRelatorio ?? 0) + 1,
+      create: async (dto) => {
+        const numero = dto.numero ?? (db.seqRelatorio ?? 0) + 1
+        db.seqRelatorio = Math.max(db.seqRelatorio ?? 0, numero)
+        const r: Relatorio = { ...(dto as Relatorio), id: uid(), numero, totais: calcularTotaisRelatorio(dto.itensServico, dto.adiantamentos, dto.reembolsos), criadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString() }
+        ;(db.relatorios ??= []).push(r)
+        return clone(r)
+      },
+      update: async (id, patch) => {
+        const r = (db.relatorios ?? []).find((x) => x.id === id)
+        if (!r) return null
+        Object.assign(r, patch, { id, atualizadoEm: new Date().toISOString() })
+        r.totais = calcularTotaisRelatorio(r.itensServico, r.adiantamentos, r.reembolsos)
+        return clone(r)
+      },
+      remove: async (id) => { db.relatorios = (db.relatorios ?? []).filter((x) => x.id !== id) },
+      numeracao: async () => ({ proximoNumero: (db.seqRelatorio ?? 0) + 1, maiorEmUso: db.seqRelatorio ?? 0, menorLivre: (db.seqRelatorio ?? 0) + 1, totalOrcamentos: (db.relatorios ?? []).length }),
+      definirProximoNumero: async (numero) => { db.seqRelatorio = numero - 1; return { ok: true } },
+      alterarNumero: async (id, numero) => { const r = (db.relatorios ?? []).find((x) => x.id === id); if (!r) return { ok: false, erro: 'Relatório não encontrado.' }; r.numero = numero; return { ok: true, relatorio: clone(r) } },
+      criarDeOrcamento: async (id) => {
+        const o = db.orcamentos.find((x) => x.id === id)
+        if (!o) return null
+        const numero = (db.seqRelatorio ?? 0) + 1
+        db.seqRelatorio = numero
+        const r: Relatorio = {
+          id: uid(), numero, data: new Date().toISOString(), clienteId: o.clienteId,
+          destinatario: o.destinatario, formato: o.formato, titulo: 'Relatório de Serviço',
+          introducao: o.introducao, itensServico: clone(o.itensServico), adiantamentos: [], reembolsos: [],
+          observacoes: [], pagamentos: [], anexos: [], status: 'rascunho',
+          origemOrcamento: { id: o.id, numero: o.numero, cliente: o.destinatario },
+          totais: calcularTotaisRelatorio(o.itensServico, [], []), criadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString()
+        }
+        ;(db.relatorios ??= []).push(r)
+        return clone(r)
+      }
+    },
     anexos: {
       // Fora do Electron não há BLOB: a miniatura já embutida no anexo basta.
       imagem: async () => null
     },
+    anexosRelatorio: { imagem: async () => null },
     ia: {
       get: async () => clone(db.configIA),
       save: async (patch) => {
@@ -237,7 +281,9 @@ export function criarMockApi(): AppApi {
     },
     documentos: {
       gerarPdf: async () => ({ caminho: null }),
-      gerarDocx: async () => ({ caminho: null })
+      gerarDocx: async () => ({ caminho: null }),
+      gerarRelatorioPdf: async () => ({ caminho: null }),
+      gerarRelatorioDocx: async () => ({ caminho: null })
     }
   }
 }

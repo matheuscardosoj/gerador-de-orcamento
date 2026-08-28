@@ -3,6 +3,8 @@ import { createContext, useContext, useState, type ReactNode } from 'react'
 export type Rota =
   | { nome: 'historico' }
   | { nome: 'editor'; orcamentoId?: string }
+  | { nome: 'historicoRelatorios' }
+  | { nome: 'editorRelatorio'; relatorioId?: string }
   | { nome: 'cadastros' }
   | { nome: 'configuracoes' }
 

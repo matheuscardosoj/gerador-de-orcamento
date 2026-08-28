@@ -1,8 +1,9 @@
 import { it, expect } from 'vitest'
 import { Packer } from 'docx'
 import { gunzipSync, inflateRawSync } from 'zlib'
-import { montarDocumentoDocx } from './docx'
-import type { EmpresaConfig, Orcamento } from '../types'
+import { montarDocumentoDocx, montarDocumentoRelatorioDocx } from './docx'
+import type { EmpresaConfig, Orcamento, Relatorio } from '../types'
+import { calcularTotaisRelatorio } from '../relatorio'
 
 const empresa: EmpresaConfig = {
   nome: 'VS PRESTADORA DE SERVIÇOS',
@@ -113,4 +114,19 @@ it('põe os anexos numa página nova, com a referência ao serviço', async () =
   // A proposta fecha na assinatura e só então vêm os anexos, em página nova.
   expect(xml.indexOf('w:framePr')).toBeGreaterThan(0)
   expect(xml.indexOf('w:framePr')).toBeLessThan(xml.indexOf('w:br w:type="page"'))
+})
+
+it('gera relatório com resumo financeiro e apêndices separados', async () => {
+  const relatorio: Relatorio = {
+    ...orc, id: 'r1', numero: 1, titulo: 'Relatório de Serviço', formato: 'tabela',
+    adiantamentos: [{ id: 'a1', descricao: 'Sinal', valor: 100 }],
+    reembolsos: [{ id: 'r1', descricao: 'Combustível', valor: 25 }],
+    anexos: [], status: 'emitido', origemOrcamento: { id: 'o1', numero: 4, cliente: 'TMG' },
+    totais: calcularTotaisRelatorio(orc.itensServico, [{ id: 'a1', descricao: 'Sinal', valor: 100 }], [{ id: 'r1', descricao: 'Combustível', valor: 25 }])
+  }
+  const xml = lerDocumentXml(Buffer.from(await Packer.toBuffer(montarDocumentoRelatorioDocx(relatorio, empresa))))
+  expect(xml).toContain('Relatório de Serviço')
+  expect(xml).toContain('Adiantamentos:')
+  expect(xml).toContain('Reembolsos:')
+  expect(xml).toContain('Valor a receber')
 })

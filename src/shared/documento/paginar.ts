@@ -38,7 +38,7 @@ export function paginarDocumento(doc: Document): void {
     const proposta = paginaOriginal.querySelector<HTMLElement>('.proposta')
     if (!proposta) return
     const rodape = proposta.querySelector<HTMLElement>('.rodape')
-    const anexosSecao = paginaOriginal.querySelector<HTMLElement>('.anexos')
+    const anexosSecoes = Array.from(paginaOriginal.querySelectorAll<HTMLElement>('.anexos'))
 
     // Unidades atômicas da proposta: filhos diretos de .proposta, exceto o
     // rodapé (tratado à parte) — com .servicos desembrulhado, para que cada
@@ -57,10 +57,6 @@ export function paginarDocumento(doc: Document): void {
     // divide linha a linha) — diferente do Word, que pagina tabelas
     // automaticamente. Assumido como aceitável: orçamentos costumam ter poucos
     // itens (catálogo de referência tem 11 serviços).
-    const unidadesAnexos: HTMLElement[] = anexosSecao
-      ? (Array.from(anexosSecao.children) as HTMLElement[])
-      : []
-
     /**
      * `offsetHeight` sozinho subestima o espaço real: `.proposta` é um flex
      * column, e margens de irmãos flex NÃO colapsam entre si (diferente do
@@ -81,7 +77,6 @@ export function paginarDocumento(doc: Document): void {
     // usar isso seria circular, já que é exatamente esse espaço que o `sobra`
     // abaixo recalcula do zero para a página final de cada rodapé.
     const alturaRodape = rodape ? rodape.offsetHeight : 0
-    const alturasAnexos = unidadesAnexos.map(alturaComMargens)
 
     const paginasNovas: HTMLElement[] = []
 
@@ -135,8 +130,9 @@ export function paginarDocumento(doc: Document): void {
 
     // Os anexos sempre começam numa folha nova própria — nunca dividem página
     // com o fim da proposta.
-    if (unidadesAnexos.length > 0) {
-      distribuir(unidadesAnexos, alturasAnexos, 'anexos')
+    for (const secao of anexosSecoes) {
+      const unidades = Array.from(secao.children) as HTMLElement[]
+      if (unidades.length > 0) distribuir(unidades, unidades.map(alturaComMargens), 'anexos')
     }
 
     const pai = paginaOriginal.parentNode

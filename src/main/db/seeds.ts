@@ -136,22 +136,26 @@ const observacoesBase: Array<Omit<ObservacaoPadrao, 'id'>> = [
   {
     texto:
       'O valor da proposta considera as quantidades informadas no escopo; caso a quantidade de serviço seja maior ou menor que a prevista, o valor será ajustado.',
-    padrao: true
+    padrao: true,
+    aplicacao: 'orcamento'
   },
   {
     texto:
       'Neste valor estão inclusas a mão de obra e as tributações necessárias. Os materiais são por conta da contratante.',
-    padrao: true
+    padrao: true,
+    aplicacao: 'orcamento'
   },
   {
     texto:
       'Caso a proposta seja aprovada, favor informar sobre o início do serviço com 15 dias úteis de antecedência.',
-    padrao: true
+    padrao: true,
+    aplicacao: 'orcamento'
   },
   {
     texto:
       'Caso o terreno apresente pedras, haverá acréscimo no valor por metro referente a toda a extensão que contém as pedras.',
-    padrao: false
+    padrao: false,
+    aplicacao: 'orcamento'
   }
 ]
 
@@ -160,11 +164,13 @@ const pagamentosBase: Array<Omit<FormaPagamentoPadrao, 'id'>> = [
   {
     texto:
       'Via transferência bancária no Banco do Brasil para conta corrente em nome da V S DE JESUS, agência: 0221-6, conta: 59088-6.',
-    padrao: true
+    padrao: true,
+    aplicacao: 'orcamento'
   },
   {
     texto: 'Via Pix para a chave: 64992341244 (Valdemiro Souza de Jesus).',
-    padrao: false
+    padrao: false,
+    aplicacao: 'orcamento'
   }
 ]
 

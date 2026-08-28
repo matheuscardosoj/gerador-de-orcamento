@@ -2,19 +2,22 @@ import { BrowserWindow, dialog, app } from 'electron'
 import { writeFile, unlink } from 'fs/promises'
 import { join } from 'path'
 import { Packer } from 'docx'
-import { orcamentosRepo, empresaRepo, anexosRepo } from './repositories'
-import { gerarHtmlOrcamento } from '@shared/documento/template'
+import { orcamentosRepo, relatoriosRepo, clientesRepo, empresaRepo, anexosRepo, anexosRelatorioRepo } from './repositories'
+import { gerarHtmlOrcamento, gerarHtmlRelatorio } from '@shared/documento/template'
 import { paginarDocumento } from '@shared/documento/paginar'
-import { montarDocumentoDocx } from '@shared/documento/docx'
+import { montarDocumentoDocx, montarDocumentoRelatorioDocx } from '@shared/documento/docx'
+import { nomeBaseDocumento } from '@shared/documento/comum'
 import type { DocumentoResultado } from '@shared/api'
-import type { Orcamento } from '@shared/types'
+import type { Orcamento, Relatorio } from '@shared/types'
 
 function nomeBase(orc: Orcamento): string {
-  const dest = (orc.destinatario || '')
-    .replace(/[^\wÀ-ú\s-]/g, '')
-    .trim()
-    .slice(0, 40)
-  return `Proposta ${orc.numero}${dest ? ' - ' + dest : ''}`
+  const cliente = orc.clienteId ? clientesRepo.get(orc.clienteId)?.nome : null
+  return nomeBaseDocumento('orcamento', cliente ?? orc.destinatario, orc.data)
+}
+
+function nomeBaseRelatorio(rel: Relatorio): string {
+  const cliente = rel.clienteId ? clientesRepo.get(rel.clienteId)?.nome : null
+  return nomeBaseDocumento('relatorio', cliente ?? rel.destinatario, rel.data)
 }
 
 /**
@@ -36,6 +39,30 @@ function carregarOrcamento(id: string): Orcamento {
   return orc
 }
 
+function carregarRelatorio(id: string): Relatorio {
+  const rel = relatoriosRepo.get(id)
+  if (!rel) throw new Error('Relatório não encontrado')
+  return rel
+}
+
+async function salvarPdfHtml(html: string, nome: string, prefixoTemp: string): Promise<DocumentoResultado> {
+  const tmpHtml = join(app.getPath('temp'), `${prefixoTemp}-${Date.now()}.html`)
+  await writeFile(tmpHtml, html, 'utf-8')
+  const win = new BrowserWindow({ show: false, webPreferences: { offscreen: false, sandbox: true } })
+  try {
+    await win.loadFile(tmpHtml)
+    await win.webContents.executeJavaScript(`(${paginarDocumento.toString()})(document)`)
+    const pdf = await win.webContents.printToPDF({ printBackground: true, preferCSSPageSize: true })
+    const r = await dialog.showSaveDialog({ title: 'Salvar PDF', defaultPath: nome + '.pdf', filters: [{ name: 'PDF', extensions: ['pdf'] }] })
+    if (r.canceled || !r.filePath) return { caminho: null }
+    await writeFile(r.filePath, pdf)
+    return { caminho: r.filePath }
+  } finally {
+    win.destroy()
+    unlink(tmpHtml).catch(() => undefined)
+  }
+}
+
 export async function gerarPdf(id: string): Promise<DocumentoResultado> {
   const orc = carregarOrcamento(id)
   const imagens = imagensDosAnexos(orc)
@@ -44,42 +71,7 @@ export async function gerarPdf(id: string): Promise<DocumentoResultado> {
     ...orc,
     anexos: (orc.anexos ?? []).map((a) => ({ ...a, imagemDataUrl: imagens.get(a.id) ?? null }))
   }
-  const html = gerarHtmlOrcamento(orcComImagens, empresaRepo.get())
-
-  // Renderiza o HTML numa janela oculta e imprime para PDF (sem software externo).
-  const tmpHtml = join(app.getPath('temp'), `orcamento-${Date.now()}.html`)
-  await writeFile(tmpHtml, html, 'utf-8')
-
-  const win = new BrowserWindow({
-    show: false,
-    webPreferences: { offscreen: false, sandbox: true }
-  })
-  try {
-    await win.loadFile(tmpHtml)
-    // O processo main não tem DOM (Node.js): a função de paginação é injetada
-    // por código-fonte na janela — esse HTML temporário não declara CSP, então
-    // a injeção não esbarra em nenhuma restrição.
-    await win.webContents.executeJavaScript(`(${paginarDocumento.toString()})(document)`)
-    const pdf = await win.webContents.printToPDF({
-      printBackground: true,
-      // O tamanho e a margem de cada folha vêm do `@page` do próprio CSS,
-      // já que `paginarDocumento` monta cada `.pagina` como uma folha A4
-      // autocontida (210×297mm com padding próprio, margem zero no @page).
-      preferCSSPageSize: true
-    })
-
-    const r = await dialog.showSaveDialog({
-      title: 'Salvar PDF',
-      defaultPath: nomeBase(orc) + '.pdf',
-      filters: [{ name: 'PDF', extensions: ['pdf'] }]
-    })
-    if (r.canceled || !r.filePath) return { caminho: null }
-    await writeFile(r.filePath, pdf)
-    return { caminho: r.filePath }
-  } finally {
-    win.destroy()
-    unlink(tmpHtml).catch(() => undefined)
-  }
+  return salvarPdfHtml(gerarHtmlOrcamento(orcComImagens, empresaRepo.get()), nomeBase(orc), 'orcamento')
 }
 
 export async function gerarDocx(id: string): Promise<DocumentoResultado> {
@@ -90,6 +82,39 @@ export async function gerarDocx(id: string): Promise<DocumentoResultado> {
   const r = await dialog.showSaveDialog({
     title: 'Salvar DOCX',
     defaultPath: nomeBase(orc) + '.docx',
+    filters: [{ name: 'Documento Word', extensions: ['docx'] }]
+  })
+  if (r.canceled || !r.filePath) return { caminho: null }
+  await writeFile(r.filePath, buffer)
+  return { caminho: r.filePath }
+}
+
+function imagensDoRelatorio(rel: Relatorio): Map<string, string> {
+  const mapa = new Map<string, string>()
+  for (const a of rel.anexos) {
+    const dataUrl = anexosRelatorioRepo.imagem(a.id)
+    if (dataUrl) mapa.set(a.id, dataUrl)
+  }
+  return mapa
+}
+
+export async function gerarRelatorioPdf(id: string): Promise<DocumentoResultado> {
+  const rel = carregarRelatorio(id)
+  const imagens = imagensDoRelatorio(rel)
+  const comImagens: Relatorio = {
+    ...rel,
+    anexos: rel.anexos.map((a) => ({ ...a, imagemDataUrl: imagens.get(a.id) ?? null }))
+  }
+  return salvarPdfHtml(gerarHtmlRelatorio(comImagens, empresaRepo.get()), nomeBaseRelatorio(rel), 'relatorio')
+}
+
+export async function gerarRelatorioDocx(id: string): Promise<DocumentoResultado> {
+  const rel = carregarRelatorio(id)
+  const doc = montarDocumentoRelatorioDocx(rel, empresaRepo.get(), imagensDoRelatorio(rel))
+  const buffer = await Packer.toBuffer(doc)
+  const r = await dialog.showSaveDialog({
+    title: 'Salvar DOCX',
+    defaultPath: nomeBaseRelatorio(rel) + '.docx',
     filters: [{ name: 'Documento Word', extensions: ['docx'] }]
   })
   if (r.canceled || !r.filePath) return { caminho: null }

@@ -22,6 +22,26 @@ let processo: ChildProcess | null = null
 let portaAtual = 0
 let subindo: Promise<number> | null = null
 let timerOcioso: NodeJS.Timeout | null = null
+let diagnosticoBoot = ''
+let capturandoBoot = false
+
+/** O runtime embutido é hermético: configurações LLAMA_* do usuário pertencem a outros servidores. */
+export function ambienteServidorEmbutido(origem: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return Object.fromEntries(
+    Object.entries(origem).filter(([chave]) => !chave.toUpperCase().startsWith('LLAMA_'))
+  )
+}
+
+function registrarDiagnostico(dado: unknown): void {
+  if (!capturandoBoot) return
+  diagnosticoBoot = (diagnosticoBoot + String(dado)).slice(-32_000)
+}
+
+function detalheDiagnostico(): string {
+  const linhas = diagnosticoBoot.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+  const detalhe = linhas.slice(-4).join(' | ').slice(0, 700)
+  return detalhe ? ` Detalhe: ${detalhe}` : ''
+}
 
 /** Pasta dos recursos de IA (fora do asar quando empacotado). */
 function pastaIA(): string {
@@ -70,6 +90,8 @@ async function garantirServidor(): Promise<number> {
     if (!arquivos) throw new Error('Runtime de IA não encontrado em resources/ia.')
 
     const porta = await portaLivre()
+    diagnosticoBoot = ''
+    capturandoBoot = true
     processo = spawn(
       arquivos.exe,
       [
@@ -80,20 +102,33 @@ async function garantirServidor(): Promise<number> {
         '--threads', String(Math.max(2, Math.min(8, cpus().length - 1))),
         '--no-webui'
       ],
-      { stdio: 'ignore', windowsHide: true }
+      {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+        env: ambienteServidorEmbutido()
+      }
     )
-    processo.on('exit', () => {
+    processo.stdout?.on('data', registrarDiagnostico)
+    processo.stderr?.on('data', registrarDiagnostico)
+    processo.on('error', (erro) => {
+      registrarDiagnostico(erro.message)
+      processo = null
+      portaAtual = 0
+    })
+    processo.on('exit', (codigo, sinal) => {
+      if (capturandoBoot) registrarDiagnostico(`Processo encerrado (código ${codigo ?? 'n/a'}, sinal ${sinal ?? 'n/a'}).`)
       processo = null
       portaAtual = 0
     })
 
     const limite = Date.now() + TIMEOUT_BOOT_MS
     while (Date.now() < limite) {
-      if (!processo) throw new Error('O servidor de IA encerrou durante a inicialização.')
+      if (!processo) throw new Error(`O servidor de IA encerrou durante a inicialização.${detalheDiagnostico()}`)
       try {
         const r = await fetch(`http://127.0.0.1:${porta}/health`)
         if (r.ok) {
           portaAtual = porta
+          capturandoBoot = false
           reagendarDesligamento()
           return porta
         }
@@ -103,7 +138,7 @@ async function garantirServidor(): Promise<number> {
       await esperar(500)
     }
     encerrarIA()
-    throw new Error('O servidor de IA não respondeu a tempo.')
+    throw new Error(`O servidor de IA não respondeu a tempo.${detalheDiagnostico()}`)
   })()
 
   try {
@@ -123,6 +158,7 @@ export function encerrarIA(): void {
     processo = null
   }
   portaAtual = 0
+  capturandoBoot = false
 }
 
 // ------------------------------------------------------------------ Chamadas
@@ -238,10 +274,19 @@ export async function statusIA(): Promise<StatusIA> {
   }
   const arquivos = arquivosIA()
   if (arquivos) {
-    return {
-      modo: 'embutida',
-      disponivel: true,
-      detalhe: `Modelo embutido pronto: ${arquivos.modelo.split(/[\\/]/).pop()}.`
+    try {
+      await garantirServidor()
+      return {
+        modo: 'embutida',
+        disponivel: true,
+        detalhe: `Modelo embutido iniciado com sucesso: ${arquivos.modelo.split(/[\\/]/).pop()}.`
+      }
+    } catch (e) {
+      return {
+        modo: 'embutida',
+        disponivel: false,
+        detalhe: String(e).replace(/^Error:\s*/, '')
+      }
     }
   }
   const ok = await ollamaAtivo(cfg)

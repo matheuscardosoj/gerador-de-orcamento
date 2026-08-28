@@ -90,6 +90,20 @@ it('importa o banco JSON preservando números, datas e filhos', () => {
   expect(readdirSync(join(raiz, 'data')).some((f) => f.includes('banco.json.migrado-'))).toBe(true)
 })
 
+it('gera relatório independente da proposta, com totais financeiros próprios', () => {
+  const proposta = repos.orcamentosRepo.list().find((o) => o.numero === 1)!
+  const relatorio = repos.relatoriosRepo.criarDeOrcamento(proposta.id)!
+  expect(relatorio.numero).toBe(1)
+  expect(relatorio.status).toBe('rascunho')
+  expect(relatorio.itensServico).toEqual(expect.arrayContaining([expect.objectContaining({ descricao: 'Cerca', valorTotal: 800 })]))
+  const atualizado = repos.relatoriosRepo.update(relatorio.id, {
+    adiantamentos: [{ id: 'a1', descricao: 'Sinal', valor: 100 }],
+    reembolsos: [{ id: 'r1', descricao: 'Combustível', valor: 25 }]
+  })!
+  expect(atualizado.totais.saldo).toBe(725)
+  expect(repos.orcamentosRepo.get(proposta.id)!.valorTotal).toBe(800)
+})
+
 /** Orçamento mínimo para os testes de numeração. */
 function novoOrcamento(destinatario = 'A Fazenda Boa Vista,', numero?: number): Orcamento {
   return repos.orcamentosRepo.create({

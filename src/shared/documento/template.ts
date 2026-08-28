@@ -1,8 +1,9 @@
 // Gera o HTML do orçamento no layout das propostas reais da VS Prestadora.
 // Usado tanto na prévia (renderer) quanto na geração de PDF/DOCX (main).
-import type { AnexoOrcamento, EmpresaConfig, Orcamento } from '../types'
+import type { AnexoOrcamento, AnexoRelatorio, EmpresaConfig, Orcamento, Relatorio } from '../types'
 import { formatMoeda, formatDataExtenso } from '../format'
 import { valorPorExtenso } from '../extenso'
+import { destinatarioNoDocumento } from './comum'
 
 function esc(s: string): string {
   return String(s ?? '')
@@ -142,7 +143,7 @@ export function gerarHtmlOrcamento(orc: Orcamento, empresa: EmpresaConfig): stri
 
     <div class="remetente">
       <p>${esc(cidade)}, ${formatDataExtenso(orc.data)}</p>
-      ${orc.destinatario ? `<p>${nl2br(orc.destinatario)}</p>` : ''}
+      ${orc.destinatario ? `<p>${nl2br(destinatarioNoDocumento(orc.destinatario))}</p>` : ''}
     </div>
 
     <h1 class="titulo">${esc(orc.titulo || 'Proposta de Serviço')}</h1>
@@ -151,8 +152,8 @@ export function gerarHtmlOrcamento(orc: Orcamento, empresa: EmpresaConfig): stri
 
     <div class="servicos">${servicosHtml}</div>
 
-    <p class="total"><strong>Valor total da proposta:</strong>
-      <mark>${formatMoeda(total)} (${valorPorExtenso(total)}).</mark></p>
+    <!--RESUMO_INICIO--><p class="total"><strong>Valor total da proposta:</strong>
+      <mark>${formatMoeda(total)} (${valorPorExtenso(total)}).</mark></p><!--RESUMO_FIM-->
 
     ${
       orc.prazoDias
@@ -175,6 +176,7 @@ export function gerarHtmlOrcamento(orc: Orcamento, empresa: EmpresaConfig): stri
       </div>
     </div>
     ${secaoAnexos(orc)}
+    <!--APENDICES-->
   `
 
   const estilo = `
@@ -249,4 +251,77 @@ export function gerarHtmlOrcamento(orc: Orcamento, empresa: EmpresaConfig): stri
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Proposta ${esc(
     String(orc.numero)
   )}</title><style>${estilo}</style></head><body><div class="pagina">${corpo}</div></body></html>`
+}
+
+function referenciaAnexoRelatorio(rel: Relatorio, anexo: AnexoRelatorio): string | null {
+  if (!anexo.referenciaId || anexo.referenciaTipo === 'solto') return null
+  if (anexo.referenciaTipo === 'servico') {
+    const idx = rel.itensServico.findIndex((i) => i.id === anexo.referenciaId)
+    return idx >= 0 ? `Referente ao Item ${idx + 1} - ${rel.itensServico[idx].descricao}` : null
+  }
+  const itens = anexo.referenciaTipo === 'adiantamento' ? rel.adiantamentos : rel.reembolsos
+  const idx = itens.findIndex((i) => i.id === anexo.referenciaId)
+  const rotulo = anexo.referenciaTipo === 'adiantamento' ? 'Adiantamento' : 'Reembolso'
+  return idx >= 0 ? `${rotulo} ${idx + 1} - ${itens[idx].descricao}` : null
+}
+
+function apendiceRelatorio(rel: Relatorio, titulo: string, anexos: AnexoRelatorio[]): string {
+  if (!anexos.length) return ''
+  const figuras = anexos.map((a) => {
+    const ref = referenciaAnexoRelatorio(rel, a)
+    const src = a.imagemDataUrl || a.miniaturaDataUrl || ''
+    return `<figure class="anexo">
+      ${a.titulo ? `<p class="anexo-titulo">${esc(a.titulo)}</p>` : ''}
+      ${ref ? `<p class="anexo-ref">${esc(ref)}</p>` : ''}
+      ${src ? `<img class="anexo-img" src="${src}" alt="${esc(a.titulo)}">` : ''}
+      ${a.descricao ? `<figcaption class="anexo-desc">${nl2br(a.descricao)}</figcaption>` : ''}
+    </figure>`
+  }).join('')
+  return `<section class="anexos"><h2 class="anexos-titulo">${esc(titulo)}</h2>${figuras}</section>`
+}
+
+/** Relatório usa o mesmo layout/paginador da proposta, trocando apenas os blocos de domínio. */
+export function gerarHtmlRelatorio(rel: Relatorio, empresa: EmpresaConfig): string {
+  const orcBase: Orcamento = {
+    id: rel.id,
+    numero: rel.numero,
+    data: rel.data,
+    clienteId: rel.clienteId,
+    destinatario: rel.destinatario,
+    formato: rel.formato,
+    titulo: rel.titulo || 'Relatório de Serviço',
+    introducao: rel.introducao,
+    itensServico: rel.itensServico,
+    materiais: [],
+    observacoes: rel.observacoes,
+    pagamentos: rel.pagamentos,
+    anexos: [],
+    prazoDias: null,
+    observacaoInterna: '',
+    valorTotal: rel.totais.servicos,
+    status: 'rascunho',
+    criadoEm: rel.criadoEm,
+    atualizadoEm: rel.atualizadoEm
+  }
+  const listaLancamentos = (itens: Relatorio['adiantamentos'], sinal: '-' | '+'): string =>
+    lista(itens.map((i) => `${sinal} ${formatMoeda(i.valor)}${i.descricao ? ` - ${i.descricao}` : ''}`))
+  const resumo = `<!--RESUMO_INICIO-->
+    <p class="total"><strong>Valor total dos serviços:</strong> ${formatMoeda(rel.totais.servicos)}</p>
+    ${rel.adiantamentos.length ? bloco('Adiantamentos:', listaLancamentos(rel.adiantamentos, '-')) : ''}
+    ${rel.reembolsos.length ? bloco('Reembolsos:', listaLancamentos(rel.reembolsos, '+')) : ''}
+    <p class="total"><strong>Valor a ${rel.totais.tipoSaldo === 'devolver' ? 'devolver' : 'receber'}:</strong>
+      <mark>${formatMoeda(rel.totais.valorFinal)} (${valorPorExtenso(rel.totais.valorFinal)}).</mark></p>
+    <!--RESUMO_FIM-->`
+  const servicos = rel.anexos.filter((a) => a.referenciaTipo === 'servico' || a.referenciaTipo === 'solto')
+  const adiantamentos = rel.anexos.filter((a) => a.referenciaTipo === 'adiantamento')
+  const reembolsos = rel.anexos.filter((a) => a.referenciaTipo === 'reembolso')
+  const apendices = [
+    apendiceRelatorio(rel, 'Fotos dos serviços', servicos),
+    apendiceRelatorio(rel, 'Comprovantes de adiantamentos', adiantamentos),
+    apendiceRelatorio(rel, 'Comprovantes de reembolsos', reembolsos)
+  ].join('')
+  return gerarHtmlOrcamento(orcBase, empresa)
+    .replace(/<!--RESUMO_INICIO-->[\s\S]*?<!--RESUMO_FIM-->/, resumo)
+    .replace('<!--APENDICES-->', `${apendices}<!--APENDICES-->`)
+    .replace(`<title>Proposta ${rel.numero}</title>`, `<title>Relatório ${rel.numero}</title>`)
 }

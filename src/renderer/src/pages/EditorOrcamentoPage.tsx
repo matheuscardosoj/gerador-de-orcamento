@@ -34,8 +34,9 @@ import { ServicoCalculoModal } from '../components/ServicoCalculoModal'
 import { PreviaModal } from '../components/PreviaModal'
 import { AnexosCard } from '../components/AnexosCard'
 import { novoId, type ResultadoServico } from '../components/tipos'
+import { normalizarDestinatario } from '@shared/documento/comum'
 
-interface Dados {
+export interface Dados {
   empresa: EmpresaConfig
   parametros: ParametrosFinanceiros
   clientes: Cliente[]
@@ -90,8 +91,8 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
           introducao: '',
           itensServico: [],
           materiais: [],
-          observacoes: observacoesPadrao.filter((o) => o.padrao).map((o) => ({ id: novoId(), texto: o.texto })),
-          pagamentos: pagamentosPadrao.filter((p) => p.padrao).map((p) => ({ id: novoId(), texto: p.texto })),
+          observacoes: observacoesPadrao.filter((o) => o.padrao && (o.aplicacao === 'ambos' || o.aplicacao === 'orcamento')).map((o) => ({ id: novoId(), texto: o.texto, origemPadraoId: o.id })),
+          pagamentos: pagamentosPadrao.filter((p) => p.padrao && (p.aplicacao === 'ambos' || p.aplicacao === 'orcamento')).map((p) => ({ id: novoId(), texto: p.texto, origemPadraoId: p.id })),
           anexos: [],
           prazoDias: null,
           observacaoInterna: '',
@@ -179,6 +180,13 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
     }
   }
 
+  const gerarRelatorio = async (): Promise<void> => {
+    const salvo = await salvar()
+    if (!salvo) return
+    const rel = await api.relatorios.criarDeOrcamento(salvo.id)
+    if (rel) navegar({ nome: 'editorRelatorio', relatorioId: rel.id })
+  }
+
   return (
     <PageShell
       titulo={orc.id ? `Orçamento ${orc.numero}` : 'Novo orçamento'}
@@ -190,6 +198,9 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
           </Button>
           <Button variant="outline" onClick={() => setPreviaAberta(true)}>
             Prévia
+          </Button>
+          <Button variant="outline" onClick={gerarRelatorio}>
+            Gerar relatório
           </Button>
           <Button variant="outline" onClick={() => exportar('docx')}>
             DOCX
@@ -212,14 +223,14 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
           titulo="Observações"
           descricao="Textos que aparecem no rodapé do orçamento"
           itens={orc.observacoes}
-          sugestoes={dados.observacoesPadrao.map((o) => o.texto)}
+          sugestoes={dados.observacoesPadrao.filter((o) => o.aplicacao === 'ambos' || o.aplicacao === 'orcamento')}
           onChange={(observacoes) => set({ observacoes })}
         />
         <TextosCard
           titulo="Formas de pagamento"
           descricao="Podem ser várias"
           itens={orc.pagamentos}
-          sugestoes={dados.pagamentosPadrao.map((p) => p.texto)}
+          sugestoes={dados.pagamentosPadrao.filter((p) => p.aplicacao === 'ambos' || p.aplicacao === 'orcamento')}
           onChange={(pagamentos) => set({ pagamentos })}
         />
         <AnexosCard
@@ -280,7 +291,7 @@ function DadosGeraisCard({
               const c = clientes.find((x) => x.id === e.target.value)
               set({
                 clienteId: c?.id ?? null,
-                destinatario: c ? `${c.tratamento} ${c.nome},` : orc.destinatario
+                destinatario: c ? normalizarDestinatario(`${c.tratamento} ${c.nome}`) : orc.destinatario
               })
             }}
           >
@@ -292,11 +303,11 @@ function DadosGeraisCard({
             ))}
           </Select>
         </Field>
-        <Field label="Destinatário (como aparece no doc)" className="md:col-span-2">
+        <Field label="Destinatário (sem vírgula)" hint="A vírgula será acrescentada apenas no PDF e DOCX" className="md:col-span-2">
           <Input
             value={orc.destinatario}
-            onChange={(e) => set({ destinatario: e.target.value, clienteId: null })}
-            placeholder="Ex.: A TMG,"
+            onChange={(e) => set({ destinatario: normalizarDestinatario(e.target.value), clienteId: null })}
+            placeholder="Ex.: A TMG"
           />
         </Field>
         <Field label="Título" className="md:col-span-2">
@@ -366,16 +377,20 @@ function AnotacaoInterna({
 }
 
 // ----------------------------------------------------------------- Serviços
-function ServicosCard({
+export function ServicosCard({
   orc,
   set,
   dados,
-  total
+  total,
+  titulo = 'Serviços a executar',
+  rotuloTotal = 'Total do orçamento'
 }: {
   orc: Orcamento
   set: (p: Partial<Orcamento>) => void
   dados: Dados
   total: number
+  titulo?: string
+  rotuloTotal?: string
 }): JSX.Element {
   const [calcAberto, setCalcAberto] = useState<ItemServico | 'novo' | null>(null)
   const [manualAberto, setManualAberto] = useState<ItemServico | 'novo' | null>(null)
@@ -408,7 +423,7 @@ function ServicosCard({
   return (
     <Card className="p-6">
       <SectionTitle
-        title="Serviços a executar"
+        title={titulo}
         description="Adicione com cálculo de custo ou informe o valor manualmente"
         action={
           <div className="flex items-center gap-2">
@@ -477,7 +492,7 @@ function ServicosCard({
             <tfoot>
               <tr className="border-t border-slate-200 bg-slate-50">
                 <td colSpan={4} className="px-3 py-2 text-right text-sm font-semibold text-slate-600">
-                  Total do orçamento
+                  {rotuloTotal}
                 </td>
                 <td className="px-3 py-2 text-right text-base font-bold text-brand-tealDark">
                   {formatMoeda(total)}
@@ -652,7 +667,7 @@ function MateriaisCard({
 }
 
 // ------------------------------------------------- Observações / Pagamentos
-function TextosCard({
+export function TextosCard({
   titulo,
   descricao,
   itens,
@@ -662,16 +677,16 @@ function TextosCard({
   titulo: string
   descricao?: string
   itens: ItemTexto[]
-  sugestoes: string[]
+  sugestoes: Array<{ id: string; texto: string }>
   onChange: (itens: ItemTexto[]) => void
 }): JSX.Element {
-  const add = (texto = ''): void => onChange([...itens, { id: novoId(), texto }])
+  const add = (texto = '', origemPadraoId?: string): void => onChange([...itens, { id: novoId(), texto, origemPadraoId }])
   const upd = (id: string, texto: string): void =>
-    onChange(itens.map((i) => (i.id === id ? { ...i, texto } : i)))
+    onChange(itens.map((i) => (i.id === id ? { ...i, texto, origemPadraoId: null } : i)))
   const rem = (id: string): void => onChange(itens.filter((i) => i.id !== id))
 
   const usadas = new Set(itens.map((i) => i.texto))
-  const disponiveis = sugestoes.filter((s) => !usadas.has(s))
+  const disponiveis = sugestoes.filter((s) => !usadas.has(s.texto))
 
   return (
     <Card className="p-6">
@@ -702,16 +717,16 @@ function TextosCard({
         <div className="mt-3 border-t border-slate-100 pt-3">
           <p className="mb-2 text-xs font-medium text-slate-400">Inserir padrão:</p>
           <div className="flex flex-wrap gap-2">
-            {disponiveis.map((s, idx) => (
+            {disponiveis.map((s) => (
               <button
-                key={idx}
-                onClick={() => add(s)}
+                key={s.id}
+                onClick={() => add(s.texto, s.id)}
                 className={cn(
                   'max-w-full truncate rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-left text-xs text-slate-600 hover:border-brand-teal hover:text-brand-tealDark'
                 )}
-                title={s}
+                title={s.texto}
               >
-                {s.length > 70 ? s.slice(0, 70) + '…' : s}
+                {s.texto.length > 70 ? s.texto.slice(0, 70) + '…' : s.texto}
               </button>
             ))}
           </div>
