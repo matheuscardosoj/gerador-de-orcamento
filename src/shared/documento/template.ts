@@ -3,7 +3,7 @@
 import type { AnexoOrcamento, AnexoRelatorio, EmpresaConfig, Orcamento, Relatorio } from '../types'
 import { formatMoeda, formatDataExtenso } from '../format'
 import { valorPorExtenso } from '../extenso'
-import { destinatarioNoDocumento } from './comum'
+import { destinatarioNoDocumento, LIMITE_ANEXO_MM } from './comum'
 
 function esc(s: string): string {
   return String(s ?? '')
@@ -88,23 +88,42 @@ function fonteDaImagem(a: AnexoOrcamento): string {
   return a.imagemDataUrl || a.miniaturaDataUrl || ''
 }
 
+interface FiguraAnexo {
+  titulo?: string
+  referencia?: string | null
+  imagem?: string | null
+  descricao?: string
+}
+
+/** Estrutura única de figura, compartilhada por orçamento e relatório. */
+function figuraAnexo({ titulo, referencia, imagem, descricao }: FiguraAnexo): string {
+  return `<figure class="anexo">
+    ${titulo ? `<p class="anexo-titulo">${esc(titulo)}</p>` : ''}
+    ${referencia ? `<p class="anexo-ref">${esc(referencia)}</p>` : ''}
+    ${imagem ? `<img class="anexo-img" src="${imagem}" alt="${esc(titulo ?? '')}">` : ''}
+    ${descricao ? `<figcaption class="anexo-desc">${nl2br(descricao)}</figcaption>` : ''}
+  </figure>`
+}
+
+function secaoDeAnexos(titulo: string, figuras: string[]): string {
+  return figuras.length
+    ? `<section class="anexos"><h2 class="anexos-titulo">${esc(titulo)}</h2>${figuras.join('')}</section>`
+    : ''
+}
+
 /** Seção de anexos: começa sempre numa página nova e só existe se houver fotos. */
 function secaoAnexos(orc: Orcamento): string {
   const anexos = orc.anexos ?? []
   if (anexos.length === 0) return ''
-  const figuras = anexos
-    .map((a) => {
-      const ref = referenciaDoAnexo(orc, a.itemServicoId)
-      const src = fonteDaImagem(a)
-      return `<figure class="anexo">
-        ${a.titulo ? `<p class="anexo-titulo">${esc(a.titulo)}</p>` : ''}
-        ${ref ? `<p class="anexo-ref">${esc(ref)}</p>` : ''}
-        ${src ? `<img class="anexo-img" src="${src}" alt="${esc(a.titulo)}">` : ''}
-        ${a.descricao ? `<figcaption class="anexo-desc">${nl2br(a.descricao)}</figcaption>` : ''}
-      </figure>`
-    })
-    .join('')
-  return `<section class="anexos"><h2 class="anexos-titulo">Anexos</h2>${figuras}</section>`
+  return secaoDeAnexos(
+    'Anexos',
+    anexos.map((a) => figuraAnexo({
+      titulo: a.titulo,
+      referencia: referenciaDoAnexo(orc, a.itemServicoId),
+      imagem: fonteDaImagem(a),
+      descricao: a.descricao
+    }))
+  )
 }
 
 /**
@@ -238,7 +257,7 @@ export function gerarHtmlOrcamento(orc: Orcamento, empresa: EmpresaConfig): stri
     .anexo-ref { font-style: italic; color: #555; font-size: 9.5pt; margin: 0 0 2mm; }
     /* Mesmos limites usados no DOCX (dimensoesAnexo), para os dois formatos
        quebrarem as páginas nos mesmos pontos. */
-    .anexo-img { max-width: 150mm; max-height: 100mm; object-fit: contain; border: 1px solid #ccc; }
+    .anexo-img { display: block; width: auto; height: auto; max-width: ${LIMITE_ANEXO_MM.largura}mm; max-height: ${LIMITE_ANEXO_MM.altura}mm; margin: 0 auto; object-fit: contain; border: 1px solid #ccc; }
     .anexo-desc { margin: 2mm 0 0; font-size: 10.5pt; text-align: center; }
     .rodape { margin-top: auto; padding-top: 12mm; text-align: center; page-break-inside: avoid; }
     .rodape-linha { border-top: 1px solid #000; width: 55%; margin: 0 auto 3px; }
@@ -266,18 +285,15 @@ function referenciaAnexoRelatorio(rel: Relatorio, anexo: AnexoRelatorio): string
 }
 
 function apendiceRelatorio(rel: Relatorio, titulo: string, anexos: AnexoRelatorio[]): string {
-  if (!anexos.length) return ''
-  const figuras = anexos.map((a) => {
-    const ref = referenciaAnexoRelatorio(rel, a)
-    const src = a.imagemDataUrl || a.miniaturaDataUrl || ''
-    return `<figure class="anexo">
-      ${a.titulo ? `<p class="anexo-titulo">${esc(a.titulo)}</p>` : ''}
-      ${ref ? `<p class="anexo-ref">${esc(ref)}</p>` : ''}
-      ${src ? `<img class="anexo-img" src="${src}" alt="${esc(a.titulo)}">` : ''}
-      ${a.descricao ? `<figcaption class="anexo-desc">${nl2br(a.descricao)}</figcaption>` : ''}
-    </figure>`
-  }).join('')
-  return `<section class="anexos"><h2 class="anexos-titulo">${esc(titulo)}</h2>${figuras}</section>`
+  return secaoDeAnexos(
+    titulo,
+    anexos.map((a) => figuraAnexo({
+      titulo: a.titulo,
+      referencia: referenciaAnexoRelatorio(rel, a),
+      imagem: a.imagemDataUrl || a.miniaturaDataUrl,
+      descricao: a.descricao
+    }))
+  )
 }
 
 /** Relatório usa o mesmo layout/paginador da proposta, trocando apenas os blocos de domínio. */

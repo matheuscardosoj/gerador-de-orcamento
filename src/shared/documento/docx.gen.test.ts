@@ -130,3 +130,46 @@ it('gera relatório com resumo financeiro e apêndices separados', async () => {
   expect(xml).toContain('Reembolsos:')
   expect(xml).toContain('Valor a receber')
 })
+
+it('mantém o mesmo padrão de anexos no relatório, sem reduzir imagens por categoria', async () => {
+  // A imagem em si pode ser pequena: as dimensões salvas são a fonte de verdade
+  // para calcular o espaço reservado ao anexo no Word.
+  const png =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+  const anexos = [
+    { id: 'foto-servico', referenciaTipo: 'servico' as const, referenciaId: 'a', titulo: 'Foto horizontal', descricao: 'Serviço concluído.', mime: 'image/png', largura: 1600, altura: 900, imagemDataUrl: png },
+    { id: 'foto-adiantamento', referenciaTipo: 'adiantamento' as const, referenciaId: 'adiantamento-1', titulo: 'Comprovante vertical', descricao: 'Sinal recebido.', mime: 'image/png', largura: 900, altura: 1600, imagemDataUrl: png },
+    { id: 'foto-reembolso', referenciaTipo: 'reembolso' as const, referenciaId: 'reembolso-1', titulo: 'Comprovante quadrado', descricao: 'Combustível reembolsado.', mime: 'image/png', largura: 1000, altura: 1000, imagemDataUrl: png }
+  ]
+  const relatorio: Relatorio = {
+    ...orc,
+    id: 'r-com-anexos', numero: 2, titulo: 'Relatório de Serviço',
+    adiantamentos: [{ id: 'adiantamento-1', descricao: 'Sinal', valor: 100 }],
+    reembolsos: [{ id: 'reembolso-1', descricao: 'Combustível', valor: 25 }],
+    anexos,
+    status: 'emitido', origemOrcamento: null,
+    totais: calcularTotaisRelatorio(orc.itensServico, [{ id: 'adiantamento-1', descricao: 'Sinal', valor: 100 }], [{ id: 'reembolso-1', descricao: 'Combustível', valor: 25 }])
+  }
+
+  const xml = lerDocumentXml(Buffer.from(await Packer.toBuffer(montarDocumentoRelatorioDocx(relatorio, empresa))))
+  expect(xml).toContain('Fotos dos serviços')
+  expect(xml).toContain('Comprovantes de adiantamentos')
+  expect(xml).toContain('Comprovantes de reembolsos')
+  expect(xml).toContain('Referente ao Item 1 - Cerca')
+  expect(xml).toContain('Adiantamento 1 - Sinal')
+  expect(xml).toContain('Reembolso 1 - Combustível')
+  // Uma quebra por apêndice: serviços, adiantamentos e reembolsos.
+  expect((xml.match(/w:br w:type="page"/g) ?? []).length).toBeGreaterThanOrEqual(3)
+
+  const extensoes = [...xml.matchAll(/wp:extent cx="(\d+)" cy="(\d+)"/g)].map((m) => ({ largura: Number(m[1]), altura: Number(m[2]) }))
+  expect(extensoes).toEqual([
+    { largura: 5400675, altura: 3038475 },
+    { largura: 2028825, altura: 3600450 },
+    { largura: 3600450, altura: 3600450 }
+  ])
+
+  // A mesma foto horizontal ocupa exatamente a mesma área em proposta e relatório.
+  const propostaComFoto: Orcamento = { ...orc, anexos: [{ id: 'foto-orcamento', itemServicoId: 'a', titulo: 'Foto horizontal', descricao: 'Serviço concluído.', mime: 'image/png', largura: 1600, altura: 900, imagemDataUrl: png }] }
+  const xmlProposta = lerDocumentXml(Buffer.from(await Packer.toBuffer(montarDocumentoDocx(propostaComFoto, empresa))))
+  expect(xmlProposta.match(/wp:extent cx="(\d+)" cy="(\d+)"/)?.slice(1)).toEqual(['5400675', '3038475'])
+})

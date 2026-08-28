@@ -9,6 +9,9 @@ export function destinatarioNoDocumento(valor: string): string {
   return limpo ? `${limpo},` : ''
 }
 
+/** Limite visual único para anexos em prévia, PDF e Word, sem distorção. */
+export const LIMITE_ANEXO_MM = { largura: 150, altura: 100 } as const
+
 /**
  * O tratamento pertence somente à apresentação do documento. Assim, listas,
  * pesquisas e nomes de arquivos trabalham sempre com o nome limpo do cliente.

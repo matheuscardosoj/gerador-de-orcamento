@@ -25,8 +25,8 @@ import type { IParagraphOptions, IRunOptions, ParagraphChild } from 'docx'
 import { formatMoeda, formatDataExtenso } from '../format'
 import { valorPorExtenso } from '../extenso'
 import { referenciaDoAnexo } from './template'
-import { destinatarioNoDocumento } from './comum'
-import type { AnexoRelatorio, EmpresaConfig, Orcamento, Relatorio } from '../types'
+import { destinatarioNoDocumento, LIMITE_ANEXO_MM } from './comum'
+import type { AnexoOrcamento, AnexoRelatorio, EmpresaConfig, Orcamento, Relatorio } from '../types'
 
 // ------------------------------------------------------------- Constantes
 const FONTE = 'Calibri'
@@ -236,18 +236,41 @@ function blocoLista(titulo: string, itens: string[]): Paragraph[] {
  * 100 mm de altura deixa duas fotos por página com folga nos dois formatos.
  */
 function dimensoesAnexo(largura: number, altura: number): { width: number; height: number } {
-  const maxW = mmParaPx(150)
-  const maxH = mmParaPx(100)
+  const maxW = mmParaPx(LIMITE_ANEXO_MM.largura)
+  const maxH = mmParaPx(LIMITE_ANEXO_MM.altura)
   const w = largura > 0 ? largura : maxW
   const h = altura > 0 ? altura : maxH
   const escala = Math.min(maxW / w, maxH / h, 1)
   return { width: Math.round(w * escala), height: Math.round(h * escala) }
 }
 
+type AnexoComumDocx = Pick<AnexoOrcamento, 'id' | 'titulo' | 'descricao' | 'largura' | 'altura' | 'imagemDataUrl' | 'miniaturaDataUrl'>
+
+function figuraAnexoDocx(anexo: AnexoComumDocx, referencia: string | null, imagem: string | undefined): Paragraph[] {
+  const blocos: Paragraph[] = []
+  if (anexo.titulo) {
+    blocos.push(p(anexo.titulo, { alignment: AlignmentType.CENTER, spacing: { line: ENTRELINHA, after: mm(1) } }, { bold: true }))
+  }
+  if (referencia) {
+    blocos.push(p(referencia, { alignment: AlignmentType.CENTER, spacing: { line: ENTRELINHA, after: mm(2) } }, { italics: true, color: '555555', size: 19 }))
+  }
+  const img = imagemDeDataUrl(imagem ?? anexo.imagemDataUrl ?? anexo.miniaturaDataUrl)
+  if (img) {
+    blocos.push(new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { line: 240, after: mm(2) },
+      children: [new ImageRun({ type: img.tipo, data: img.data, transformation: dimensoesAnexo(anexo.largura, anexo.altura) })]
+    }))
+  }
+  if (anexo.descricao) {
+    blocos.push(p(anexo.descricao, { alignment: AlignmentType.CENTER, spacing: { line: ENTRELINHA, after: mm(8) } }, { size: MIUDO }))
+  }
+  return blocos
+}
+
 function secaoAnexos(orc: Orcamento, imagens: Map<string, string>): Paragraph[] {
   const anexos = orc.anexos ?? []
   if (anexos.length === 0) return []
-
   const blocos: Paragraph[] = [
     new Paragraph({
       children: [new PageBreak(), new TextRun({ text: 'Anexos', bold: true, size: 28 })],
@@ -256,48 +279,7 @@ function secaoAnexos(orc: Orcamento, imagens: Map<string, string>): Paragraph[] 
     })
   ]
 
-  for (const a of anexos) {
-    if (a.titulo) {
-      blocos.push(
-        p(a.titulo, { alignment: AlignmentType.CENTER, spacing: { line: ENTRELINHA, after: mm(1) } }, { bold: true })
-      )
-    }
-    const ref = referenciaDoAnexo(orc, a.itemServicoId)
-    if (ref) {
-      blocos.push(
-        p(
-          ref,
-          { alignment: AlignmentType.CENTER, spacing: { line: ENTRELINHA, after: mm(2) } },
-          { italics: true, color: '555555', size: 19 }
-        )
-      )
-    }
-    const img = imagemDeDataUrl(imagens.get(a.id) ?? a.imagemDataUrl ?? a.miniaturaDataUrl)
-    if (img) {
-      blocos.push(
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          spacing: { line: 240, after: mm(2) },
-          children: [
-            new ImageRun({
-              type: img.tipo,
-              data: img.data,
-              transformation: dimensoesAnexo(a.largura, a.altura)
-            })
-          ]
-        })
-      )
-    }
-    if (a.descricao) {
-      blocos.push(
-        p(
-          a.descricao,
-          { alignment: AlignmentType.CENTER, spacing: { line: ENTRELINHA, after: mm(8) } },
-          { size: MIUDO }
-        )
-      )
-    }
-  }
+  for (const a of anexos) blocos.push(...figuraAnexoDocx(a, referenciaDoAnexo(orc, a.itemServicoId), imagens.get(a.id)))
   return blocos
 }
 
@@ -485,20 +467,7 @@ function apendiceRelatorioDocx(
       spacing: { line: ENTRELINHA, after: mm(6) }
     })
   ]
-  for (const a of anexos) {
-    if (a.titulo) blocos.push(p(a.titulo, { alignment: AlignmentType.CENTER, spacing: { after: mm(1) } }, { bold: true }))
-    const ref = referenciaAnexoRelatorio(rel, a)
-    if (ref) blocos.push(p(ref, { alignment: AlignmentType.CENTER, spacing: { after: mm(2) } }, { italics: true, color: '555555', size: 19 }))
-    const img = imagemDeDataUrl(imagens.get(a.id) ?? a.imagemDataUrl ?? a.miniaturaDataUrl)
-    if (img) {
-      blocos.push(new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { after: mm(2) },
-        children: [new ImageRun({ type: img.tipo, data: img.data, transformation: dimensoesAnexo(a.largura, a.altura) })]
-      }))
-    }
-    if (a.descricao) blocos.push(p(a.descricao, { alignment: AlignmentType.CENTER, spacing: { after: mm(8) } }, { size: MIUDO }))
-  }
+  for (const a of anexos) blocos.push(...figuraAnexoDocx(a, referenciaAnexoRelatorio(rel, a), imagens.get(a.id)))
   return blocos
 }
 
