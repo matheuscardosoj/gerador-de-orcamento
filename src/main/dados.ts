@@ -41,9 +41,14 @@ export async function exportarDados(): Promise<{ caminho: string | null }> {
   const nome = `Backup Gerador de Orçamentos - ${new Date().toISOString().slice(0, 10).split('-').reverse().join('.')}.gdo-backup`
   const escolha = await dialog.showSaveDialog({ title: 'Exportar cópia de segurança', defaultPath: nome, filters: [{ name: 'Backup do Gerador', extensions: ['gdo-backup'] }] })
   if (escolha.canceled || !escolha.filePath) return { caminho: null }
-  validar(caminhoBanco())
-  copyFileSync(caminhoBanco(), escolha.filePath)
+  exportarDadosPara(escolha.filePath)
   return { caminho: escolha.filePath }
+}
+
+/** Exportação sem diálogo, usada pela interface e pelos testes de integridade. */
+export function exportarDadosPara(destino: string): void {
+  validar(caminhoBanco())
+  copyFileSync(caminhoBanco(), destino)
 }
 
 function resumo(): Resumo {
@@ -111,11 +116,15 @@ function mesclar(fonte: Database): Resumo {
   return r
 }
 
-export async function importarDados(modo: Modo): Promise<ResultadoImportacaoDados | null> {
-  const escolha = await dialog.showOpenDialog({ title: 'Selecionar cópia de segurança', properties: ['openFile'], filters: [{ name: 'Backup do Gerador', extensions: ['gdo-backup', 'db'] }] })
-  if (escolha.canceled || !escolha.filePaths[0]) return null
-  const origem = escolha.filePaths[0]; validar(origem); const backupAntes = backupAntesImportar()
+export function importarDadosDe(origem: string, modo: Modo): ResultadoImportacaoDados {
+  validar(origem); const backupAntes = backupAntesImportar()
   if (modo === 'mesclar') { const fonte = new Database(origem); try { const r = tx(() => mesclar(fonte)); return { modo, backupAntes, ...r, reiniciarNecessario: false } } finally { fonte.close() } }
   const temporario = `${caminhoBanco()}.importando-${Date.now()}`
   try { copyFileSync(origem, temporario); validar(temporario); fecharBanco(); copyFileSync(temporario, caminhoBanco()); abrirBanco(); return { modo, backupAntes, ...resumo(), reiniciarNecessario: true } } catch (e) { copyFileSync(backupAntes, caminhoBanco()); abrirBanco(); throw e } finally { if (existsSync(temporario)) rmSync(temporario, { force: true }) }
+}
+
+export async function importarDados(modo: Modo): Promise<ResultadoImportacaoDados | null> {
+  const escolha = await dialog.showOpenDialog({ title: 'Selecionar cópia de segurança', properties: ['openFile'], filters: [{ name: 'Backup do Gerador', extensions: ['gdo-backup', 'db'] }] })
+  if (escolha.canceled || !escolha.filePaths[0]) return null
+  return importarDadosDe(escolha.filePaths[0], modo)
 }

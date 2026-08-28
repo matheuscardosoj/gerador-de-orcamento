@@ -297,3 +297,28 @@ it('não permite excluir cliente usado e permite inativá-lo', () => {
   const inativo = repos.clientesRepo.update(cliente.id, { ativo: false })!
   expect(inativo.ativo).toBe(false)
 })
+
+it('exporta e restaura relatório com anotação interna e comprovante em BLOB', async () => {
+  const relatorio = repos.relatoriosRepo.list()[0]!
+  const salvo = repos.relatoriosRepo.update(relatorio.id, {
+    observacaoInterna: 'Backup: relatório conferido pela IA.',
+    anexos: [{
+      id: 'anexo-relatorio-backup', referenciaTipo: 'adiantamento', referenciaId: relatorio.adiantamentos[0]?.id ?? null,
+      titulo: 'Comprovante do sinal', descricao: 'Preservado no backup.', mime: 'image/png', largura: 1600, altura: 1200,
+      miniaturaDataUrl: PNG, imagemDataUrl: PNG
+    }]
+  })!
+  const { exportarDadosPara, importarDadosDe } = await import('../dados')
+  const backup = join(raiz, 'backup-completo.gdo-backup')
+  exportarDadosPara(backup)
+  expect(existsSync(backup)).toBe(true)
+  repos.relatoriosRepo.update(salvo.id, { observacaoInterna: 'Alterado depois da exportação.', anexos: [] })
+
+  const resultado = importarDadosDe(backup, 'restaurar')
+  expect(resultado.reiniciarNecessario).toBe(true)
+  expect(existsSync(resultado.backupAntes)).toBe(true)
+  const restaurado = repos.relatoriosRepo.get(salvo.id)!
+  expect(restaurado.observacaoInterna).toBe('Backup: relatório conferido pela IA.')
+  expect(restaurado.anexos).toHaveLength(1)
+  expect(repos.anexosRelatorioRepo.buffer(restaurado.anexos[0].id)?.length).toBeGreaterThan(50)
+})

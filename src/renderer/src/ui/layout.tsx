@@ -26,12 +26,12 @@ export function PageShell({
   return (
     <div className="min-h-full">
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100/80 px-8 py-5 backdrop-blur">
-        <div className={cn('mx-auto flex items-center justify-between gap-4', max)}>
+        <div className={cn('mx-auto flex flex-wrap items-center justify-between gap-4', max)}>
           <div>
             <h1 className="text-xl font-bold text-slate-800">{titulo}</h1>
             {descricao && <p className="mt-0.5 text-sm text-slate-500">{descricao}</p>}
           </div>
-          {acoes && <div className="flex items-center gap-2">{acoes}</div>}
+          {acoes && <div className="flex flex-wrap items-center justify-end gap-2">{acoes}</div>}
         </div>
       </header>
       <div className={cn('mx-auto px-8 py-6', max)}>{children}</div>

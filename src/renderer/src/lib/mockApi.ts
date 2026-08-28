@@ -121,7 +121,7 @@ export function criarMockApi(): AppApi {
   }
 
   return {
-    aplicativo: { versao: async () => '1.2.0-dev' },
+    aplicativo: { versao: async () => '1.2.1-dev' },
     empresa: {
       get: async () => clone(db.empresa),
       save: async (patch) => {

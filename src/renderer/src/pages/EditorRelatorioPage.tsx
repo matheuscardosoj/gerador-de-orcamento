@@ -1,20 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { api } from '../lib/api'
 import { PageShell } from '../ui/layout'
 import { Button, Card, Field, Input, NumberField, Select, SectionTitle, Textarea } from '../ui/primitives'
 import { formatMoeda } from '@shared/format'
 import { calcularTotaisRelatorio } from '@shared/relatorio'
 import { normalizarDestinatario } from '@shared/documento/comum'
-import type { AnexoRelatorio, LancamentoRelatorio, Orcamento, Relatorio } from '@shared/types'
+import type { LancamentoRelatorio, Orcamento, Relatorio } from '@shared/types'
 import { novoId } from '../components/tipos'
 import { PreviaRelatorioModal } from '../components/PreviaRelatorioModal'
 import { AnotacaoInterna, ServicosCard, TextosCard, type Dados } from './EditorOrcamentoPage'
-import { arquivosParaAnexos } from '../lib/imagens'
+import { AnexosCard } from '../components/AnexosCard'
+import { useNav } from '../lib/nav'
 
 type Base = Pick<Dados, 'empresa' | 'parametros' | 'clientes' | 'servicos' | 'observacoesPadrao' | 'pagamentosPadrao'>
 const agora = (): string => new Date().toISOString()
 
 export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): JSX.Element {
+  const { navegar } = useNav()
   const [dados,setDados]=useState<Base|null>(null); const [rel,setRel]=useState<Relatorio|null>(null); const [salvando,setSalvando]=useState(false); const [erro,setErro]=useState<string|null>(null); const [previa,setPrevia]=useState(false); const [numeroOriginal,setNumeroOriginal]=useState<number|null>(null)
   useEffect(() => {
     let vivo = true
@@ -71,6 +73,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
   const orcAdaptado:Orcamento={...rel,materiais:[],prazoDias:null,valorTotal:totais.servicos,status:'rascunho'}
   const acoes = (
     <div className="flex gap-2">
+      <Button variant="ghost" onClick={() => navegar({ nome: 'historicoRelatorios' })}>Voltar</Button>
       <Button variant="outline" onClick={() => setPrevia(true)}>Prévia</Button>
       <Button variant="outline" onClick={() => { void salvar().then((r) => r && api.documentos.gerarRelatorioPdf(r.id)) }}>PDF</Button>
       <Button variant="outline" onClick={() => { void salvar().then((r) => r && api.documentos.gerarRelatorioDocx(r.id)) }}>Word</Button>
@@ -91,7 +94,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
           <Field label="Destinatário (sem vírgula)" className="md:col-span-3"><Input value={rel.destinatario} onChange={(e) => set({ destinatario: normalizarDestinatario(e.target.value) })} /></Field>
           <Field label="Título" className="md:col-span-3"><Input value={rel.titulo} onChange={(e) => set({ titulo: e.target.value })} /></Field>
           <Field label="Introdução" className="md:col-span-3"><Textarea value={rel.introducao ?? ''} onChange={(e) => set({ introducao: e.target.value })} /></Field>
-          <AnotacaoInterna orc={orcAdaptado} set={(patch) => set({ observacaoInterna: patch.observacaoInterna })} />
+          <AnotacaoInterna orc={orcAdaptado} set={(patch) => set({ observacaoInterna: patch.observacaoInterna })} tipoDocumento="relatórios" />
         </div>
       </Card>
       <div className="space-y-6">
@@ -110,19 +113,11 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
 function Resumo({label,valor,destaque}:{label:string;valor:number;destaque?:boolean}):JSX.Element{return <div className={destaque?'rounded-lg bg-brand-teal/10 p-3':'rounded-lg bg-slate-50 p-3'}><p className="text-xs text-slate-500">{label}</p><p className={destaque?'font-bold text-brand-tealDark':'font-semibold'}>{formatMoeda(valor)}</p></div>}
 function LancamentosCard({titulo,descricao,itens,onChange}:{titulo:string;descricao:string;itens:LancamentoRelatorio[];onChange:(v:LancamentoRelatorio[])=>void}):JSX.Element{const add=()=>onChange([...itens,{id:novoId(),descricao:'',valor:0}]);const upd=(id:string,p:Partial<LancamentoRelatorio>)=>onChange(itens.map(x=>x.id===id?{...x,...p}:x));return <Card className="p-6"><SectionTitle title={titulo} description={descricao} action={<Button variant="outline" onClick={add}>+ Adicionar</Button>}/>{itens.length===0?<p className="text-sm text-slate-500">Nenhum lançamento.</p>:<div className="space-y-2">{itens.map(x=><div key={x.id} className="grid grid-cols-[1fr_160px_auto] gap-2"><Input value={x.descricao} placeholder="Descrição" onChange={e=>upd(x.id,{descricao:e.target.value})}/><NumberField value={x.valor} min={0} onChange={valor=>upd(x.id,{valor})}/><Button variant="ghost" className="text-slate-400 hover:text-red-600" onClick={()=>onChange(itens.filter(i=>i.id!==x.id))}>Excluir</Button></div>)}</div>}</Card>}
 
-function AnexosRelatorioCard({ anexos, relatorio, onChange }: { anexos: AnexoRelatorio[]; relatorio: Relatorio; onChange: (v: AnexoRelatorio[]) => void }): JSX.Element {
-  const arquivo = useRef<HTMLInputElement>(null)
-  const adicionar = async (files: FileList | File[]): Promise<void> => {
-    const novos = await arquivosParaAnexos(files)
-    onChange([...anexos, ...novos.map((a) => ({ ...a, referenciaTipo: 'solto' as const, referenciaId: null }))])
-  }
-  const atualizar = (id: string, patch: Partial<AnexoRelatorio>): void => onChange(anexos.map((a) => a.id === id ? { ...a, ...patch } : a))
+function AnexosRelatorioCard({ anexos, relatorio, onChange }: { anexos: Relatorio['anexos']; relatorio: Relatorio; onChange: (v: Relatorio['anexos']) => void }): JSX.Element {
   const referencias = [
     ...relatorio.itensServico.map((x, n) => ({ tipo: 'servico' as const, id: x.id, texto: `Serviço ${n + 1}: ${x.descricao}` })),
     ...relatorio.adiantamentos.map((x) => ({ tipo: 'adiantamento' as const, id: x.id, texto: `Adiantamento: ${x.descricao || 'sem descrição'}` })),
     ...relatorio.reembolsos.map((x) => ({ tipo: 'reembolso' as const, id: x.id, texto: `Reembolso: ${x.descricao || 'sem descrição'}` }))
   ]
-  return <Card className="p-6"><SectionTitle title="Fotos e comprovantes" description="As fotos dos serviços, comprovantes de adiantamento e reembolso começam cada qual em nova página." action={<Button variant="outline" onClick={() => arquivo.current?.click()}>+ Fotos</Button>} /><input ref={arquivo} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { if (e.target.files?.length) void adicionar(e.target.files); e.target.value = '' }} />
-    {anexos.length === 0 ? <p className="text-sm text-slate-500">Nenhuma foto anexada.</p> : <div className="space-y-3">{anexos.map((a) => <div key={a.id} className="grid grid-cols-[72px_1fr_auto] gap-3 rounded-lg border border-slate-200 p-3"><img src={a.miniaturaDataUrl} alt={a.titulo} className="h-16 w-16 rounded object-cover" /><div className="grid gap-2 md:grid-cols-2"><Input value={a.titulo} placeholder="Título" onChange={(e) => atualizar(a.id, { titulo: e.target.value })} /><Select value={a.referenciaId ?? ''} onChange={(e) => { const r = referencias.find((x) => x.id === e.target.value); atualizar(a.id, { referenciaId: r?.id ?? null, referenciaTipo: r?.tipo ?? 'solto' }) }}><option value="">Foto solta / serviço</option>{referencias.map((r) => <option key={r.id} value={r.id}>{r.texto}</option>)}</Select><Textarea value={a.descricao} placeholder="Observação" className="md:col-span-2" onChange={(e) => atualizar(a.id, { descricao: e.target.value })} /></div><Button variant="ghost" className="text-slate-400 hover:text-red-600" onClick={() => onChange(anexos.filter((x) => x.id !== a.id))}>Excluir</Button></div>)}</div>}
-  </Card>
+  return <AnexosCard anexos={anexos} onChange={onChange} titulo="Fotos e comprovantes" descricao="As fotos dos serviços, comprovantes de adiantamento e reembolso começam cada qual em uma nova página." opcoesVinculo={referencias} valorVinculo={(anexo) => anexo.referenciaId ?? ''} atualizarVinculo={(_anexo, id) => { const referencia = referencias.find((item) => item.id === id); return { referenciaId: referencia?.id ?? null, referenciaTipo: (referencia?.tipo ?? 'solto') as Relatorio['anexos'][number]['referenciaTipo'] } }} prepararNovos={(novos) => novos.map((anexo) => ({ ...anexo, referenciaId: null, referenciaTipo: 'solto' as const }))} buscarImagem={(id) => api.anexosRelatorio.imagem(id)} />
 }

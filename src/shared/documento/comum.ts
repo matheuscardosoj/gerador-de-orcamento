@@ -39,10 +39,12 @@ export function nomeSeguroArquivo(valor: string): string {
 
 export function nomeBaseDocumento(
   tipo: 'orcamento' | 'relatorio',
+  titulo: string,
   nomeCliente: string,
   data: string
 ): string {
-  const prefixo = tipo === 'orcamento' ? 'Proposta de Serviço' : 'Relatório de Serviço'
+  const prefixoPadrao = tipo === 'orcamento' ? 'Proposta de Serviço' : 'Relatório de Serviço'
+  const prefixo = nomeSeguroArquivo(titulo) || prefixoPadrao
   const cliente = nomeSeguroArquivo(nomeCliente) || 'Cliente'
   return `${prefixo} - ${cliente} - ${dataNoNomeArquivo(data)}`
 }

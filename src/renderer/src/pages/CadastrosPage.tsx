@@ -145,15 +145,15 @@ function ClienteModal({
       }
     >
       <div className="space-y-4">
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="Tratamento no PDF/Word" className="col-span-1" hint="Não aparece em listas nem no nome do arquivo">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(170px,0.85fr)_minmax(0,1.65fr)] sm:gap-3">
+          <Field label="Tratamento" hint="Usado no PDF/Word; não aparece em listas nem no nome do arquivo">
             <Input
               value={form.tratamento}
               onChange={(e) => set({ tratamento: e.target.value })}
               placeholder="A / Ao Sr. / À Sra."
             />
           </Field>
-          <Field label="Nome / destinatário" className="col-span-2">
+          <Field label="Nome / destinatário">
             <Input value={form.nome} onChange={(e) => set({ nome: e.target.value })} autoFocus />
           </Field>
         </div>

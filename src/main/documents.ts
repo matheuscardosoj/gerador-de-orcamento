@@ -12,12 +12,12 @@ import type { Orcamento, Relatorio } from '@shared/types'
 
 function nomeBase(orc: Orcamento): string {
   const cliente = orc.clienteId ? clientesRepo.get(orc.clienteId)?.nome : null
-  return nomeBaseDocumento('orcamento', cliente ?? orc.destinatario, orc.data)
+  return nomeBaseDocumento('orcamento', orc.titulo, cliente ?? orc.destinatario, orc.data)
 }
 
 function nomeBaseRelatorio(rel: Relatorio): string {
   const cliente = rel.clienteId ? clientesRepo.get(rel.clienteId)?.nome : null
-  return nomeBaseDocumento('relatorio', cliente ?? rel.destinatario, rel.data)
+  return nomeBaseDocumento('relatorio', rel.titulo, cliente ?? rel.destinatario, rel.data)
 }
 
 /** Aplica o tratamento atual apenas à cópia usada para PDF/DOCX. */

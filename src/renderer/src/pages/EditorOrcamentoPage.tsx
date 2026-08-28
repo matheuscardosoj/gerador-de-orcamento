@@ -235,8 +235,11 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
         />
         <AnexosCard
           anexos={orc.anexos ?? []}
-          itensServico={orc.itensServico}
           onChange={(anexos) => set({ anexos })}
+          opcoesVinculo={orc.itensServico.map((item, indice) => ({ id: item.id, texto: `Item ${indice + 1} — ${item.descricao.slice(0, 60)}` }))}
+          valorVinculo={(anexo) => anexo.itemServicoId ?? ''}
+          atualizarVinculo={(_anexo, id) => ({ itemServicoId: id || null })}
+          buscarImagem={(id) => api.anexos.imagem(id)}
         />
       </div>
       {previaAberta && (
@@ -332,10 +335,12 @@ function DadosGeraisCard({
  */
 export function AnotacaoInterna({
   orc,
-  set
+  set,
+  tipoDocumento = 'orçamentos'
 }: {
   orc: Orcamento
   set: (p: Partial<Orcamento>) => void
+  tipoDocumento?: 'orçamentos' | 'relatórios'
 }): JSX.Element {
   const [gerando, setGerando] = useState(false)
   const [aviso, setAviso] = useState<string | null>(null)
@@ -357,7 +362,7 @@ export function AnotacaoInterna({
   return (
     <Field
       label="Anotação interna"
-      hint="Aparece só na listagem de orçamentos e na busca — não sai no documento."
+      hint={`Aparece só na listagem de ${tipoDocumento} e na busca — não sai no documento.`}
       className="md:col-span-3"
     >
       {aviso && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{aviso}</p>}
