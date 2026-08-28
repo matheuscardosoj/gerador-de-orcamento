@@ -9,6 +9,14 @@ export function destinatarioNoDocumento(valor: string): string {
   return limpo ? `${limpo},` : ''
 }
 
+/**
+ * O tratamento pertence somente à apresentação do documento. Assim, listas,
+ * pesquisas e nomes de arquivos trabalham sempre com o nome limpo do cliente.
+ */
+export function destinatarioComTratamento(tratamento: string | null | undefined, nome: string): string {
+  return [String(tratamento ?? '').trim(), normalizarDestinatario(nome)].filter(Boolean).join(' ')
+}
+
 export function dataNoNomeArquivo(iso: string): string {
   const m = String(iso ?? '').match(/^(\d{4})-(\d{2})-(\d{2})/)
   if (m) return `${m[3]}.${m[2]}.${m[1]}`

@@ -41,7 +41,8 @@ const clienteVazio = (): Omit<Cliente, 'id' | 'criadoEm'> => ({
   nome: '',
   tratamento: 'A',
   contato: '',
-  observacao: ''
+  observacao: '',
+  ativo: true
 })
 
 function SecaoClientes(): JSX.Element {
@@ -55,11 +56,11 @@ function SecaoClientes(): JSX.Element {
       </div>
       <div className="divide-y divide-slate-100">
         {(data ?? []).map((c) => (
-          <div key={c.id} className="flex items-center justify-between py-3">
+          <div key={c.id} className="flex items-center justify-between gap-4 py-3">
             <div>
               <p className="font-medium text-slate-800">
-                <span className="text-slate-400">{c.tratamento} </span>
                 {c.nome}
+                {!c.ativo && <Badge>Inativo</Badge>}
               </p>
               {c.contato && <p className="text-sm text-slate-500">{c.contato}</p>}
             </div>
@@ -71,9 +72,12 @@ function SecaoClientes(): JSX.Element {
                 size="sm"
                 variant="ghost"
                 onClick={async () => {
-                  if (confirm(`Excluir o cliente "${c.nome}"?`)) {
+                  if (!confirm(`Excluir o cliente "${c.nome}"?`)) return
+                  try {
                     await api.clientes.remove(c.id)
                     reload()
+                  } catch (erro) {
+                    alert(String(erro).replace(/^Error:\s*/, ''))
                   }
                 }}
               >
@@ -142,7 +146,7 @@ function ClienteModal({
     >
       <div className="space-y-4">
         <div className="grid grid-cols-3 gap-3">
-          <Field label="Tratamento" className="col-span-1">
+          <Field label="Tratamento no PDF/Word" className="col-span-1" hint="Não aparece em listas nem no nome do arquivo">
             <Input
               value={form.tratamento}
               onChange={(e) => set({ tratamento: e.target.value })}
@@ -156,6 +160,10 @@ function ClienteModal({
         <Field label="Contato" hint="Telefone, e-mail ou responsável">
           <Input value={form.contato ?? ''} onChange={(e) => set({ contato: e.target.value })} />
         </Field>
+        <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+          <input type="checkbox" checked={form.ativo} onChange={(e) => set({ ativo: e.target.checked })} />
+          Cliente ativo para novos documentos
+        </label>
         <Field label="Observação">
           <Textarea
             value={form.observacao ?? ''}

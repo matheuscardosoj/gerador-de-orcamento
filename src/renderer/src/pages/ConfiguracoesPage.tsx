@@ -23,6 +23,7 @@ import type {
   ConfigIA,
   StatusIA
 } from '@shared/types'
+import type { InfoNumeracao } from '@shared/api'
 
 const aplicacoes = [
   { valor: 'ambos', rotulo: 'Orçamento e relatório' },
@@ -30,7 +31,7 @@ const aplicacoes = [
   { valor: 'relatorio', rotulo: 'Somente relatório' }
 ] as const
 
-type Aba = 'empresa' | 'parametros' | 'observacoes' | 'pagamentos' | 'numeracao' | 'ia'
+type Aba = 'empresa' | 'parametros' | 'observacoes' | 'pagamentos' | 'numeracao' | 'dados' | 'ia'
 
 export function ConfiguracoesPage(): JSX.Element {
   const [aba, setAba] = useState<Aba>('empresa')
@@ -45,6 +46,7 @@ export function ConfiguracoesPage(): JSX.Element {
           { id: 'observacoes', label: 'Observações padrão' },
           { id: 'pagamentos', label: 'Formas de pagamento' },
           { id: 'numeracao', label: 'Numeração' },
+          { id: 'dados', label: 'Dados e backup' },
           { id: 'ia', label: 'IA local' }
         ]}
       />
@@ -53,6 +55,7 @@ export function ConfiguracoesPage(): JSX.Element {
       {aba === 'observacoes' && <SecaoObservacoes />}
       {aba === 'pagamentos' && <SecaoPagamentos />}
       {aba === 'numeracao' && <SecaoNumeracao />}
+      {aba === 'dados' && <SecaoDados />}
       {aba === 'ia' && <SecaoIA />}
     </PageShell>
   )
@@ -322,12 +325,12 @@ function SecaoObservacoes(): JSX.Element {
         title="Observações padrão"
         description="Defina onde o texto pode ser usado e se ele entra automaticamente em documentos novos"
       />
-      <div className="mb-4 flex gap-2">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row">
         <Textarea
           value={novo}
           onChange={(e) => setNovo(e.target.value)}
           placeholder="Escreva uma nova observação padrão…"
-          className="min-h-[44px]"
+          className="min-h-[80px] flex-1"
         />
         <Button type="button" onClick={adicionar} className="shrink-0 self-start">
           Adicionar
@@ -356,46 +359,38 @@ function ItemObservacao({ obs, onChange }: { obs: ObservacaoPadrao; onChange: ()
   }
 
   return (
-    <div className="flex items-start gap-3 rounded-lg border border-slate-200 p-3">
-      <Checkbox
-        label="incluir automaticamente"
-        checked={obs.padrao}
-        onChange={async (v) => {
-          await api.observacoes.update(obs.id, { padrao: v })
-          onChange()
-        }}
-      />
-      <div className="flex-1">
+    <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-[minmax(0,1fr)_220px] md:items-start">
+      <div className="min-w-0">
         {editando ? (
-          <Textarea value={texto} onChange={(e) => setTexto(e.target.value)} className="min-h-[60px]" />
+          <Textarea value={texto} onChange={(e) => setTexto(e.target.value)} className="min-h-[96px]" autoFocus />
         ) : (
-          <p className="text-sm text-slate-700">{obs.texto}</p>
+          <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{obs.texto}</p>
         )}
       </div>
-      <Select
-        value={obs.aplicacao}
-        onChange={async (e) => {
-          await api.observacoes.update(obs.id, { aplicacao: e.target.value as ObservacaoPadrao['aplicacao'] })
-          onChange()
-        }}
-        className="w-48 shrink-0"
-      >
-        {aplicacoes.map((a) => <option key={a.valor} value={a.valor}>{a.rotulo}</option>)}
-      </Select>
-      <div className="flex shrink-0 gap-1">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-1">
+        <Checkbox label="Incluir automaticamente" checked={obs.padrao} onChange={async (v) => { await api.observacoes.update(obs.id, { padrao: v }); onChange() }} />
+        <Select value={obs.aplicacao} aria-label="Aplicação da observação" onChange={async (e) => { await api.observacoes.update(obs.id, { aplicacao: e.target.value as ObservacaoPadrao['aplicacao'] }); onChange() }}>
+          {aplicacoes.map((a) => <option key={a.valor} value={a.valor}>{a.rotulo}</option>)}
+        </Select>
+        <div className="flex flex-wrap gap-2">
         {editando ? (
-          <Button type="button" size="sm" onClick={salvar}>
-            Salvar
-          </Button>
+          <>
+            <Button type="button" size="sm" onClick={salvar} disabled={!texto.trim()}>
+              Salvar
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => { setTexto(obs.texto); setEditando(false) }}>
+              Cancelar
+            </Button>
+          </>
         ) : (
-          <Button type="button" size="sm" variant="ghost" onClick={() => setEditando(true)}>
+          <Button type="button" size="sm" variant="outline" onClick={() => setEditando(true)}>
             Editar
           </Button>
         )}
         <Button
           type="button"
           size="sm"
-          variant="ghost"
+          variant="ghost" aria-label="Excluir observação"
           onClick={async () => {
             await api.observacoes.remove(obs.id)
             onChange()
@@ -403,6 +398,7 @@ function ItemObservacao({ obs, onChange }: { obs: ObservacaoPadrao; onChange: ()
         >
           <Icone>🗑</Icone>
         </Button>
+        </div>
       </div>
     </div>
   )
@@ -426,12 +422,12 @@ function SecaoPagamentos(): JSX.Element {
         title="Formas de pagamento padrão"
         description="Defina onde o texto pode ser usado e se ele entra automaticamente em documentos novos"
       />
-      <div className="mb-4 flex gap-2">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row">
         <Textarea
           value={novo}
           onChange={(e) => setNovo(e.target.value)}
           placeholder="Ex.: Via Pix para a chave…"
-          className="min-h-[44px]"
+          className="min-h-[80px] flex-1"
         />
         <Button type="button" onClick={adicionar} className="shrink-0 self-start">
           Adicionar
@@ -464,46 +460,38 @@ function ItemPagamento({
   }
 
   return (
-    <div className="flex items-start gap-3 rounded-lg border border-slate-200 p-3">
-      <Checkbox
-        label="incluir automaticamente"
-        checked={pag.padrao}
-        onChange={async (v) => {
-          await api.pagamentos.update(pag.id, { padrao: v })
-          onChange()
-        }}
-      />
-      <div className="flex-1">
+    <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-[minmax(0,1fr)_220px] md:items-start">
+      <div className="min-w-0">
         {editando ? (
-          <Textarea value={texto} onChange={(e) => setTexto(e.target.value)} className="min-h-[60px]" />
+          <Textarea value={texto} onChange={(e) => setTexto(e.target.value)} className="min-h-[96px]" autoFocus />
         ) : (
-          <p className="text-sm text-slate-700">{pag.texto}</p>
+          <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{pag.texto}</p>
         )}
       </div>
-      <Select
-        value={pag.aplicacao}
-        onChange={async (e) => {
-          await api.pagamentos.update(pag.id, { aplicacao: e.target.value as FormaPagamentoPadrao['aplicacao'] })
-          onChange()
-        }}
-        className="w-48 shrink-0"
-      >
-        {aplicacoes.map((a) => <option key={a.valor} value={a.valor}>{a.rotulo}</option>)}
-      </Select>
-      <div className="flex shrink-0 gap-1">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-1">
+        <Checkbox label="Incluir automaticamente" checked={pag.padrao} onChange={async (v) => { await api.pagamentos.update(pag.id, { padrao: v }); onChange() }} />
+        <Select value={pag.aplicacao} aria-label="Aplicação da forma de pagamento" onChange={async (e) => { await api.pagamentos.update(pag.id, { aplicacao: e.target.value as FormaPagamentoPadrao['aplicacao'] }); onChange() }}>
+          {aplicacoes.map((a) => <option key={a.valor} value={a.valor}>{a.rotulo}</option>)}
+        </Select>
+        <div className="flex flex-wrap gap-2">
         {editando ? (
-          <Button type="button" size="sm" onClick={salvar}>
-            Salvar
-          </Button>
+          <>
+            <Button type="button" size="sm" onClick={salvar} disabled={!texto.trim()}>
+              Salvar
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => { setTexto(pag.texto); setEditando(false) }}>
+              Cancelar
+            </Button>
+          </>
         ) : (
-          <Button type="button" size="sm" variant="ghost" onClick={() => setEditando(true)}>
+          <Button type="button" size="sm" variant="outline" onClick={() => setEditando(true)}>
             Editar
           </Button>
         )}
         <Button
           type="button"
           size="sm"
-          variant="ghost"
+          variant="ghost" aria-label="Excluir forma de pagamento"
           onClick={async () => {
             await api.pagamentos.remove(pag.id)
             onChange()
@@ -511,6 +499,7 @@ function ItemPagamento({
         >
           <Icone>🗑</Icone>
         </Button>
+        </div>
       </div>
     </div>
   )
@@ -612,13 +601,37 @@ function SecaoIA(): JSX.Element {
 }
 
 // ------------------------------------------------------------------ Numeração
-/**
- * Ajuste do contador de orçamentos. Serve principalmente para reaproveitar
- * números depois de exclusões — embora excluir o orçamento de maior número já
- * faça o contador recuar sozinho.
- */
 function SecaoNumeracao(): JSX.Element {
-  const { data, reload } = useAsync(() => api.orcamentos.numeracao(), [])
+  return (
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+      <PainelNumeracao
+        titulo="Numeração dos orçamentos"
+        documento="orçamento"
+        carregar={() => api.orcamentos.numeracao()}
+        definirNumero={(numero) => api.orcamentos.definirProximoNumero(numero)}
+      />
+      <PainelNumeracao
+        titulo="Numeração dos relatórios"
+        documento="relatório"
+        carregar={() => api.relatorios.numeracao()}
+        definirNumero={(numero) => api.relatorios.definirProximoNumero(numero)}
+      />
+    </div>
+  )
+}
+
+function PainelNumeracao({
+  titulo,
+  documento,
+  carregar,
+  definirNumero
+}: {
+  titulo: string
+  documento: string
+  carregar: () => Promise<InfoNumeracao>
+  definirNumero: (numero: number) => Promise<{ ok: boolean; erro?: string }>
+}): JSX.Element {
+  const { data, reload } = useAsync(carregar, [])
   const [proximo, setProximo] = useState<number | null>(null)
   const [salvando, setSalvando] = useState(false)
   const [ok, setOk] = useState(false)
@@ -640,7 +653,7 @@ function SecaoNumeracao(): JSX.Element {
     e.preventDefault()
     setSalvando(true)
     setErro(null)
-    const r = await api.orcamentos.definirProximoNumero(proximo)
+    const r = await definirNumero(proximo)
     setSalvando(false)
     if (r.ok) {
       setOk(true)
@@ -654,13 +667,13 @@ function SecaoNumeracao(): JSX.Element {
     <form onSubmit={salvar}>
       <Card className="p-6">
         <SectionTitle
-          title="Numeração dos orçamentos"
-          description="Define o número que o próximo orçamento vai receber."
+          title={titulo}
+          description={`Define o número que o próximo ${documento} vai receber. Ao excluir o último documento, esse número volta a ficar disponível.`}
         />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field
             label="Próximo número"
-            hint="Números já usados são recusados para não haver dois orçamentos com o mesmo número."
+            hint={`Números já usados são recusados para não haver dois ${documento}s com o mesmo número.`}
           >
             <NumberField value={proximo} onChange={definir} min={1} step={1} />
           </Field>
@@ -668,7 +681,7 @@ function SecaoNumeracao(): JSX.Element {
             <p className="text-sm text-slate-500">
               Maior número em uso: <strong className="text-slate-700">{data.maiorEmUso || '—'}</strong> ·{' '}
               Menor número livre: <strong className="text-slate-700">{data.menorLivre}</strong> ·{' '}
-              {data.totalOrcamentos} orçamento{data.totalOrcamentos === 1 ? '' : 's'}
+              {data.totalOrcamentos} {documento}{data.totalOrcamentos === 1 ? '' : 's'}
             </p>
             {proximo !== data.menorLivre && (
               <Button type="button" variant="outline" size="sm" onClick={() => definir(data.menorLivre)}>
@@ -685,5 +698,66 @@ function SecaoNumeracao(): JSX.Element {
         </div>
       </Card>
     </form>
+  )
+}
+
+// ----------------------------------------------------------- Dados e backup
+function SecaoDados(): JSX.Element {
+  const [ocupado, setOcupado] = useState<'exportar' | 'restaurar' | 'mesclar' | null>(null)
+  const [resultado, setResultado] = useState<string | null>(null)
+  const [erro, setErro] = useState<string | null>(null)
+
+  const exportar = async (): Promise<void> => {
+    setOcupado('exportar'); setResultado(null); setErro(null)
+    try {
+      const r = await api.dados.exportar()
+      if (r.caminho) setResultado(`Cópia de segurança criada em: ${r.caminho}`)
+    } catch (e) { setErro(String(e).replace(/^Error:\s*/, '')) } finally { setOcupado(null) }
+  }
+  const importar = async (modo: 'restaurar' | 'mesclar'): Promise<void> => {
+    const texto = modo === 'restaurar'
+      ? 'Restaurar tudo substituirá dados e configurações deste computador pelo backup escolhido. Continuar?'
+      : 'Manter dados atuais preserva empresa, logo, parâmetros financeiros e IA deste computador. Continuar?'
+    if (!confirm(texto)) return
+    setOcupado(modo); setResultado(null); setErro(null)
+    try {
+      const r = await api.dados.importar(modo)
+      if (!r) return
+      const itens = Object.entries(r.importados).filter(([, n]) => n > 0).map(([nome, n]) => `${n} ${nome.replace('_padrao', '')}`).join(', ')
+      const ignorados = Object.values(r.ignorados).reduce((a, n) => a + n, 0)
+      const renumerados = r.renumerados.orcamentos + r.renumerados.relatorios
+      setResultado(modo === 'restaurar'
+        ? `Backup restaurado com segurança. A cópia anterior foi salva em: ${r.backupAntes}. Feche e abra o aplicativo para carregar os dados restaurados.`
+        : `Importação concluída${itens ? `: ${itens}` : ''}.${ignorados ? ` ${ignorados} itens iguais foram mantidos sem duplicar.` : ''}${renumerados ? ` ${renumerados} documento(s) receberam um novo número por conflito.` : ''} A cópia anterior foi salva em: ${r.backupAntes}.`)
+    } catch (e) { setErro(String(e).replace(/^Error:\s*/, '')) } finally { setOcupado(null) }
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card className="p-6">
+        <SectionTitle title="Cópia de segurança" description="Gera um único arquivo protegido com clientes, documentos, imagens, logo e configurações." />
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="max-w-2xl text-sm leading-6 text-slate-600">Guarde esse arquivo em um local seguro. Ele permite recuperar o aplicativo em outro computador sem perder os anexos.</p>
+          <Button type="button" onClick={exportar} disabled={ocupado !== null}>{ocupado === 'exportar' ? 'Exportando…' : 'Exportar backup…'}</Button>
+        </div>
+      </Card>
+      <Card className="p-6">
+        <SectionTitle title="Importar dados" description="Todo processo valida o arquivo e salva uma cópia datada do banco atual antes de alterar qualquer dado." />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="rounded-xl border border-slate-200 p-4">
+            <h3 className="font-semibold text-slate-800">Restaurar tudo</h3>
+            <p className="mt-1 text-sm leading-6 text-slate-600">Substitui documentos e configurações deste computador exatamente pelo backup selecionado.</p>
+            <Button type="button" variant="outline" className="mt-4" onClick={() => void importar('restaurar')} disabled={ocupado !== null}>{ocupado === 'restaurar' ? 'Restaurando…' : 'Escolher backup e restaurar…'}</Button>
+          </div>
+          <div className="rounded-xl border border-brand-teal/30 bg-brand-teal/5 p-4">
+            <h3 className="font-semibold text-slate-800">Manter dados atuais</h3>
+            <p className="mt-1 text-sm leading-6 text-slate-600">Importa clientes e documentos sem apagar os existentes. Empresa, logo, parâmetros financeiros e IA deste computador são preservados.</p>
+            <Button type="button" className="mt-4" onClick={() => void importar('mesclar')} disabled={ocupado !== null}>{ocupado === 'mesclar' ? 'Importando…' : 'Escolher backup e importar…'}</Button>
+          </div>
+        </div>
+      </Card>
+      {resultado && <p role="status" className="rounded-xl bg-emerald-50 p-4 text-sm leading-6 text-emerald-900">{resultado}</p>}
+      {erro && <p role="alert" className="rounded-xl bg-red-50 p-4 text-sm leading-6 text-red-800">{erro}</p>}
+    </div>
   )
 }

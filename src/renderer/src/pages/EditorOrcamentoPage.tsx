@@ -240,7 +240,7 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
         />
       </div>
       {previaAberta && (
-        <PreviaModal orc={{ ...orc, valorTotal: total }} empresa={dados.empresa} onClose={() => setPreviaAberta(false)} />
+        <PreviaModal orc={{ ...orc, valorTotal: total }} empresa={dados.empresa} tratamento={dados.clientes.find((c) => c.id === orc.clienteId)?.tratamento} onClose={() => setPreviaAberta(false)} />
       )}
     </PageShell>
   )
@@ -291,12 +291,12 @@ function DadosGeraisCard({
               const c = clientes.find((x) => x.id === e.target.value)
               set({
                 clienteId: c?.id ?? null,
-                destinatario: c ? normalizarDestinatario(`${c.tratamento} ${c.nome}`) : orc.destinatario
+                destinatario: c ? c.nome : orc.destinatario
               })
             }}
           >
             <option value="">— livre —</option>
-            {clientes.map((c) => (
+            {clientes.filter((c) => c.ativo || c.id === orc.clienteId).map((c) => (
               <option key={c.id} value={c.id}>
                 {c.nome}
               </option>
@@ -307,7 +307,7 @@ function DadosGeraisCard({
           <Input
             value={orc.destinatario}
             onChange={(e) => set({ destinatario: normalizarDestinatario(e.target.value), clienteId: null })}
-            placeholder="Ex.: A TMG"
+            placeholder="Ex.: TMG"
           />
         </Field>
         <Field label="Título" className="md:col-span-2">

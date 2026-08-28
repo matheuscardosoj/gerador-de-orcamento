@@ -45,7 +45,7 @@ function estadoInicial(): BancoDados {
       modoImpostoPadrao: 'gross_up'
     },
     clientes: [
-      { id: uid(), nome: 'TMG', tratamento: 'A', contato: '', observacao: '', criadoEm: new Date().toISOString() }
+      { id: uid(), nome: 'TMG', tratamento: 'A', contato: '', observacao: '', ativo: true, criadoEm: new Date().toISOString() }
     ],
     servicos: [
       { id: uid(), nome: 'Cerca de Arame Liso', descricaoPadrao: 'Construção de cerca de arame liso.', unidade: 'metro linear', precoReferencia: 8.5 },
@@ -121,6 +121,7 @@ export function criarMockApi(): AppApi {
   }
 
   return {
+    aplicativo: { versao: async () => '1.2.0-dev' },
     empresa: {
       get: async () => clone(db.empresa),
       save: async (patch) => {
@@ -284,6 +285,10 @@ export function criarMockApi(): AppApi {
       gerarDocx: async () => ({ caminho: null }),
       gerarRelatorioPdf: async () => ({ caminho: null }),
       gerarRelatorioDocx: async () => ({ caminho: null })
+    },
+    dados: {
+      exportar: async () => ({ caminho: null }),
+      importar: async () => null
     }
   }
 }

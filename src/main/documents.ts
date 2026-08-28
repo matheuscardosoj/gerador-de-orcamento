@@ -6,7 +6,7 @@ import { orcamentosRepo, relatoriosRepo, clientesRepo, empresaRepo, anexosRepo, 
 import { gerarHtmlOrcamento, gerarHtmlRelatorio } from '@shared/documento/template'
 import { paginarDocumento } from '@shared/documento/paginar'
 import { montarDocumentoDocx, montarDocumentoRelatorioDocx } from '@shared/documento/docx'
-import { nomeBaseDocumento } from '@shared/documento/comum'
+import { destinatarioComTratamento, nomeBaseDocumento } from '@shared/documento/comum'
 import type { DocumentoResultado } from '@shared/api'
 import type { Orcamento, Relatorio } from '@shared/types'
 
@@ -18,6 +18,14 @@ function nomeBase(orc: Orcamento): string {
 function nomeBaseRelatorio(rel: Relatorio): string {
   const cliente = rel.clienteId ? clientesRepo.get(rel.clienteId)?.nome : null
   return nomeBaseDocumento('relatorio', cliente ?? rel.destinatario, rel.data)
+}
+
+/** Aplica o tratamento atual apenas à cópia usada para PDF/DOCX. */
+function paraDocumento<T extends Orcamento | Relatorio>(documento: T): T {
+  const cliente = documento.clienteId ? clientesRepo.get(documento.clienteId) : null
+  return cliente
+    ? { ...documento, destinatario: destinatarioComTratamento(cliente.tratamento, cliente.nome) }
+    : documento
 }
 
 /**
@@ -68,7 +76,7 @@ export async function gerarPdf(id: string): Promise<DocumentoResultado> {
   const imagens = imagensDosAnexos(orc)
   // No PDF as fotos saem em tamanho cheio (a miniatura é só para a tela).
   const orcComImagens: Orcamento = {
-    ...orc,
+    ...paraDocumento(orc),
     anexos: (orc.anexos ?? []).map((a) => ({ ...a, imagemDataUrl: imagens.get(a.id) ?? null }))
   }
   return salvarPdfHtml(gerarHtmlOrcamento(orcComImagens, empresaRepo.get()), nomeBase(orc), 'orcamento')
@@ -76,7 +84,7 @@ export async function gerarPdf(id: string): Promise<DocumentoResultado> {
 
 export async function gerarDocx(id: string): Promise<DocumentoResultado> {
   const orc = carregarOrcamento(id)
-  const doc = montarDocumentoDocx(orc, empresaRepo.get(), imagensDosAnexos(orc))
+  const doc = montarDocumentoDocx(paraDocumento(orc), empresaRepo.get(), imagensDosAnexos(orc))
   const buffer = await Packer.toBuffer(doc)
 
   const r = await dialog.showSaveDialog({
@@ -102,7 +110,7 @@ export async function gerarRelatorioPdf(id: string): Promise<DocumentoResultado>
   const rel = carregarRelatorio(id)
   const imagens = imagensDoRelatorio(rel)
   const comImagens: Relatorio = {
-    ...rel,
+    ...paraDocumento(rel),
     anexos: rel.anexos.map((a) => ({ ...a, imagemDataUrl: imagens.get(a.id) ?? null }))
   }
   return salvarPdfHtml(gerarHtmlRelatorio(comImagens, empresaRepo.get()), nomeBaseRelatorio(rel), 'relatorio')
@@ -110,7 +118,7 @@ export async function gerarRelatorioPdf(id: string): Promise<DocumentoResultado>
 
 export async function gerarRelatorioDocx(id: string): Promise<DocumentoResultado> {
   const rel = carregarRelatorio(id)
-  const doc = montarDocumentoRelatorioDocx(rel, empresaRepo.get(), imagensDoRelatorio(rel))
+  const doc = montarDocumentoRelatorioDocx(paraDocumento(rel), empresaRepo.get(), imagensDoRelatorio(rel))
   const buffer = await Packer.toBuffer(doc)
   const r = await dialog.showSaveDialog({
     title: 'Salvar DOCX',

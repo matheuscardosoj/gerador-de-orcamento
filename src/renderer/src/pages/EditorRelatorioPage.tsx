@@ -15,16 +15,17 @@ type Base = Pick<Dados, 'empresa' | 'parametros' | 'clientes' | 'servicos' | 'ob
 const agora = (): string => new Date().toISOString()
 
 export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): JSX.Element {
-  const [dados,setDados]=useState<Base|null>(null); const [rel,setRel]=useState<Relatorio|null>(null); const [salvando,setSalvando]=useState(false); const [erro,setErro]=useState<string|null>(null); const [previa,setPrevia]=useState(false)
+  const [dados,setDados]=useState<Base|null>(null); const [rel,setRel]=useState<Relatorio|null>(null); const [salvando,setSalvando]=useState(false); const [erro,setErro]=useState<string|null>(null); const [previa,setPrevia]=useState(false); const [numeroOriginal,setNumeroOriginal]=useState<number|null>(null)
   useEffect(() => {
     let vivo = true
     void (async () => {
       const [empresa, parametros, clientes, servicos, observacoesPadrao, pagamentosPadrao] = await Promise.all([api.empresa.get(), api.parametros.get(), api.clientes.list(), api.servicos.list(), api.observacoes.list(), api.pagamentos.list()])
       if (!vivo) return
       setDados({ empresa, parametros, clientes, servicos, observacoesPadrao, pagamentosPadrao })
-      if (relatorioId) { setRel(await api.relatorios.get(relatorioId)); return }
+      if (relatorioId) { const existente = await api.relatorios.get(relatorioId); if (existente) { setRel(existente); setNumeroOriginal(existente.numero) }; return }
       const numero = await api.relatorios.proximoNumero()
       if (!vivo) return
+      setNumeroOriginal(numero)
       setRel({ id: '', numero, data: agora(), clienteId: null, destinatario: '', formato: 'tabela', titulo: 'Relatório de Serviço', introducao: '', itensServico: [], adiantamentos: [], reembolsos: [], observacoes: observacoesPadrao.filter(x => x.padrao && (x.aplicacao === 'ambos' || x.aplicacao === 'relatorio')).map(x => ({ id: novoId(), texto: x.texto, origemPadraoId: x.id })), pagamentos: pagamentosPadrao.filter(x => x.padrao && (x.aplicacao === 'ambos' || x.aplicacao === 'relatorio')).map(x => ({ id: novoId(), texto: x.texto, origemPadraoId: x.id })), anexos: [], status: 'rascunho', origemOrcamento: null, totais: calcularTotaisRelatorio([], [], []), criadoEm: agora(), atualizadoEm: agora() })
     })()
     return () => { vivo = false }
@@ -42,11 +43,22 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
     setSalvando(true)
     setErro(null)
     try {
-      const gravado = rel.id
-        ? await api.relatorios.update(rel.id, { ...rel, totais })
-        : await api.relatorios.create({ ...rel, totais })
+      const numeroMudou = numeroOriginal !== null && rel.numero !== numeroOriginal
+      let gravado: Relatorio | null
+      if (rel.id) {
+        if (numeroMudou) {
+          const r = await api.relatorios.alterarNumero(rel.id, rel.numero)
+          if (!r.ok) { setErro(r.erro ?? 'Não foi possível alterar o número do relatório.'); return null }
+        }
+        gravado = await api.relatorios.update(rel.id, { ...rel, totais })
+      } else {
+        const { id: _id, numero, criadoEm: _criadoEm, atualizadoEm: _atualizadoEm, ...novo } = { ...rel, totais }
+        gravado = await api.relatorios.create(numeroMudou ? { ...novo, numero } : novo)
+      }
       if (!gravado) throw new Error('Relatório não encontrado.')
       setRel(gravado)
+      setNumeroOriginal(gravado.numero)
+      if (!rel.id && numeroMudou && gravado.numero !== rel.numero) setErro(`O número ${rel.numero} já estava em uso. O relatório foi salvo com o número ${gravado.numero}.`)
       return gravado
     } catch (e) {
       setErro(String(e).replace(/^Error:\s*/, ''))
@@ -75,7 +87,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
           <Field label="Número"><NumberField value={rel.numero} min={1} step={1} onChange={(numero) => set({ numero })} /></Field>
           <Field label="Data"><Input type="date" value={rel.data.slice(0, 10)} onChange={(e) => set({ data: e.target.value })} /></Field>
           <Field label="Status"><Select value={rel.status} onChange={(e) => set({ status: e.target.value as Relatorio['status'] })}><option value="rascunho">Rascunho</option><option value="emitido">Emitido</option><option value="pago">Pago</option></Select></Field>
-          <Field label="Cliente cadastrado"><Select value={rel.clienteId ?? ''} onChange={(e) => { const cliente = dados.clientes.find((x) => x.id === e.target.value); set({ clienteId: cliente?.id ?? null, destinatario: cliente ? `${cliente.tratamento} ${cliente.nome}`.trim() : rel.destinatario }) }}><option value="">— destinatário livre —</option>{dados.clientes.map((cliente) => <option key={cliente.id} value={cliente.id}>{cliente.nome}</option>)}</Select></Field>
+          <Field label="Cliente cadastrado"><Select value={rel.clienteId ?? ''} onChange={(e) => { const cliente = dados.clientes.find((x) => x.id === e.target.value); set({ clienteId: cliente?.id ?? null, destinatario: cliente ? cliente.nome : rel.destinatario }) }}><option value="">— destinatário livre —</option>{dados.clientes.filter((cliente) => cliente.ativo || cliente.id === rel.clienteId).map((cliente) => <option key={cliente.id} value={cliente.id}>{cliente.nome}</option>)}</Select></Field>
           <Field label="Destinatário (sem vírgula)" className="md:col-span-3"><Input value={rel.destinatario} onChange={(e) => set({ destinatario: normalizarDestinatario(e.target.value) })} /></Field>
           <Field label="Título" className="md:col-span-3"><Input value={rel.titulo} onChange={(e) => set({ titulo: e.target.value })} /></Field>
           <Field label="Introdução" className="md:col-span-3"><Textarea value={rel.introducao ?? ''} onChange={(e) => set({ introducao: e.target.value })} /></Field>
@@ -90,7 +102,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
         <TextosCard titulo="Observações" itens={rel.observacoes} sugestoes={dados.observacoesPadrao.filter((x) => x.aplicacao === 'ambos' || x.aplicacao === 'relatorio')} onChange={(observacoes) => set({ observacoes })} />
         <TextosCard titulo="Forma de pagamento" itens={rel.pagamentos} sugestoes={dados.pagamentosPadrao.filter((x) => x.aplicacao === 'ambos' || x.aplicacao === 'relatorio')} onChange={(pagamentos) => set({ pagamentos })} />
       </div>
-      {previa && <PreviaRelatorioModal relatorio={{ ...rel, totais }} empresa={dados.empresa} onClose={() => setPrevia(false)} />}
+      {previa && <PreviaRelatorioModal relatorio={{ ...rel, totais }} empresa={dados.empresa} tratamento={dados.clientes.find((c) => c.id === rel.clienteId)?.tratamento} onClose={() => setPrevia(false)} />}
     </PageShell>
   )
 }

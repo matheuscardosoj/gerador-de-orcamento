@@ -3,17 +3,23 @@ import { gerarHtmlOrcamento } from '@shared/documento/template'
 import { paginarDocumento } from '@shared/documento/paginar'
 import type { EmpresaConfig, Orcamento } from '@shared/types'
 import { Button } from '../ui/primitives'
+import { destinatarioComTratamento } from '@shared/documento/comum'
 
 export function PreviaModal({
   orc,
   empresa,
+  tratamento,
   onClose
 }: {
   orc: Orcamento
   empresa: EmpresaConfig
+  tratamento?: string
   onClose: () => void
 }): JSX.Element {
-  const html = useMemo(() => gerarHtmlOrcamento(orc, empresa), [orc, empresa])
+  const html = useMemo(
+    () => gerarHtmlOrcamento(tratamento ? { ...orc, destinatario: destinatarioComTratamento(tratamento, orc.destinatario) } : orc, empresa),
+    [orc, empresa, tratamento]
+  )
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
   // DOM puro sobre o contentDocument do iframe: não esbarra na CSP do

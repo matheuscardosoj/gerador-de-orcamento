@@ -20,6 +20,7 @@ function Sidebar(): JSX.Element {
   const { rota, navegar } = useNav()
   // Recarrega o nome da empresa ao trocar de tela (reflete edições nas Configurações).
   const { data: empresa } = useAsync(() => api.empresa.get(), [rota.nome])
+  const { data: versao } = useAsync(() => api.aplicativo.versao(), [])
   const nomeEmpresa = empresa
     ? empresa.nomeExibicao === 'razaoSocial'
       ? empresa.razaoSocial
@@ -57,7 +58,7 @@ function Sidebar(): JSX.Element {
         })}
       </nav>
       <div className="border-t border-slate-200 px-5 py-3 text-[11px] text-slate-400">
-        v0.1.0 · dados locais
+        v{versao ?? '…'} · dados locais
       </div>
     </aside>
   )
