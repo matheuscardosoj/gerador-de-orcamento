@@ -27,16 +27,40 @@ export function formatNumero(n: number): string {
   return numeroFmt.format(Number.isFinite(n) ? n : 0)
 }
 
-/** Formata data ISO -> "21 de julho de 2026". */
+/** Data civil local usada pelos documentos, sem conversão acidental de fuso. */
+export function dataCivilHoje(agora = new Date()): string {
+  const ano = agora.getFullYear()
+  const mes = String(agora.getMonth() + 1).padStart(2, '0')
+  const dia = String(agora.getDate()).padStart(2, '0')
+  return `${ano}-${mes}-${dia}`
+}
+
+/** Aceita datas antigas em ISO e devolve a parte civil canônica AAAA-MM-DD. */
+export function normalizarDataCivil(valor: string): string {
+  const correspondencia = String(valor ?? '').match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (correspondencia) return `${correspondencia[1]}-${correspondencia[2]}-${correspondencia[3]}`
+  const data = new Date(valor)
+  return Number.isNaN(data.getTime()) ? '' : dataCivilHoje(data)
+}
+
+/** Converte uma data documental em meio-dia local para evitar o dia anterior. */
+export function dataCivilParaDate(valor: string): Date {
+  const civil = normalizarDataCivil(valor)
+  if (!civil) return new Date(Number.NaN)
+  const [ano, mes, dia] = civil.split('-').map(Number)
+  return new Date(ano, mes - 1, dia, 12, 0, 0, 0)
+}
+
+/** Formata data documental -> "21 de julho de 2026". */
 export function formatDataExtenso(iso: string): string {
-  const d = new Date(iso)
+  const d = dataCivilParaDate(iso)
   if (Number.isNaN(d.getTime())) return ''
   return d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-/** Formata data ISO -> "21/07/2026". */
+/** Formata data documental -> "21/07/2026". */
 export function formatDataCurta(iso: string): string {
-  const d = new Date(iso)
+  const d = dataCivilParaDate(iso)
   if (Number.isNaN(d.getTime())) return ''
   return d.toLocaleDateString('pt-BR')
 }

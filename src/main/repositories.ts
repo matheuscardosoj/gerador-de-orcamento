@@ -31,6 +31,7 @@ import type {
 import type { InfoNumeracao, ResultadoNumeracao } from '@shared/api'
 import { calcularTotaisRelatorio } from '@shared/relatorio'
 import { normalizarDestinatario } from '@shared/documento/comum'
+import { dataCivilHoje } from '@shared/format'
 
 const nowIso = (): string => new Date().toISOString()
 
@@ -556,7 +557,7 @@ export const orcamentosRepo = {
       proximoNumero: proximoNumeroLivre(),
       maiorEmUso: numero(agregado?.maior),
       menorLivre: numeroLivreAPartirDe(1),
-      totalOrcamentos: numero(agregado?.total)
+      totalDocumentos: numero(agregado?.total)
     }
   },
 
@@ -663,12 +664,11 @@ export const orcamentosRepo = {
       if (!alvo) return
       const excluido = numero(alvo.numero)
       run('DELETE FROM orcamentos WHERE id = ?', [id])
-      // Excluiu justamente o último número entregue? O contador recua para
-      // reaproveitá-lo. A comparação é com o contador (e não com o maior número
-      // existente) para não desfazer um ajuste manual feito nas Configurações.
+      // Excluiu justamente o último número entregue? O contador recua uma
+      // posição para que exatamente esse número volte, sem preencher lacunas
+      // internas mais antigas.
       if (excluido === seqAtual()) {
-        const restante = get('SELECT COALESCE(MAX(numero), 0) AS maior FROM orcamentos')
-        gravarConfig('seqOrcamento', numero(restante?.maior))
+        gravarConfig('seqOrcamento', Math.max(0, excluido - 1))
       }
     }),
 
@@ -956,7 +956,7 @@ export const relatoriosRepo = {
       proximoNumero: proximoNumeroRelatorio(),
       maiorEmUso: numero(agregado?.maior),
       menorLivre: numeroRelatorioLivreAPartirDe(1),
-      totalOrcamentos: numero(agregado?.total)
+      totalDocumentos: numero(agregado?.total)
     }
   },
 
@@ -1044,8 +1044,7 @@ export const relatoriosRepo = {
       const excluido = numero(alvo.numero)
       run('DELETE FROM relatorios WHERE id = ?', [id])
       if (excluido === seqRelatorioAtual()) {
-        const restante = get('SELECT COALESCE(MAX(numero), 0) AS maior FROM relatorios')
-        gravarConfig('seqRelatorio', numero(restante?.maior))
+        gravarConfig('seqRelatorio', Math.max(0, excluido - 1))
       }
     }),
 
@@ -1071,7 +1070,7 @@ export const relatoriosRepo = {
           .map((i) => ({ ...i, id: randomUUID() }))
       const cliente = orc.clienteId ? clientesRepo.get(orc.clienteId)?.nome : null
       const rel = relatoriosRepo.create({
-        data: nowIso(),
+        data: dataCivilHoje(),
         clienteId: orc.clienteId ?? null,
         destinatario: normalizarDestinatario(orc.destinatario),
         formato: orc.formato,

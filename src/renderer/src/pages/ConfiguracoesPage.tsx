@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Icone } from '../ui/primitives'
+import { Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAsync } from '../lib/hooks'
 import { PageShell, Tabs } from '../ui/layout'
@@ -13,8 +13,10 @@ import {
   Textarea,
   SectionTitle,
   Checkbox,
-  EmptyState
+  EmptyState,
+  ConfirmDialog
 } from '../ui/primitives'
+import { AppIcon } from '../ui/primitives'
 import type {
   EmpresaConfig,
   ParametrosFinanceiros,
@@ -396,7 +398,7 @@ function ItemObservacao({ obs, onChange }: { obs: ObservacaoPadrao; onChange: ()
             onChange()
           }}
         >
-          <Icone>🗑</Icone>
+          <AppIcon icon={Trash2} />
         </Button>
         </div>
       </div>
@@ -497,7 +499,7 @@ function ItemPagamento({
             onChange()
           }}
         >
-          <Icone>🗑</Icone>
+          <AppIcon icon={Trash2} />
         </Button>
         </div>
       </div>
@@ -681,7 +683,7 @@ function PainelNumeracao({
             <p className="text-sm text-slate-500">
               Maior número em uso: <strong className="text-slate-700">{data.maiorEmUso || '—'}</strong> ·{' '}
               Menor número livre: <strong className="text-slate-700">{data.menorLivre}</strong> ·{' '}
-              {data.totalOrcamentos} {documento}{data.totalOrcamentos === 1 ? '' : 's'}
+              {data.totalDocumentos} {documento}{data.totalDocumentos === 1 ? '' : 's'}
             </p>
             {proximo !== data.menorLivre && (
               <Button type="button" variant="outline" size="sm" onClick={() => definir(data.menorLivre)}>
@@ -706,6 +708,7 @@ function SecaoDados(): JSX.Element {
   const [ocupado, setOcupado] = useState<'exportar' | 'restaurar' | 'mesclar' | null>(null)
   const [resultado, setResultado] = useState<string | null>(null)
   const [erro, setErro] = useState<string | null>(null)
+  const [confirmacao, setConfirmacao] = useState<'restaurar' | 'mesclar' | null>(null)
 
   const exportar = async (): Promise<void> => {
     setOcupado('exportar'); setResultado(null); setErro(null)
@@ -715,10 +718,6 @@ function SecaoDados(): JSX.Element {
     } catch (e) { setErro(String(e).replace(/^Error:\s*/, '')) } finally { setOcupado(null) }
   }
   const importar = async (modo: 'restaurar' | 'mesclar'): Promise<void> => {
-    const texto = modo === 'restaurar'
-      ? 'Restaurar tudo substituirá dados e configurações deste computador pelo backup escolhido. Continuar?'
-      : 'Manter dados atuais preserva empresa, logo, parâmetros financeiros e IA deste computador. Continuar?'
-    if (!confirm(texto)) return
     setOcupado(modo); setResultado(null); setErro(null)
     try {
       const r = await api.dados.importar(modo)
@@ -747,17 +746,18 @@ function SecaoDados(): JSX.Element {
           <div className="rounded-xl border border-slate-200 p-4">
             <h3 className="font-semibold text-slate-800">Restaurar tudo</h3>
             <p className="mt-1 text-sm leading-6 text-slate-600">Substitui documentos e configurações deste computador exatamente pelo backup selecionado.</p>
-            <Button type="button" variant="outline" className="mt-4" onClick={() => void importar('restaurar')} disabled={ocupado !== null}>{ocupado === 'restaurar' ? 'Restaurando…' : 'Escolher backup e restaurar…'}</Button>
+            <Button type="button" variant="outline" className="mt-4" onClick={() => setConfirmacao('restaurar')} disabled={ocupado !== null}>{ocupado === 'restaurar' ? 'Restaurando…' : 'Escolher backup e restaurar…'}</Button>
           </div>
           <div className="rounded-xl border border-brand-teal/30 bg-brand-teal/5 p-4">
             <h3 className="font-semibold text-slate-800">Manter dados atuais</h3>
             <p className="mt-1 text-sm leading-6 text-slate-600">Importa clientes e documentos sem apagar os existentes. Empresa, logo, parâmetros financeiros e IA deste computador são preservados.</p>
-            <Button type="button" className="mt-4" onClick={() => void importar('mesclar')} disabled={ocupado !== null}>{ocupado === 'mesclar' ? 'Importando…' : 'Escolher backup e importar…'}</Button>
+            <Button type="button" className="mt-4" onClick={() => setConfirmacao('mesclar')} disabled={ocupado !== null}>{ocupado === 'mesclar' ? 'Importando…' : 'Escolher backup e importar…'}</Button>
           </div>
         </div>
       </Card>
       {resultado && <p role="status" className="rounded-xl bg-emerald-50 p-4 text-sm leading-6 text-emerald-900">{resultado}</p>}
       {erro && <p role="alert" className="rounded-xl bg-red-50 p-4 text-sm leading-6 text-red-800">{erro}</p>}
+      <ConfirmDialog open={Boolean(confirmacao)} title={confirmacao === 'restaurar' ? 'Restaurar backup' : 'Importar mantendo dados'} description={confirmacao === 'restaurar' ? 'A restauração substituirá os dados e configurações deste computador pelo arquivo escolhido. Uma cópia automática será criada antes.' : 'A importação preservará empresa, logo, parâmetros financeiros e IA locais, conciliando os demais dados. Uma cópia automática será criada antes.'} confirmLabel="Continuar" onCancel={() => setConfirmacao(null)} onConfirm={async () => { const modo = confirmacao; setConfirmacao(null); if (modo) await importar(modo) }} />
     </div>
   )
 }

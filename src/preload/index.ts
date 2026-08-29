@@ -62,7 +62,7 @@ const api: AppApi = {
     get: () => invoke('ia.get') as never,
     save: (patch) => invoke('ia.save', patch) as never,
     status: () => invoke('ia.status') as never,
-    sugerirObservacao: (orc) => invoke('ia.sugerirObservacao', orc) as never
+    sugerirObservacao: (entrada) => invoke('ia.sugerirObservacao', entrada) as never
   },
   logo: {
     selecionar: () => invoke('logo.selecionar') as never

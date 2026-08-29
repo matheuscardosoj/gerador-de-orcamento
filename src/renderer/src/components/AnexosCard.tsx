@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { ArrowDown, ArrowUp, X } from 'lucide-react'
 import { arquivosParaAnexos } from '../lib/imagens'
-import { Button, Card, Icone, Input, Modal, SectionTitle, Select, Textarea, cn } from '../ui/primitives'
+import { Button, Card, IconButton, Input, Modal, SectionTitle, Select, Textarea, cn } from '../ui/primitives'
 import type { AnexoOrcamento } from '@shared/types'
 
 /** Campos comuns aos anexos de orçamento e de relatório. */
@@ -64,7 +65,7 @@ export function AnexosCard<T extends AnexoEditavel>({
         {atualizarVinculo && <Select value={valorVinculo?.(a) ?? ''} onChange={(e) => atualizar(a.id, atualizarVinculo(a, e.target.value))}><option value="">— sem vínculo —</option>{opcoesVinculo.map((v) => <option key={v.id} value={v.id}>{v.texto}</option>)}</Select>}
         <Textarea value={a.descricao} onChange={(e) => atualizar(a.id, { descricao: e.target.value } as Partial<T>)} placeholder="Breve observação (opcional)" className="min-h-[52px] md:col-span-2" />
       </div>
-      <div className="flex shrink-0 flex-col items-center gap-1"><Button variant="ghost" size="sm" className="text-slate-400" onClick={() => mover(idx, -1)} disabled={!idx}><Icone>↑</Icone></Button><Button variant="ghost" size="sm" className="text-slate-400" onClick={() => mover(idx, 1)} disabled={idx === anexos.length - 1}><Icone>↓</Icone></Button><Button variant="ghost" size="sm" className="text-slate-400 hover:text-red-600" onClick={() => remover(a.id)}><Icone>✕</Icone></Button></div>
+      <div className="flex shrink-0 flex-col items-center gap-1"><IconButton icon={ArrowUp} label="Mover foto para cima" className="text-slate-400" onClick={() => mover(idx, -1)} disabled={!idx} /><IconButton icon={ArrowDown} label="Mover foto para baixo" className="text-slate-400" onClick={() => mover(idx, 1)} disabled={idx === anexos.length - 1} /><IconButton icon={X} label={`Remover foto ${a.titulo || idx + 1}`} className="text-slate-400 hover:text-red-600" onClick={() => remover(a.id)} /></div>
     </div>)}</div>}
     {ampliado && <ModalFoto anexo={ampliado} buscarImagem={buscarImagem} onClose={() => setAmpliado(null)} />}
   </Card>

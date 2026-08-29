@@ -1,11 +1,18 @@
 import {
+  Children,
+  cloneElement,
   forwardRef,
+  isValidElement,
+  useEffect,
+  useId,
+  useRef,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type TextareaHTMLAttributes,
   type SelectHTMLAttributes,
   type ReactNode
 } from 'react'
+import { X, type LucideIcon } from 'lucide-react'
 
 export function cn(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(' ')
@@ -34,6 +41,10 @@ export function Icone({
       {children}
     </span>
   )
+}
+
+export function AppIcon({ icon: Icon, className }: { icon: LucideIcon; className?: string }): JSX.Element {
+  return <Icon aria-hidden className={cn('h-[18px] w-[18px] shrink-0', className)} strokeWidth={1.9} />
 }
 
 // ------------------------------------------------------------------ Button
@@ -65,6 +76,41 @@ export const Button = forwardRef<
     />
   )
 })
+
+export function IconButton({
+  icon,
+  label,
+  className,
+  variant = 'ghost',
+  size = 'sm',
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  icon: LucideIcon
+  label: string
+  variant?: ButtonVariant
+  size?: ButtonSize
+}): JSX.Element {
+  return (
+    <span className="group relative inline-flex">
+      <Button
+        type="button"
+        variant={variant}
+        size={size}
+        aria-label={label}
+        className={cn('h-9 w-9 px-0', className)}
+        {...props}
+      >
+        <AppIcon icon={icon} />
+      </Button>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute bottom-full left-1/2 z-40 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-800 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-md transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+      >
+        {label}
+      </span>
+    </span>
+  )
+}
 
 // ------------------------------------------------------------------- Inputs
 const fieldBase =
@@ -134,12 +180,17 @@ export function Field({
   children: ReactNode
   className?: string
 }): JSX.Element {
-  // Usa <div> (não <label>) de propósito: envolver múltiplos controles num <label>
-  // faz o clique redirecionar o foco para o primeiro controle, travando a digitação.
+  const gerado = useId()
+  const unico = Children.count(children) === 1 && isValidElement(children) ? children : null
+  const rotulavel = unico && [Input, Textarea, Select, NumberField].includes(unico.type as never)
+  const idControle = rotulavel ? String((unico.props as { id?: string }).id ?? gerado) : undefined
+  const conteudo = rotulavel ? cloneElement(unico, { id: idControle } as never) : children
   return (
     <div className={cn('block space-y-1', className)}>
-      {label && <span className="block text-sm font-medium text-slate-700">{label}</span>}
-      {children}
+      {label && (idControle
+        ? <label htmlFor={idControle} className="block text-sm font-medium text-slate-700">{label}</label>
+        : <span className="block text-sm font-medium text-slate-700">{label}</span>)}
+      {conteudo}
       {hint && <span className="block text-xs text-slate-400">{hint}</span>}
     </div>
   )
@@ -258,23 +309,42 @@ export function Modal({
   footer?: ReactNode
   size?: 'md' | 'lg' | 'xl'
 }): JSX.Element | null {
+  const tituloId = useId()
+  const caixaRef = useRef<HTMLDivElement>(null)
+  const focoAnterior = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    if (!open) return
+    focoAnterior.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const timer = window.setTimeout(() => caixaRef.current?.querySelector<HTMLElement>('button, input, select, textarea, [tabindex]:not([tabindex="-1"])')?.focus(), 0)
+    const teclado = (evento: KeyboardEvent): void => { if (evento.key === 'Escape') onClose() }
+    document.addEventListener('keydown', teclado)
+    return () => {
+      window.clearTimeout(timer)
+      document.removeEventListener('keydown', teclado)
+      focoAnterior.current?.focus()
+    }
+  }, [open, onClose])
   if (!open) return null
   const width = size === 'md' ? 'max-w-lg' : size === 'lg' ? 'max-w-2xl' : 'max-w-4xl'
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 sm:p-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 sm:p-8" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div
+        ref={caixaRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? tituloId : undefined}
         className={cn('flex max-h-[90vh] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-2xl', width)}
         onClick={(e) => e.stopPropagation()}
       >
         {title && (
           <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-6 py-4">
-            <h3 className="text-base font-semibold text-slate-800">{title}</h3>
+            <h3 id={tituloId} className="text-base font-semibold text-slate-800">{title}</h3>
             <button
               onClick={onClose}
-              className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-brand-teal/40"
               aria-label="Fechar"
             >
-              <Icone>✕</Icone>
+              <AppIcon icon={X} />
             </button>
           </div>
         )}
@@ -284,5 +354,44 @@ export function Modal({
         )}
       </div>
     </div>
+  )
+}
+
+export function ConfirmDialog({
+  open,
+  title,
+  description,
+  confirmLabel = 'Excluir',
+  danger = true,
+  busy = false,
+  onCancel,
+  onConfirm
+}: {
+  open: boolean
+  title: ReactNode
+  description: ReactNode
+  confirmLabel?: string
+  danger?: boolean
+  busy?: boolean
+  onCancel: () => void
+  onConfirm: () => void | Promise<void>
+}): JSX.Element | null {
+  return (
+    <Modal
+      open={open}
+      onClose={onCancel}
+      title={title}
+      size="md"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onCancel} disabled={busy}>Cancelar</Button>
+          <Button variant={danger ? 'danger' : 'primary'} onClick={() => void onConfirm()} disabled={busy}>
+            {busy ? 'Aguarde…' : confirmLabel}
+          </Button>
+        </>
+      }
+    >
+      <p className="text-sm leading-6 text-slate-600">{description}</p>
+    </Modal>
   )
 }

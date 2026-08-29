@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Icone } from '../ui/primitives'
+import { Pencil, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { useNav } from '../lib/nav'
 import { PageShell } from '../ui/layout'
@@ -14,10 +14,10 @@ import {
   Textarea,
   Badge,
   SectionTitle,
+  IconButton,
   cn
 } from '../ui/primitives'
-import { formatMoeda } from '@shared/format'
-import { round2 } from '@shared/format'
+import { dataCivilHoje, formatMoeda, normalizarDataCivil, round2 } from '@shared/format'
 import type {
   Orcamento,
   ItemServico,
@@ -28,13 +28,15 @@ import type {
   ServicoCatalogo,
   ObservacaoPadrao,
   FormaPagamentoPadrao,
-  EmpresaConfig
+  EmpresaConfig,
+  Relatorio
 } from '@shared/types'
 import { ServicoCalculoModal } from '../components/ServicoCalculoModal'
 import { PreviaModal } from '../components/PreviaModal'
 import { AnexosCard } from '../components/AnexosCard'
 import { novoId, type ResultadoServico } from '../components/tipos'
 import { normalizarDestinatario } from '@shared/documento/comum'
+import { removerServicoOrcamento } from '@shared/edicao'
 
 export interface Dados {
   empresa: EmpresaConfig
@@ -51,6 +53,7 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
   const [orc, setOrc] = useState<Orcamento | null>(null)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const [mensagem, setMensagem] = useState<string | null>(null)
   const [previaAberta, setPreviaAberta] = useState(false)
   // Número com que o orçamento foi carregado: só mexemos na numeração se mudou.
   const [numeroOriginal, setNumeroOriginal] = useState<number | null>(null)
@@ -83,7 +86,7 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
         setOrc({
           id: '',
           numero,
-          data: new Date().toISOString(),
+          data: dataCivilHoje(),
           clienteId: null,
           destinatario: '',
           formato: 'carta',
@@ -174,9 +177,9 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
     if (!salvo) return
     try {
       const r = tipo === 'pdf' ? await api.documentos.gerarPdf(salvo.id) : await api.documentos.gerarDocx(salvo.id)
-      if (r.caminho) alert(`Documento gerado:\n${r.caminho}`)
+      if (r.caminho) setMensagem(`Documento gerado com sucesso: ${r.caminho}`)
     } catch (e) {
-      alert(`Não foi possível gerar o documento.\n${String(e)}`)
+      setErro(`Não foi possível gerar o documento. ${String(e).replace(/^Error:\s*/, '')}`)
     }
   }
 
@@ -215,9 +218,10 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
       }
     >
       {erro && <div className="mb-4 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{erro}</div>}
+      {mensagem && <div role="status" className="mb-4 rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">{mensagem}</div>}
       <div className="space-y-5">
         <DadosGeraisCard orc={orc} set={set} clientes={dados.clientes} />
-        <ServicosCard orc={orc} set={set} dados={dados} total={total} />
+        <ServicosCard orc={orc} set={set} dados={dados} total={total} onRemover={(id) => set(removerServicoOrcamento(orc, id))} />
         <MateriaisCard orc={orc} set={set} />
         <TextosCard
           titulo="Observações"
@@ -269,8 +273,8 @@ function DadosGeraisCard({
         <Field label="Data">
           <Input
             type="date"
-            value={orc.data.slice(0, 10)}
-            onChange={(e) => set({ data: new Date(e.target.value + 'T12:00:00').toISOString() })}
+            value={normalizarDataCivil(orc.data)}
+            onChange={(e) => set({ data: normalizarDataCivil(e.target.value) })}
           />
         </Field>
         <Field label="Formato do documento">
@@ -322,7 +326,7 @@ function DadosGeraisCard({
         <Field label="Introdução / apresentação" hint="Parágrafo opcional antes dos serviços" className="md:col-span-3">
           <Textarea value={orc.introducao ?? ''} onChange={(e) => set({ introducao: e.target.value })} />
         </Field>
-        <AnotacaoInterna orc={orc} set={set} />
+        <AnotacaoInterna documento={orc} set={set} tipoDocumento="orcamento" />
       </div>
     </Card>
   )
@@ -334,13 +338,13 @@ function DadosGeraisCard({
  * continua totalmente editável — ou pode ser escrito do zero, sem usar a IA.
  */
 export function AnotacaoInterna({
-  orc,
+  documento,
   set,
-  tipoDocumento = 'orçamentos'
+  tipoDocumento
 }: {
-  orc: Orcamento
-  set: (p: Partial<Orcamento>) => void
-  tipoDocumento?: 'orçamentos' | 'relatórios'
+  documento: Orcamento | Relatorio
+  set: (p: { observacaoInterna?: string }) => void
+  tipoDocumento: 'orcamento' | 'relatorio'
 }): JSX.Element {
   const [gerando, setGerando] = useState(false)
   const [aviso, setAviso] = useState<string | null>(null)
@@ -349,7 +353,9 @@ export function AnotacaoInterna({
     setGerando(true)
     setAviso(null)
     try {
-      const texto = await api.ia.sugerirObservacao(orc)
+      const texto = tipoDocumento === 'relatorio'
+        ? await api.ia.sugerirObservacao({ tipo: 'relatorio', documento: documento as Relatorio })
+        : await api.ia.sugerirObservacao({ tipo: 'orcamento', documento: documento as Orcamento })
       if (texto) set({ observacaoInterna: texto })
       else setAviso('A IA não retornou nenhum texto.')
     } catch (e) {
@@ -362,13 +368,13 @@ export function AnotacaoInterna({
   return (
     <Field
       label="Anotação interna"
-      hint={`Aparece só na listagem de ${tipoDocumento} e na busca — não sai no documento.`}
+      hint={`Aparece só na listagem de ${tipoDocumento === 'relatorio' ? 'relatórios' : 'orçamentos'} e na busca — não sai no documento.`}
       className="md:col-span-3"
     >
       {aviso && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{aviso}</p>}
       <div className="flex items-start gap-2">
         <Textarea
-          value={orc.observacaoInterna ?? ''}
+          value={documento.observacaoInterna ?? ''}
           onChange={(e) => set({ observacaoInterna: e.target.value })}
           placeholder="Ex.: Cercamento da fazenda do Sr. João, 1.200 m, aguardando retorno."
           className="min-h-[64px]"
@@ -388,7 +394,8 @@ export function ServicosCard({
   dados,
   total,
   titulo = 'Serviços a executar',
-  rotuloTotal = 'Total do orçamento'
+  rotuloTotal = 'Total do orçamento',
+  onRemover
 }: {
   orc: Orcamento
   set: (p: Partial<Orcamento>) => void
@@ -396,6 +403,7 @@ export function ServicosCard({
   total: number
   titulo?: string
   rotuloTotal?: string
+  onRemover?: (id: string) => void
 }): JSX.Element {
   const [calcAberto, setCalcAberto] = useState<ItemServico | 'novo' | null>(null)
   const [manualAberto, setManualAberto] = useState<ItemServico | 'novo' | null>(null)
@@ -416,8 +424,10 @@ export function ServicosCard({
 
   const atualizar = (item: ItemServico): void =>
     set({ itensServico: orc.itensServico.map((i) => (i.id === item.id ? item : i)) })
-  const remover = (id: string): void =>
-    set({ itensServico: orc.itensServico.filter((i) => i.id !== id) })
+  const remover = (id: string): void => {
+    if (onRemover) onRemover(id)
+    else set({ itensServico: orc.itensServico.filter((i) => i.id !== id) })
+  }
 
   // Ao editar um item: se foi calculado, reabre o modal de cálculo; senão, o manual.
   const editarItem = (i: ItemServico): void => {
@@ -455,8 +465,8 @@ export function ServicosCard({
           Nenhum serviço adicionado.
         </p>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-slate-200">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-lg border border-slate-200">
+          <table className="w-full min-w-[760px] text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-3 py-2">Descrição</th>
@@ -481,15 +491,10 @@ export function ServicosCard({
                   <td className="px-3 py-2 text-right text-slate-600">{formatMoeda(i.valorUnitario)}</td>
                   <td className="px-3 py-2 text-right font-medium text-slate-800">{formatMoeda(i.valorTotal)}</td>
                   <td className="px-3 py-2 text-right">
-                    <button
-                      className="text-xs text-slate-400 hover:text-brand-tealDark"
-                      onClick={() => editarItem(i)}
-                    >
-                      editar
-                    </button>{' '}
-                    <button className="text-xs text-slate-400 hover:text-red-600" onClick={() => remover(i.id)}>
-                      excluir
-                    </button>
+                    <div className="flex items-center justify-end gap-1">
+                      <IconButton icon={Pencil} label={`Editar serviço ${i.descricao}`} onClick={() => editarItem(i)} />
+                      <IconButton icon={X} label={`Remover serviço ${i.descricao}`} className="text-slate-400 hover:text-red-600" onClick={() => remover(i.id)} />
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -660,9 +665,7 @@ function MateriaisCard({
                 onChange={(e) => upd(m.id, { especificacao: e.target.value })}
                 placeholder="Especificação do material"
               />
-              <Button variant="ghost" size="sm" className="text-slate-400" onClick={() => rem(m.id)}>
-                <Icone>✕</Icone>
-              </Button>
+              <IconButton icon={X} label={`Remover material ${m.especificacao || 'sem descrição'}`} className="text-slate-400" onClick={() => rem(m.id)} />
             </div>
           ))}
         </div>
@@ -712,9 +715,7 @@ export function TextosCard({
               onChange={(e) => upd(i.id, e.target.value)}
               className="min-h-[52px]"
             />
-            <Button variant="ghost" size="sm" className="mt-1 shrink-0 text-slate-400" onClick={() => rem(i.id)}>
-              <Icone>✕</Icone>
-            </Button>
+            <IconButton icon={X} label="Remover observação ou texto" className="mt-1 shrink-0 text-slate-400" onClick={() => rem(i.id)} />
           </div>
         ))}
       </div>

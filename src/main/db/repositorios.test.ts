@@ -160,9 +160,9 @@ it('recua o contador ao excluir o orçamento de maior número', () => {
   repos.orcamentosRepo.remove(a.id)
   expect(repos.orcamentosRepo.proximoNumero()).toBe(5)
 
-  // Excluir o último entregue devolve o número para reaproveitamento.
+  // Excluir o último entregue devolve exatamente esse número para reaproveitamento.
   repos.orcamentosRepo.remove(b.id)
-  expect(repos.orcamentosRepo.proximoNumero()).toBe(3)
+  expect(repos.orcamentosRepo.proximoNumero()).toBe(4)
 })
 
 it('deixa escolher o próximo número e recusa os já usados', () => {
@@ -210,7 +210,7 @@ it('altera o número de um orçamento e bloqueia duplicidade', () => {
   const info = repos.orcamentosRepo.numeracao()
   expect(info.maiorEmUso).toBe(20)
   expect(info.menorLivre).toBe(2)
-  expect(info.totalOrcamentos).toBe(2)
+  expect(info.totalDocumentos).toBe(2)
 
   repos.orcamentosRepo.alterarNumero(alvo.id, 2)
   repos.orcamentosRepo.definirProximoNumero(3)

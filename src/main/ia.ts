@@ -12,8 +12,9 @@ import { join } from 'path'
 import { createServer } from 'net'
 import { cpus } from 'os'
 import { configIARepo } from './repositories'
-import { formatMoeda } from '@shared/format'
-import type { Orcamento, StatusIA, ConfigIA } from '@shared/types'
+import { formatDataCurta, formatMoeda } from '@shared/format'
+import type { Orcamento, Relatorio, StatusIA, ConfigIA } from '@shared/types'
+import type { SugestaoObservacaoEntrada } from '@shared/api'
 
 const OCIOSO_MS = 5 * 60_000
 const TIMEOUT_BOOT_MS = 90_000
@@ -223,7 +224,7 @@ export function resumirOrcamento(orc: Orcamento): string {
   linhas.push(`Número: ${orc.numero}`)
   if (orc.destinatario) linhas.push(`Cliente: ${orc.destinatario.replace(/,$/, '')}`)
   if (orc.titulo) linhas.push(`Título: ${orc.titulo}`)
-  linhas.push(`Data: ${new Date(orc.data).toLocaleDateString('pt-BR')}`)
+  linhas.push(`Data: ${formatDataCurta(orc.data)}`)
   if (orc.itensServico.length) {
     linhas.push('Serviços:')
     orc.itensServico.forEach((i, idx) => {
@@ -243,7 +244,30 @@ export function resumirOrcamento(orc: Orcamento): string {
   return linhas.join('\n')
 }
 
-function promptAnotacao(orc: Orcamento): string {
+export function resumirRelatorio(rel: Relatorio): string {
+  const linhas: string[] = [`Número: ${rel.numero}`]
+  if (rel.destinatario) linhas.push(`Cliente: ${rel.destinatario.replace(/,$/, '')}`)
+  if (rel.titulo) linhas.push(`Título: ${rel.titulo}`)
+  linhas.push(`Data: ${formatDataCurta(rel.data)}`)
+  if (rel.itensServico.length) {
+    linhas.push('Serviços prestados:')
+    rel.itensServico.forEach((item, indice) => {
+      const quantidade = item.quantidade > 1 ? ` — ${item.quantidade} ${item.unidade}` : ''
+      linhas.push(`  ${indice + 1}. ${item.descricao}${quantidade} — ${formatMoeda(item.valorTotal)}`)
+    })
+  }
+  if (rel.adiantamentos.length) {
+    linhas.push(`Adiantamentos: ${rel.adiantamentos.map((item) => `${item.descricao || 'Sem descrição'} — ${formatMoeda(item.valor)}`).join('; ')}`)
+  }
+  if (rel.reembolsos.length) {
+    linhas.push(`Reembolsos: ${rel.reembolsos.map((item) => `${item.descricao || 'Sem descrição'} — ${formatMoeda(item.valor)}`).join('; ')}`)
+  }
+  linhas.push(`Valor total dos serviços: ${formatMoeda(rel.totais.servicos)}`)
+  linhas.push(`Valor a ${rel.totais.tipoSaldo === 'devolver' ? 'devolver' : 'receber'}: ${formatMoeda(rel.totais.valorFinal)}`)
+  return linhas.join('\n')
+}
+
+function promptAnotacaoOrcamento(orc: Orcamento): string {
   return (
     'Escreva UMA única frase corrida, de no máximo 25 palavras, que identifique o ' +
     'orçamento abaixo numa lista: o serviço, a quantidade, o cliente e o valor total.\n' +
@@ -253,6 +277,23 @@ function promptAnotacao(orc: Orcamento): string {
     'Orçamento:\n' +
     resumirOrcamento(orc)
   )
+}
+
+function promptAnotacaoRelatorio(rel: Relatorio): string {
+  return (
+    'Escreva UMA única frase corrida, de no máximo 30 palavras, que identifique o ' +
+    'relatório abaixo numa lista: serviço concluído, cliente, valor dos serviços e saldo final. ' +
+    'Mencione adiantamento ou reembolso quando houver.\n' +
+    'Proibido usar listas, marcadores, quebras de linha, rótulos de campo ou aspas.\n\n' +
+    'Relatório:\n' +
+    resumirRelatorio(rel)
+  )
+}
+
+export function promptAnotacao(entrada: SugestaoObservacaoEntrada): string {
+  return entrada.tipo === 'relatorio'
+    ? promptAnotacaoRelatorio(entrada.documento)
+    : promptAnotacaoOrcamento(entrada.documento)
 }
 
 // ---------------------------------------------------------------- API pública
@@ -299,11 +340,11 @@ export async function statusIA(): Promise<StatusIA> {
   }
 }
 
-export async function sugerirObservacao(orc: Orcamento): Promise<string> {
+export async function sugerirObservacao(entrada: SugestaoObservacaoEntrada): Promise<string> {
   const cfg = configIARepo.get()
   if (cfg.modo === 'desligada') throw new Error('A sugestão por IA está desativada nas Configurações.')
 
-  const prompt = promptAnotacao(orc)
+  const prompt = promptAnotacao(entrada)
   if (cfg.modo === 'ollama') return limpar(await chamarOllama(cfg, prompt, SISTEMA))
 
   if (arquivosIA()) return limpar(await chamarEmbutida(prompt, SISTEMA))

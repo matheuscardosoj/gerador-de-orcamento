@@ -74,6 +74,8 @@ export function criarMockApi(): AppApi {
   // Espelho simplificado das regras de numeração do main (ver repositories.ts).
   const ocupado = (n: number, ignorarId?: string): Orcamento | undefined =>
     db.orcamentos.find((o) => o.numero === n && o.id !== ignorarId)
+  const ocupadoRelatorio = (n: number, ignorarId?: string): Relatorio | undefined =>
+    (db.relatorios ?? []).find((r) => r.numero === n && r.id !== ignorarId)
   const proximoLivre = (de: number): number => {
     let n = Math.max(1, de)
     while (ocupado(n)) n++
@@ -121,7 +123,7 @@ export function criarMockApi(): AppApi {
   }
 
   return {
-    aplicativo: { versao: async () => '1.2.1-dev' },
+    aplicativo: { versao: async () => '1.2.2-dev' },
     empresa: {
       get: async () => clone(db.empresa),
       save: async (patch) => {
@@ -183,7 +185,7 @@ export function criarMockApi(): AppApi {
         const alvo = db.orcamentos.find((x) => x.id === id)
         db.orcamentos = db.orcamentos.filter((x) => x.id !== id)
         if (alvo && alvo.numero === db.seqOrcamento) {
-          db.seqOrcamento = db.orcamentos.reduce((m, o) => Math.max(m, o.numero), 0)
+          db.seqOrcamento = Math.max(0, alvo.numero - 1)
         }
       },
       duplicate: async (id) => {
@@ -199,7 +201,7 @@ export function criarMockApi(): AppApi {
         proximoNumero: proximoLivre(db.seqOrcamento + 1),
         maiorEmUso: db.orcamentos.reduce((m, o) => Math.max(m, o.numero), 0),
         menorLivre: proximoLivre(1),
-        totalOrcamentos: db.orcamentos.length
+        totalDocumentos: db.orcamentos.length
       }),
       definirProximoNumero: async (n) => {
         const erro = validar(n)
@@ -221,9 +223,10 @@ export function criarMockApi(): AppApi {
     relatorios: {
       list: async () => clone(db.relatorios ?? []),
       get: async (id) => clone((db.relatorios ?? []).find((x) => x.id === id) ?? null),
-      proximoNumero: async () => (db.seqRelatorio ?? 0) + 1,
+      proximoNumero: async () => { let n = (db.seqRelatorio ?? 0) + 1; while (ocupadoRelatorio(n)) n++; return n },
       create: async (dto) => {
-        const numero = dto.numero ?? (db.seqRelatorio ?? 0) + 1
+        let numero = dto.numero ?? (db.seqRelatorio ?? 0) + 1
+        while (ocupadoRelatorio(numero)) numero++
         db.seqRelatorio = Math.max(db.seqRelatorio ?? 0, numero)
         const r: Relatorio = { ...(dto as Relatorio), id: uid(), numero, totais: calcularTotaisRelatorio(dto.itensServico, dto.adiantamentos, dto.reembolsos), criadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString() }
         ;(db.relatorios ??= []).push(r)
@@ -236,17 +239,17 @@ export function criarMockApi(): AppApi {
         r.totais = calcularTotaisRelatorio(r.itensServico, r.adiantamentos, r.reembolsos)
         return clone(r)
       },
-      remove: async (id) => { db.relatorios = (db.relatorios ?? []).filter((x) => x.id !== id) },
-      numeracao: async () => ({ proximoNumero: (db.seqRelatorio ?? 0) + 1, maiorEmUso: db.seqRelatorio ?? 0, menorLivre: (db.seqRelatorio ?? 0) + 1, totalOrcamentos: (db.relatorios ?? []).length }),
-      definirProximoNumero: async (numero) => { db.seqRelatorio = numero - 1; return { ok: true } },
-      alterarNumero: async (id, numero) => { const r = (db.relatorios ?? []).find((x) => x.id === id); if (!r) return { ok: false, erro: 'Relatório não encontrado.' }; r.numero = numero; return { ok: true, relatorio: clone(r) } },
+      remove: async (id) => { const alvo = (db.relatorios ?? []).find((x) => x.id === id); db.relatorios = (db.relatorios ?? []).filter((x) => x.id !== id); if (alvo && alvo.numero === db.seqRelatorio) db.seqRelatorio = Math.max(0, alvo.numero - 1) },
+      numeracao: async () => { const lista = db.relatorios ?? []; let proximo = (db.seqRelatorio ?? 0) + 1; while (ocupadoRelatorio(proximo)) proximo++; let menor = 1; while (ocupadoRelatorio(menor)) menor++; return { proximoNumero: proximo, maiorEmUso: lista.reduce((m, r) => Math.max(m, r.numero), 0), menorLivre: menor, totalDocumentos: lista.length } },
+      definirProximoNumero: async (numero) => { if (!Number.isInteger(numero) || numero < 1 || numero > 999999) return { ok: false, erro: 'O número deve ser um inteiro entre 1 e 999999.' }; const conflito = ocupadoRelatorio(numero); if (conflito) return { ok: false, erro: `O número ${numero} já está em uso por outro relatório.` }; db.seqRelatorio = numero - 1; return { ok: true } },
+      alterarNumero: async (id, numero) => { const r = (db.relatorios ?? []).find((x) => x.id === id); if (!r) return { ok: false, erro: 'Relatório não encontrado.' }; if (!Number.isInteger(numero) || numero < 1 || numero > 999999) return { ok: false, erro: 'O número deve ser um inteiro entre 1 e 999999.' }; const conflito = ocupadoRelatorio(numero, id); if (conflito) return { ok: false, erro: `O número ${numero} já está em uso por outro relatório.` }; r.numero = numero; db.seqRelatorio = Math.max(db.seqRelatorio ?? 0, numero); return { ok: true, relatorio: clone(r) } },
       criarDeOrcamento: async (id) => {
         const o = db.orcamentos.find((x) => x.id === id)
         if (!o) return null
         const numero = (db.seqRelatorio ?? 0) + 1
         db.seqRelatorio = numero
         const r: Relatorio = {
-          id: uid(), numero, data: new Date().toISOString(), clienteId: o.clienteId,
+          id: uid(), numero, data: new Date().toISOString().slice(0, 10), clienteId: o.clienteId,
           destinatario: o.destinatario, formato: o.formato, titulo: 'Relatório de Serviço',
           introducao: o.introducao, itensServico: clone(o.itensServico), adiantamentos: [], reembolsos: [],
           observacoes: [], pagamentos: [], anexos: [], status: 'rascunho',

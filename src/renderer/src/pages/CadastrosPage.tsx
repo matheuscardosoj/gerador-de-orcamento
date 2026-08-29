@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Icone } from '../ui/primitives'
+import { Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAsync } from '../lib/hooks'
 import { PageShell, Tabs } from '../ui/layout'
@@ -12,8 +12,10 @@ import {
   Textarea,
   Modal,
   EmptyState,
-  Badge
+  Badge,
+  ConfirmDialog
 } from '../ui/primitives'
+import { IconButton } from '../ui/primitives'
 import { formatMoeda } from '@shared/format'
 import type { Cliente, ServicoCatalogo } from '@shared/types'
 
@@ -48,12 +50,20 @@ const clienteVazio = (): Omit<Cliente, 'id' | 'criadoEm'> => ({
 function SecaoClientes(): JSX.Element {
   const { data, reload } = useAsync(() => api.clientes.list(), [])
   const [edit, setEdit] = useState<Cliente | 'novo' | null>(null)
+  const [excluir, setExcluir] = useState<Cliente | null>(null)
+  const [erro, setErro] = useState<string | null>(null)
+  const confirmar = async (): Promise<void> => {
+    if (!excluir) return
+    try { await api.clientes.remove(excluir.id); setExcluir(null); reload() }
+    catch (e) { setErro(String(e).replace(/^Error:\s*/, '')) }
+  }
 
   return (
     <Card className="p-6">
       <div className="mb-4 flex justify-end">
         <Button onClick={() => setEdit('novo')}>+ Novo cliente</Button>
       </div>
+      {erro && <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</p>}
       <div className="divide-y divide-slate-100">
         {(data ?? []).map((c) => (
           <div key={c.id} className="flex items-center justify-between gap-4 py-3">
@@ -68,21 +78,12 @@ function SecaoClientes(): JSX.Element {
               <Button size="sm" variant="ghost" onClick={() => setEdit(c)}>
                 Editar
               </Button>
-              <Button
+              <IconButton
+                icon={Trash2}
+                label={`Excluir cliente ${c.nome}`}
                 size="sm"
-                variant="ghost"
-                onClick={async () => {
-                  if (!confirm(`Excluir o cliente "${c.nome}"?`)) return
-                  try {
-                    await api.clientes.remove(c.id)
-                    reload()
-                  } catch (erro) {
-                    alert(String(erro).replace(/^Error:\s*/, ''))
-                  }
-                }}
-              >
-                <Icone>🗑</Icone>
-              </Button>
+                onClick={() => { setErro(null); setExcluir(c) }}
+              />
             </div>
           </div>
         ))}
@@ -104,6 +105,7 @@ function SecaoClientes(): JSX.Element {
           }}
         />
       )}
+      <ConfirmDialog open={Boolean(excluir)} title="Excluir cliente" description={`Excluir o cliente “${excluir?.nome ?? ''}”? Documentos já gravados continuarão preservados.`} onCancel={() => setExcluir(null)} onConfirm={confirmar} />
     </Card>
   )
 }
@@ -186,6 +188,7 @@ const servicoVazio = (): Omit<ServicoCatalogo, 'id'> => ({
 function SecaoServicos(): JSX.Element {
   const { data, reload } = useAsync(() => api.servicos.list(), [])
   const [edit, setEdit] = useState<ServicoCatalogo | 'novo' | null>(null)
+  const [excluir, setExcluir] = useState<ServicoCatalogo | null>(null)
 
   return (
     <Card className="p-6">
@@ -208,18 +211,12 @@ function SecaoServicos(): JSX.Element {
               <Button size="sm" variant="ghost" onClick={() => setEdit(s)}>
                 Editar
               </Button>
-              <Button
+              <IconButton
+                icon={Trash2}
+                label={`Excluir serviço ${s.nome}`}
                 size="sm"
-                variant="ghost"
-                onClick={async () => {
-                  if (confirm(`Excluir o serviço "${s.nome}"?`)) {
-                    await api.servicos.remove(s.id)
-                    reload()
-                  }
-                }}
-              >
-                <Icone>🗑</Icone>
-              </Button>
+                onClick={() => setExcluir(s)}
+              />
             </div>
           </div>
         ))}
@@ -235,6 +232,7 @@ function SecaoServicos(): JSX.Element {
           }}
         />
       )}
+      <ConfirmDialog open={Boolean(excluir)} title="Excluir serviço" description={`Excluir o serviço “${excluir?.nome ?? ''}” do catálogo? Itens já gravados não serão alterados.`} onCancel={() => setExcluir(null)} onConfirm={async () => { if (excluir) { await api.servicos.remove(excluir.id); setExcluir(null); reload() } }} />
     </Card>
   )
 }

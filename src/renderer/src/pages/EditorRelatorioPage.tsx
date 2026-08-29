@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import { PageShell } from '../ui/layout'
-import { Button, Card, Field, Input, NumberField, Select, SectionTitle, Textarea } from '../ui/primitives'
-import { formatMoeda } from '@shared/format'
+import { Button, Card, Field, IconButton, Input, NumberField, Select, SectionTitle, Textarea } from '../ui/primitives'
+import { dataCivilHoje, formatMoeda, normalizarDataCivil } from '@shared/format'
 import { calcularTotaisRelatorio } from '@shared/relatorio'
 import { normalizarDestinatario } from '@shared/documento/comum'
 import type { LancamentoRelatorio, Orcamento, Relatorio } from '@shared/types'
@@ -11,6 +12,7 @@ import { PreviaRelatorioModal } from '../components/PreviaRelatorioModal'
 import { AnotacaoInterna, ServicosCard, TextosCard, type Dados } from './EditorOrcamentoPage'
 import { AnexosCard } from '../components/AnexosCard'
 import { useNav } from '../lib/nav'
+import { removerLancamentoRelatorio, removerServicoRelatorio } from '@shared/edicao'
 
 type Base = Pick<Dados, 'empresa' | 'parametros' | 'clientes' | 'servicos' | 'observacoesPadrao' | 'pagamentosPadrao'>
 const agora = (): string => new Date().toISOString()
@@ -28,7 +30,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
       const numero = await api.relatorios.proximoNumero()
       if (!vivo) return
       setNumeroOriginal(numero)
-      setRel({ id: '', numero, data: agora(), clienteId: null, destinatario: '', formato: 'tabela', titulo: 'Relatório de Serviço', introducao: '', itensServico: [], adiantamentos: [], reembolsos: [], observacoes: observacoesPadrao.filter(x => x.padrao && (x.aplicacao === 'ambos' || x.aplicacao === 'relatorio')).map(x => ({ id: novoId(), texto: x.texto, origemPadraoId: x.id })), pagamentos: pagamentosPadrao.filter(x => x.padrao && (x.aplicacao === 'ambos' || x.aplicacao === 'relatorio')).map(x => ({ id: novoId(), texto: x.texto, origemPadraoId: x.id })), anexos: [], observacaoInterna: '', status: 'rascunho', origemOrcamento: null, totais: calcularTotaisRelatorio([], [], []), criadoEm: agora(), atualizadoEm: agora() })
+      setRel({ id: '', numero, data: dataCivilHoje(), clienteId: null, destinatario: '', formato: 'tabela', titulo: 'Relatório de Serviço', introducao: '', itensServico: [], adiantamentos: [], reembolsos: [], observacoes: observacoesPadrao.filter(x => x.padrao && (x.aplicacao === 'ambos' || x.aplicacao === 'relatorio')).map(x => ({ id: novoId(), texto: x.texto, origemPadraoId: x.id })), pagamentos: pagamentosPadrao.filter(x => x.padrao && (x.aplicacao === 'ambos' || x.aplicacao === 'relatorio')).map(x => ({ id: novoId(), texto: x.texto, origemPadraoId: x.id })), anexos: [], observacaoInterna: '', status: 'rascunho', origemOrcamento: null, totais: calcularTotaisRelatorio([], [], []), criadoEm: agora(), atualizadoEm: agora() })
     })()
     return () => { vivo = false }
   }, [relatorioId])
@@ -72,7 +74,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
   if(!dados||!rel||!totais)return <p className="p-8 text-sm text-slate-500">Carregando…</p>
   const orcAdaptado:Orcamento={...rel,materiais:[],prazoDias:null,valorTotal:totais.servicos,status:'rascunho'}
   const acoes = (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2">
       <Button variant="ghost" onClick={() => navegar({ nome: 'historicoRelatorios' })}>Voltar</Button>
       <Button variant="outline" onClick={() => setPrevia(true)}>Prévia</Button>
       <Button variant="outline" onClick={() => { void salvar().then((r) => r && api.documentos.gerarRelatorioPdf(r.id)) }}>PDF</Button>
@@ -88,19 +90,20 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
         <SectionTitle title="Dados do relatório" />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Field label="Número"><NumberField value={rel.numero} min={1} step={1} onChange={(numero) => set({ numero })} /></Field>
-          <Field label="Data"><Input type="date" value={rel.data.slice(0, 10)} onChange={(e) => set({ data: e.target.value })} /></Field>
+          <Field label="Data"><Input type="date" value={normalizarDataCivil(rel.data)} onChange={(e) => set({ data: normalizarDataCivil(e.target.value) })} /></Field>
           <Field label="Status"><Select value={rel.status} onChange={(e) => set({ status: e.target.value as Relatorio['status'] })}><option value="rascunho">Rascunho</option><option value="emitido">Emitido</option><option value="pago">Pago</option></Select></Field>
+          <Field label="Formato do documento"><Select value={rel.formato} onChange={(e) => set({ formato: e.target.value as Relatorio['formato'] })}><option value="carta">Carta (parágrafos)</option><option value="tabela">Tabela (colunas)</option></Select></Field>
           <Field label="Cliente cadastrado"><Select value={rel.clienteId ?? ''} onChange={(e) => { const cliente = dados.clientes.find((x) => x.id === e.target.value); set({ clienteId: cliente?.id ?? null, destinatario: cliente ? cliente.nome : rel.destinatario }) }}><option value="">— destinatário livre —</option>{dados.clientes.filter((cliente) => cliente.ativo || cliente.id === rel.clienteId).map((cliente) => <option key={cliente.id} value={cliente.id}>{cliente.nome}</option>)}</Select></Field>
-          <Field label="Destinatário (sem vírgula)" className="md:col-span-3"><Input value={rel.destinatario} onChange={(e) => set({ destinatario: normalizarDestinatario(e.target.value) })} /></Field>
+          <Field label="Destinatário (sem vírgula)" className="md:col-span-2"><Input value={rel.destinatario} onChange={(e) => set({ destinatario: normalizarDestinatario(e.target.value), clienteId: null })} /></Field>
           <Field label="Título" className="md:col-span-3"><Input value={rel.titulo} onChange={(e) => set({ titulo: e.target.value })} /></Field>
           <Field label="Introdução" className="md:col-span-3"><Textarea value={rel.introducao ?? ''} onChange={(e) => set({ introducao: e.target.value })} /></Field>
-          <AnotacaoInterna orc={orcAdaptado} set={(patch) => set({ observacaoInterna: patch.observacaoInterna })} tipoDocumento="relatórios" />
+          <AnotacaoInterna documento={rel} set={(patch) => set({ observacaoInterna: patch.observacaoInterna })} tipoDocumento="relatorio" />
         </div>
       </Card>
       <div className="space-y-6">
-        <ServicosCard orc={orcAdaptado} set={(p) => set({ itensServico: p.itensServico ?? rel.itensServico })} dados={dados} total={totais.servicos} titulo="Serviços prestados" rotuloTotal="Valor total dos serviços" />
-        <LancamentosCard titulo="Valores adiantados" descricao="São subtraídos do valor dos serviços." itens={rel.adiantamentos} onChange={(adiantamentos) => set({ adiantamentos })} />
-        <LancamentosCard titulo="Valores a reembolsar" descricao="São somados ao valor dos serviços." itens={rel.reembolsos} onChange={(reembolsos) => set({ reembolsos })} />
+        <ServicosCard orc={orcAdaptado} set={(p) => set({ itensServico: p.itensServico ?? rel.itensServico })} dados={dados} total={totais.servicos} titulo="Serviços prestados" rotuloTotal="Valor total dos serviços" onRemover={(id) => set(removerServicoRelatorio(rel, id))} />
+        <LancamentosCard titulo="Valores adiantados" descricao="São subtraídos do valor dos serviços." itens={rel.adiantamentos} onChange={(adiantamentos) => set({ adiantamentos })} onRemover={(id) => set(removerLancamentoRelatorio(rel, 'adiantamento', id))} />
+        <LancamentosCard titulo="Valores a reembolsar" descricao="São somados ao valor dos serviços." itens={rel.reembolsos} onChange={(reembolsos) => set({ reembolsos })} onRemover={(id) => set(removerLancamentoRelatorio(rel, 'reembolso', id))} />
         <AnexosRelatorioCard anexos={rel.anexos} relatorio={rel} onChange={(anexos) => set({ anexos })} />
         <Card className="p-6"><SectionTitle title="Resumo financeiro" /><div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4"><Resumo label="Serviços" valor={totais.servicos} /><Resumo label="Adiantamentos" valor={-totais.adiantamentos} /><Resumo label="Reembolsos" valor={totais.reembolsos} /><Resumo label={totais.tipoSaldo === 'devolver' ? 'Valor a devolver' : 'Valor a receber'} valor={totais.valorFinal} destaque /></div></Card>
         <TextosCard titulo="Observações" itens={rel.observacoes} sugestoes={dados.observacoesPadrao.filter((x) => x.aplicacao === 'ambos' || x.aplicacao === 'relatorio')} onChange={(observacoes) => set({ observacoes })} />
@@ -111,7 +114,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
   )
 }
 function Resumo({label,valor,destaque}:{label:string;valor:number;destaque?:boolean}):JSX.Element{return <div className={destaque?'rounded-lg bg-brand-teal/10 p-3':'rounded-lg bg-slate-50 p-3'}><p className="text-xs text-slate-500">{label}</p><p className={destaque?'font-bold text-brand-tealDark':'font-semibold'}>{formatMoeda(valor)}</p></div>}
-function LancamentosCard({titulo,descricao,itens,onChange}:{titulo:string;descricao:string;itens:LancamentoRelatorio[];onChange:(v:LancamentoRelatorio[])=>void}):JSX.Element{const add=()=>onChange([...itens,{id:novoId(),descricao:'',valor:0}]);const upd=(id:string,p:Partial<LancamentoRelatorio>)=>onChange(itens.map(x=>x.id===id?{...x,...p}:x));return <Card className="p-6"><SectionTitle title={titulo} description={descricao} action={<Button variant="outline" onClick={add}>+ Adicionar</Button>}/>{itens.length===0?<p className="text-sm text-slate-500">Nenhum lançamento.</p>:<div className="space-y-2">{itens.map(x=><div key={x.id} className="grid grid-cols-[1fr_160px_auto] gap-2"><Input value={x.descricao} placeholder="Descrição" onChange={e=>upd(x.id,{descricao:e.target.value})}/><NumberField value={x.valor} min={0} onChange={valor=>upd(x.id,{valor})}/><Button variant="ghost" className="text-slate-400 hover:text-red-600" onClick={()=>onChange(itens.filter(i=>i.id!==x.id))}>Excluir</Button></div>)}</div>}</Card>}
+function LancamentosCard({titulo,descricao,itens,onChange,onRemover}:{titulo:string;descricao:string;itens:LancamentoRelatorio[];onChange:(v:LancamentoRelatorio[])=>void;onRemover:(id:string)=>void}):JSX.Element{const add=()=>onChange([...itens,{id:novoId(),descricao:'',valor:0}]);const upd=(id:string,p:Partial<LancamentoRelatorio>)=>onChange(itens.map(x=>x.id===id?{...x,...p}:x));return <Card className="p-6"><SectionTitle title={titulo} description={descricao} action={<Button variant="outline" onClick={add}>+ Adicionar</Button>}/>{itens.length===0?<p className="text-sm text-slate-500">Nenhum lançamento.</p>:<div className="space-y-2">{itens.map(x=><div key={x.id} className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_160px_auto]"><Input value={x.descricao} placeholder="Descrição" aria-label={`Descrição de ${titulo.toLowerCase()}`} onChange={e=>upd(x.id,{descricao:e.target.value})}/><NumberField value={x.valor} min={0} aria-label={`Valor de ${titulo.toLowerCase()}`} onChange={valor=>upd(x.id,{valor})}/><IconButton icon={X} label={`Remover lançamento de ${titulo.toLowerCase()}`} className="text-slate-400 hover:text-red-600" onClick={()=>onRemover(x.id)} /></div>)}</div>}</Card>}
 
 function AnexosRelatorioCard({ anexos, relatorio, onChange }: { anexos: Relatorio['anexos']; relatorio: Relatorio; onChange: (v: Relatorio['anexos']) => void }): JSX.Element {
   const referencias = [

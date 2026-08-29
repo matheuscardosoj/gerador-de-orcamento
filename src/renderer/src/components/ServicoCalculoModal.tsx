@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Icone } from '../ui/primitives'
+import { X } from 'lucide-react'
 import { calcularCustoServico, criarEntradaCalculo, normalizarEntrada } from '@shared/calculo/engine'
 import type { EntradaCalculo, ModoAplicacao, ParametrosFinanceiros } from '@shared/types'
 import { formatMoeda } from '@shared/format'
-import { Button, Card, Checkbox, Field, Input, NumberField, Select, cn } from '../ui/primitives'
+import { Button, Card, Checkbox, Field, IconButton, Input, NumberField, Select, cn } from '../ui/primitives'
 import { novoId, type ResultadoServico } from './tipos'
 
 interface Props {
@@ -90,7 +90,7 @@ export function ServicoCalculoModal({
         <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
           <h3 className="text-base font-semibold text-slate-800">Calcular custo do serviço</h3>
           <button onClick={onCancel} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100" aria-label="Fechar">
-            <Icone>✕</Icone>
+            <X aria-hidden className="h-[18px] w-[18px]" />
           </button>
         </div>
 
@@ -253,9 +253,7 @@ function MaoDeObraBloco({ e, set }: BlocoProps): JSX.Element {
                   onChange={(ev) => upd(g.id, { descricao: ev.target.value })}
                 />
               </Field>
-              <Button size="sm" variant="ghost" onClick={() => rem(g.id)} className="text-slate-400">
-                <Icone>✕</Icone>
-              </Button>
+              <IconButton icon={X} label="Remover grupo de mão de obra" onClick={() => rem(g.id)} className="text-slate-400" />
             </div>
             <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
               <Field label="Funcionários">
@@ -343,9 +341,7 @@ function LinhaDescricao({
       <Field label="Descrição" className="flex-1">
         <Input placeholder={placeholder} value={valor} onChange={(ev) => onChange(ev.target.value)} />
       </Field>
-      <Button size="sm" variant="ghost" onClick={onRemove} className="text-slate-400">
-        <Icone>✕</Icone>
-      </Button>
+      <IconButton icon={X} label="Remover item" onClick={onRemove} className="text-slate-400" />
     </div>
   )
 }
@@ -442,9 +438,7 @@ function FerramentasBloco({ e, set }: BlocoProps): JSX.Element {
             <NumberField value={f.valor} onChange={(v) => upd(f.id, { valor: v })} min={0} />
             <div className="flex items-center gap-1">
               <ModoSelect value={f.modo} onChange={(m) => upd(f.id, { modo: m })} />
-              <Button size="sm" variant="ghost" onClick={() => rem(f.id)} className="text-slate-400">
-                <Icone>✕</Icone>
-              </Button>
+              <IconButton icon={X} label="Remover ferramenta" onClick={() => rem(f.id)} className="text-slate-400" />
             </div>
           </div>
         ))}
@@ -628,9 +622,7 @@ function AvulsosBloco({ e, set }: BlocoProps): JSX.Element {
             <NumberField value={a.valor} onChange={(v) => upd(a.id, { valor: v })} min={0} />
             <div className="flex items-center gap-1">
               <ModoSelect value={a.modo} onChange={(m) => upd(a.id, { modo: m })} />
-              <Button size="sm" variant="ghost" onClick={() => rem(a.id)} className={cn('text-slate-400')}>
-                <Icone>✕</Icone>
-              </Button>
+              <IconButton icon={X} label="Remover outro custo" onClick={() => rem(a.id)} className={cn('text-slate-400')} />
             </div>
           </div>
         ))}

@@ -1,7 +1,7 @@
 // Conexão SQLite (node-sqlite3-wasm: WebAssembly com acesso real ao arquivo,
 // sem nenhuma dependência nativa/node-gyp — ver memória `ambiente-build-windows`).
 import { app } from 'electron'
-import { copyFileSync, existsSync, mkdirSync } from 'fs'
+import { copyFileSync, existsSync, mkdirSync, openSync, closeSync, readFileSync, unlinkSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { Database } from 'node-sqlite3-wasm'
 import { aplicarMigracoes } from './schema'
@@ -9,6 +9,7 @@ import { aplicarMigracoes } from './schema'
 export type Linha = Record<string, string | number | Uint8Array | null>
 
 let conexao: Database | null = null
+let trava: { caminho: string; fd: number } | null = null
 
 /** Pasta `userData/data`, onde ficam o banco e os backups. */
 export function pastaDados(): string {
@@ -19,6 +20,33 @@ export function pastaDados(): string {
 
 export function caminhoBanco(): string {
   return join(pastaDados(), 'banco.db')
+}
+
+function adquirirTrava(): void {
+  const caminho = join(pastaDados(), 'banco.lock')
+  try {
+    const fd = openSync(caminho, 'wx')
+    writeFileSync(fd, `${process.pid}\n`, 'utf8')
+    trava = { caminho, fd }
+  } catch (erro) {
+    if (!existsSync(caminho)) throw erro
+    let pid = 0
+    try { pid = Number.parseInt(readFileSync(caminho, 'utf8').trim(), 10) } catch { pid = 0 }
+    let vivo = false
+    if (pid > 0) { try { process.kill(pid, 0); vivo = true } catch { vivo = false } }
+    if (vivo) throw new Error('O banco de dados já está aberto por outra instância do aplicativo.')
+    try { unlinkSync(caminho) } catch { throw new Error('Não foi possível obter a trava do banco de dados.') }
+    const fd = openSync(caminho, 'wx')
+    writeFileSync(fd, `${process.pid}\n`, 'utf8')
+    trava = { caminho, fd }
+  }
+}
+
+function liberarTrava(): void {
+  if (!trava) return
+  try { closeSync(trava.fd) } catch { /* já fechado */ }
+  try { unlinkSync(trava.caminho) } catch { /* a limpeza não impede o encerramento */ }
+  trava = null
 }
 
 export function caminhoBackupPreV2(): string {
@@ -57,6 +85,7 @@ function verificarIntegridade(d: Database): void {
  */
 export function abrirBanco(): { db: Database; bancoNovo: boolean } {
   if (conexao) return { db: conexao, bancoNovo: false }
+  adquirirTrava()
   const caminho = caminhoBanco()
   const bancoNovo = !existsSync(caminho)
   const backup = bancoNovo ? null : prepararBackupPreV2(caminho)
@@ -71,6 +100,7 @@ export function abrirBanco(): { db: Database; bancoNovo: boolean } {
   } catch (e) {
     conexao.close()
     conexao = null
+    liberarTrava()
     const sufixo = backup ? `\nBackup preservado em: ${backup}` : ''
     throw new Error(`${String(e).replace(/^Error:\s*/, '')}${sufixo}`)
   }
@@ -87,6 +117,7 @@ export function fecharBanco(): void {
     conexao.close()
     conexao = null
   }
+  liberarTrava()
 }
 
 /** Executa `fn` dentro de uma transação (commit no sucesso, rollback no erro). */

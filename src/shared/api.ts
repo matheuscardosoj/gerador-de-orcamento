@@ -43,13 +43,17 @@ export interface ResultadoNumeracao {
 }
 
 export interface InfoNumeracao {
-  /** Número que o próximo orçamento receberá. */
+  /** Número que o próximo documento desse tipo receberá. */
   proximoNumero: number
   maiorEmUso: number
   /** Menor número ainda não usado (útil para fechar buracos na sequência). */
   menorLivre: number
-  totalOrcamentos: number
+  totalDocumentos: number
 }
+
+export type SugestaoObservacaoEntrada =
+  | { tipo: 'orcamento'; documento: Orcamento }
+  | { tipo: 'relatorio'; documento: Relatorio }
 
 export interface DocumentoResultado {
   /** Caminho do arquivo salvo, ou null se o usuário cancelou. */
@@ -122,8 +126,8 @@ export interface AppApi {
     get(): Promise<ConfigIA>
     save(patch: Partial<ConfigIA>): Promise<ConfigIA>
     status(): Promise<StatusIA>
-    /** Gera uma sugestão de anotação interna a partir do orçamento em edição. */
-    sugerirObservacao(orc: Orcamento): Promise<string>
+    /** Gera uma sugestão de anotação interna adequada ao tipo do documento. */
+    sugerirObservacao(entrada: SugestaoObservacaoEntrada): Promise<string>
   }
   logo: {
     /** Abre um seletor de imagem e retorna a logo como data URL. */

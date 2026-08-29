@@ -1,5 +1,6 @@
 import { NavProvider, useNav, type Rota } from './lib/nav'
-import { cn, Icone } from './ui/primitives'
+import { cn, AppIcon } from './ui/primitives'
+import { ClipboardList, ContactRound, FileText, Settings, type LucideIcon } from 'lucide-react'
 import { api } from './lib/api'
 import { useAsync } from './lib/hooks'
 import { HistoricoPage } from './pages/HistoricoPage'
@@ -9,11 +10,11 @@ import { EditorOrcamentoPage } from './pages/EditorOrcamentoPage'
 import { HistoricoRelatoriosPage } from './pages/HistoricoRelatoriosPage'
 import { EditorRelatorioPage } from './pages/EditorRelatorioPage'
 
-const itens: Array<{ nome: Rota['nome']; label: string; icon: string }> = [
-  { nome: 'historico', label: 'Orçamentos', icon: '📄' },
-  { nome: 'historicoRelatorios', label: 'Relatórios', icon: '📋' },
-  { nome: 'cadastros', label: 'Cadastros', icon: '📇' },
-  { nome: 'configuracoes', label: 'Configurações', icon: '⚙️' }
+const itens: Array<{ nome: Rota['nome']; label: string; icon: LucideIcon }> = [
+  { nome: 'historico', label: 'Orçamentos', icon: FileText },
+  { nome: 'historicoRelatorios', label: 'Relatórios', icon: ClipboardList },
+  { nome: 'cadastros', label: 'Cadastros', icon: ContactRound },
+  { nome: 'configuracoes', label: 'Configurações', icon: Settings }
 ]
 
 function Sidebar(): JSX.Element {
@@ -27,7 +28,7 @@ function Sidebar(): JSX.Element {
       : empresa.nome
     : ''
   return (
-    <aside className="flex w-60 flex-col border-r border-slate-200 bg-white">
+    <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white">
       <div className="border-b border-slate-200 px-5 py-5">
         {nomeEmpresa && (
           <div className="inline-flex max-w-full items-center truncate rounded-full bg-brand-teal px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
@@ -51,7 +52,7 @@ function Sidebar(): JSX.Element {
                 ativo ? 'bg-brand-teal/10 text-brand-tealDark' : 'text-slate-600 hover:bg-slate-100'
               )}
             >
-              <Icone>{item.icon}</Icone>
+              <AppIcon icon={item.icon} />
               {item.label}
             </button>
           )
@@ -89,7 +90,7 @@ function App(): JSX.Element {
     <NavProvider>
       <div className="flex h-full">
         <Sidebar />
-        <main className="flex-1 overflow-y-auto bg-slate-100">
+        <main className="min-w-0 flex-1 overflow-y-auto bg-slate-100">
           <Conteudo />
         </main>
       </div>
