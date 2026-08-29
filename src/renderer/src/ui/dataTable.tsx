@@ -11,19 +11,38 @@ export function DataTableFrame({
 }): JSX.Element {
   return (
     <Card className="overflow-hidden">
-      <div
-        className="data-table-viewport overflow-x-auto"
-        tabIndex={0}
-        aria-label="Tabela com rolagem horizontal"
-      >
-        <table
-          className="data-table w-full table-fixed text-sm"
-          style={{ '--data-table-min-width': minWidth } as CSSProperties}
-        >
-          {children}
-        </table>
-      </div>
+      <DataTableViewport minWidth={minWidth}>{children}</DataTableViewport>
     </Card>
+  )
+}
+
+/**
+ * Estrutura compartilhada para tabelas que vivem dentro de um Card existente.
+ * Mantém o mesmo layout fixo e comportamento responsivo das tabelas de histórico
+ * sem criar um Card aninhado.
+ */
+export function DataTableViewport({
+  children,
+  minWidth = '1000px',
+  className
+}: {
+  children: ReactNode
+  minWidth?: string
+  className?: string
+}): JSX.Element {
+  return (
+    <div
+      className={cn('data-table-viewport overflow-x-auto', className)}
+      tabIndex={0}
+      aria-label="Tabela com rolagem horizontal"
+    >
+      <table
+        className="data-table w-full table-fixed text-sm"
+        style={{ '--data-table-min-width': minWidth } as CSSProperties}
+      >
+        {children}
+      </table>
+    </div>
   )
 }
 

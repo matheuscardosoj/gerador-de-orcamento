@@ -38,6 +38,7 @@ import { novoId, type ResultadoServico } from '../components/tipos'
 import { normalizarDestinatario } from '@shared/documento/comum'
 import { removerServicoOrcamento } from '@shared/edicao'
 import { mensagemValidacao, normalizarOrcamento, validarOrcamentoFinal } from '@shared/validacao'
+import { DataTableViewport } from '../ui/dataTable'
 
 export interface Dados {
   empresa: EmpresaConfig
@@ -605,69 +606,74 @@ export function ServicosCard({
           Nenhum serviço adicionado.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-200">
-          <table className="w-full min-w-[760px] text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-3 py-2">Descrição</th>
-                <th className="px-3 py-2 text-right">Qtd</th>
-                <th className="px-3 py-2">Unid.</th>
-                <th className="px-3 py-2 text-right">Valor unit.</th>
-                <th className="px-3 py-2 text-right">Total</th>
-                <th className="px-3 py-2"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {orc.itensServico.map((i) => (
-                <tr key={i.id}>
-                  <td className="px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-700">{i.descricao}</span>
-                      {i.calculo && <Badge color="green">calculado</Badge>}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 text-right text-slate-600">{i.quantidade}</td>
-                  <td className="px-3 py-2 text-slate-600">{i.unidade}</td>
-                  <td className="px-3 py-2 text-right text-slate-600">
-                    {formatMoeda(i.valorUnitario)}
-                  </td>
-                  <td className="px-3 py-2 text-right font-medium text-slate-800">
-                    {formatMoeda(i.valorTotal)}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <IconButton
-                        icon={Pencil}
-                        label={`Editar serviço ${i.descricao}`}
-                        onClick={() => editarItem(i)}
-                      />
-                      <IconButton
-                        icon={X}
-                        label={`Remover serviço ${i.descricao}`}
-                        className="text-slate-400 hover:text-red-600"
-                        onClick={() => remover(i.id)}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t border-slate-200 bg-slate-50">
-                <td
-                  colSpan={4}
-                  className="px-3 py-2 text-right text-sm font-semibold text-slate-600"
-                >
-                  {rotuloTotal}
+        <DataTableViewport minWidth="760px" className="rounded-lg border border-slate-200">
+          <colgroup>
+            <col className="w-[35%]" />
+            <col className="w-[9%]" />
+            <col className="w-[12%]" />
+            <col className="w-[16%]" />
+            <col className="w-[16%]" />
+            <col className="w-[12%]" />
+          </colgroup>
+          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+            <tr>
+              <th className="px-3 py-2">Descrição</th>
+              <th className="whitespace-nowrap px-3 py-2 text-right">Qtd</th>
+              <th className="whitespace-nowrap px-3 py-2">Unid.</th>
+              <th className="whitespace-nowrap px-3 py-2 text-right">Valor unit.</th>
+              <th className="whitespace-nowrap px-3 py-2 text-right">Total</th>
+              <th className="px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {orc.itensServico.map((i) => (
+              <tr key={i.id}>
+                <td className="min-w-0 px-3 py-2 align-middle">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="min-w-0 break-words text-slate-700">{i.descricao}</span>
+                    {i.calculo && <Badge color="green">calculado</Badge>}
+                  </div>
                 </td>
-                <td className="px-3 py-2 text-right text-base font-bold text-brand-tealDark">
-                  {formatMoeda(total)}
+                <td className="whitespace-nowrap px-3 py-2 text-right text-slate-600">
+                  {i.quantidade}
                 </td>
-                <td></td>
+                <td className="min-w-0 break-words px-3 py-2 text-slate-600">{i.unidade}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-right text-slate-600">
+                  {formatMoeda(i.valorUnitario)}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-right font-medium text-slate-800">
+                  {formatMoeda(i.valorTotal)}
+                </td>
+                <td className="px-3 py-2 text-right align-middle">
+                  <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+                    <IconButton
+                      icon={Pencil}
+                      label={`Editar serviço ${i.descricao}`}
+                      onClick={() => editarItem(i)}
+                    />
+                    <IconButton
+                      icon={X}
+                      label={`Remover serviço ${i.descricao}`}
+                      className="text-slate-400 hover:text-red-600"
+                      onClick={() => remover(i.id)}
+                    />
+                  </div>
+                </td>
               </tr>
-            </tfoot>
-          </table>
-        </div>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t border-slate-200 bg-slate-50">
+              <td colSpan={4} className="px-3 py-2 text-right text-sm font-semibold text-slate-600">
+                {rotuloTotal}
+              </td>
+              <td className="px-3 py-2 text-right text-base font-bold text-brand-tealDark">
+                {formatMoeda(total)}
+              </td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </DataTableViewport>
       )}
 
       {calcAberto && (
