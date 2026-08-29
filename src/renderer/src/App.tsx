@@ -93,7 +93,7 @@ function App(): JSX.Element {
     <NavProvider>
       <div className="flex h-full">
         <Sidebar />
-        <main className="min-w-0 flex-1 overflow-y-auto bg-slate-100">
+        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-slate-100">
           <Conteudo />
         </main>
       </div>

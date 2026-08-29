@@ -1,6 +1,6 @@
 {
   "name": "gerador-de-orcamento",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "description": "Gerador de Orçamentos - VS Prestadora de Serviços",
   "main": "./out/main/index.js",
   "author": "VS Prestadora de Serviços",
@@ -61,5 +61,12 @@
     "typescript-eslint": "8.68.0",
     "vite": "7.3.6",
     "vitest": "4.1.11"
+  },
+  "allowScripts": {
+    "electron@44.0.0": true,
+    "@swc/core@1.16.1": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.2": true,
+    "electron-winstaller@5.4.0": true
   }
 }
