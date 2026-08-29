@@ -32,7 +32,11 @@ async function carregarImagem(arquivo: File): Promise<HTMLImageElement> {
   })
 }
 
-function redimensionar(img: HTMLImageElement, ladoMaximo: number, qualidade: number): {
+function redimensionar(
+  img: HTMLImageElement,
+  ladoMaximo: number,
+  qualidade: number
+): {
   dataUrl: string
   largura: number
   altura: number
@@ -53,7 +57,9 @@ function redimensionar(img: HTMLImageElement, ladoMaximo: number, qualidade: num
 }
 
 const novoId = (): string =>
-  typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)
+  typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2)
 
 /** Converte um arquivo escolhido pelo usuário em um anexo pronto para salvar. */
 export async function arquivoParaAnexo(arquivo: File): Promise<AnexoOrcamento> {

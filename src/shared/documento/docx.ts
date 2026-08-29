@@ -50,7 +50,11 @@ function runsDeTexto(texto: string, opcoes: Omit<IRunOptions, 'text' | 'break'> 
     .map((linha, i) => new TextRun({ ...opcoes, text: linha, break: i > 0 ? 1 : undefined }))
 }
 
-function p(texto: string, opcoes: IParagraphOptions = {}, run: Omit<IRunOptions, 'text'> = {}): Paragraph {
+function p(
+  texto: string,
+  opcoes: IParagraphOptions = {},
+  run: Omit<IRunOptions, 'text'> = {}
+): Paragraph {
   return new Paragraph({ children: runsDeTexto(texto, run), ...opcoes })
 }
 
@@ -143,7 +147,9 @@ function servicosCarta(orc: Orcamento): Paragraph[] {
     const filhos: ParagraphChild[] = [new TextRun({ text: `Item ${idx + 1} -`, bold: true })]
     filhos.push(...runsDeTexto(` ${i.descricao}`))
     if (i.quantidade > 1 && i.valorUnitario > 0) {
-      filhos.push(new TextRun({ text: ` / Valor por ${i.unidade}: ${formatMoeda(i.valorUnitario)}` }))
+      filhos.push(
+        new TextRun({ text: ` / Valor por ${i.unidade}: ${formatMoeda(i.valorUnitario)}` })
+      )
     }
     filhos.push(new TextRun({ text: ` / Valor do item: ${formatMoeda(i.valorTotal)}` }))
     return new Paragraph({
@@ -154,10 +160,7 @@ function servicosCarta(orc: Orcamento): Paragraph[] {
   })
 }
 
-function celulaTabela(
-  filhos: Paragraph[],
-  opcoes: { largura: number; fundo?: string }
-): TableCell {
+function celulaTabela(filhos: Paragraph[], opcoes: { largura: number; fundo?: string }): TableCell {
   return new TableCell({
     width: { size: opcoes.largura, type: WidthType.PERCENTAGE },
     shading: opcoes.fundo ? { fill: opcoes.fundo } : undefined,
@@ -170,7 +173,10 @@ function celulaTabela(
 function servicosTabela(orc: Orcamento): Table {
   // Mesmas proporções do CSS (.c-item 40px, .c-unid 66px, resto proporcional).
   const larguras = [6, 45, 10, 9, 15, 15]
-  const celulaTexto = (texto: string, alinhamento: (typeof AlignmentType)[keyof typeof AlignmentType]): Paragraph[] => [
+  const celulaTexto = (
+    texto: string,
+    alinhamento: (typeof AlignmentType)[keyof typeof AlignmentType]
+  ): Paragraph[] => [
     p(texto, { alignment: alinhamento, spacing: { line: 240, after: 0 } }, { size: MIUDO })
   ]
 
@@ -181,7 +187,8 @@ function servicosTabela(orc: Orcamento): Table {
       celulaTabela(
         [
           new Paragraph({
-            alignment: i === 0 ? AlignmentType.CENTER : i >= 3 ? AlignmentType.RIGHT : AlignmentType.LEFT,
+            alignment:
+              i === 0 ? AlignmentType.CENTER : i >= 3 ? AlignmentType.RIGHT : AlignmentType.LEFT,
             spacing: { line: 240, after: 0 },
             children: [new TextRun({ text: titulo, bold: true, size: MIUDO })]
           })
@@ -195,12 +202,20 @@ function servicosTabela(orc: Orcamento): Table {
     (i, idx) =>
       new TableRow({
         children: [
-          celulaTabela(celulaTexto(String(idx + 1), AlignmentType.CENTER), { largura: larguras[0] }),
+          celulaTabela(celulaTexto(String(idx + 1), AlignmentType.CENTER), {
+            largura: larguras[0]
+          }),
           celulaTabela(celulaTexto(i.descricao, AlignmentType.LEFT), { largura: larguras[1] }),
           celulaTabela(celulaTexto(i.unidade, AlignmentType.LEFT), { largura: larguras[2] }),
-          celulaTabela(celulaTexto(String(i.quantidade), AlignmentType.RIGHT), { largura: larguras[3] }),
-          celulaTabela(celulaTexto(formatMoeda(i.valorUnitario), AlignmentType.RIGHT), { largura: larguras[4] }),
-          celulaTabela(celulaTexto(formatMoeda(i.valorTotal), AlignmentType.RIGHT), { largura: larguras[5] })
+          celulaTabela(celulaTexto(String(i.quantidade), AlignmentType.RIGHT), {
+            largura: larguras[3]
+          }),
+          celulaTabela(celulaTexto(formatMoeda(i.valorUnitario), AlignmentType.RIGHT), {
+            largura: larguras[4]
+          }),
+          celulaTabela(celulaTexto(formatMoeda(i.valorTotal), AlignmentType.RIGHT), {
+            largura: larguras[5]
+          })
         ]
       })
   )
@@ -244,26 +259,59 @@ function dimensoesAnexo(largura: number, altura: number): { width: number; heigh
   return { width: Math.round(w * escala), height: Math.round(h * escala) }
 }
 
-type AnexoComumDocx = Pick<AnexoOrcamento, 'id' | 'titulo' | 'descricao' | 'largura' | 'altura' | 'imagemDataUrl' | 'miniaturaDataUrl'>
+type AnexoComumDocx = Pick<
+  AnexoOrcamento,
+  'id' | 'titulo' | 'descricao' | 'largura' | 'altura' | 'imagemDataUrl' | 'miniaturaDataUrl'
+>
 
-function figuraAnexoDocx(anexo: AnexoComumDocx, referencia: string | null, imagem: string | undefined): Paragraph[] {
+function figuraAnexoDocx(
+  anexo: AnexoComumDocx,
+  referencia: string | null,
+  imagem: string | undefined
+): Paragraph[] {
   const blocos: Paragraph[] = []
   if (anexo.titulo) {
-    blocos.push(p(anexo.titulo, { alignment: AlignmentType.CENTER, spacing: { line: ENTRELINHA, after: mm(1) } }, { bold: true }))
+    blocos.push(
+      p(
+        anexo.titulo,
+        { alignment: AlignmentType.CENTER, spacing: { line: ENTRELINHA, after: mm(1) } },
+        { bold: true }
+      )
+    )
   }
   if (referencia) {
-    blocos.push(p(referencia, { alignment: AlignmentType.CENTER, spacing: { line: ENTRELINHA, after: mm(2) } }, { italics: true, color: '555555', size: 19 }))
+    blocos.push(
+      p(
+        referencia,
+        { alignment: AlignmentType.CENTER, spacing: { line: ENTRELINHA, after: mm(2) } },
+        { italics: true, color: '555555', size: 19 }
+      )
+    )
   }
   const img = imagemDeDataUrl(imagem ?? anexo.imagemDataUrl ?? anexo.miniaturaDataUrl)
   if (img) {
-    blocos.push(new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { line: 240, after: mm(2) },
-      children: [new ImageRun({ type: img.tipo, data: img.data, transformation: dimensoesAnexo(anexo.largura, anexo.altura) })]
-    }))
+    blocos.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { line: 240, after: mm(2) },
+        children: [
+          new ImageRun({
+            type: img.tipo,
+            data: img.data,
+            transformation: dimensoesAnexo(anexo.largura, anexo.altura)
+          })
+        ]
+      })
+    )
   }
   if (anexo.descricao) {
-    blocos.push(p(anexo.descricao, { alignment: AlignmentType.CENTER, spacing: { line: ENTRELINHA, after: mm(8) } }, { size: MIUDO }))
+    blocos.push(
+      p(
+        anexo.descricao,
+        { alignment: AlignmentType.CENTER, spacing: { line: ENTRELINHA, after: mm(8) } },
+        { size: MIUDO }
+      )
+    )
   }
   return blocos
 }
@@ -279,7 +327,8 @@ function secaoAnexos(orc: Orcamento, imagens: Map<string, string>): Paragraph[] 
     })
   ]
 
-  for (const a of anexos) blocos.push(...figuraAnexoDocx(a, referenciaDoAnexo(orc, a.itemServicoId), imagens.get(a.id)))
+  for (const a of anexos)
+    blocos.push(...figuraAnexoDocx(a, referenciaDoAnexo(orc, a.itemServicoId), imagens.get(a.id)))
   return blocos
 }
 
@@ -337,20 +386,28 @@ export function montarDocumentoDocx(
     })
   )
   if (orc.destinatario) {
-    corpo.push(p(destinatarioNoDocumento(orc.destinatario), { spacing: { line: ENTRELINHA, after: mm(6) } }))
+    corpo.push(
+      p(destinatarioNoDocumento(orc.destinatario), { spacing: { line: ENTRELINHA, after: mm(6) } })
+    )
   }
 
   corpo.push(
     p(
       orc.titulo || 'Proposta de Serviço',
-      { alignment: AlignmentType.CENTER, spacing: { line: ENTRELINHA, before: mm(4), after: mm(8) } },
+      {
+        alignment: AlignmentType.CENTER,
+        spacing: { line: ENTRELINHA, before: mm(4), after: mm(8) }
+      },
       { bold: true, size: 32 }
     )
   )
 
   if (orc.introducao) {
     corpo.push(
-      p(orc.introducao, { alignment: AlignmentType.BOTH, spacing: { line: ENTRELINHA, after: mm(4) } })
+      p(orc.introducao, {
+        alignment: AlignmentType.BOTH,
+        spacing: { line: ENTRELINHA, after: mm(4) }
+      })
     )
   }
 
@@ -393,8 +450,18 @@ export function montarDocumentoDocx(
       orc.materiais.map((m) => `${m.quantidade} ${m.unidade} — ${m.especificacao}`)
     )
   )
-  corpo.push(...blocoLista('Observações:', orc.observacoes.map((o) => o.texto)))
-  corpo.push(...blocoLista('Forma de Pagamento:', orc.pagamentos.map((pg) => pg.texto)))
+  corpo.push(
+    ...blocoLista(
+      'Observações:',
+      orc.observacoes.map((o) => o.texto)
+    )
+  )
+  corpo.push(
+    ...blocoLista(
+      'Forma de Pagamento:',
+      orc.pagamentos.map((pg) => pg.texto)
+    )
+  )
   // A proposta fecha na assinatura; os anexos vêm depois, em página nova.
   // O frame da assinatura precisa de um parágrafo âncora no fim da proposta.
   corpo.push(new Paragraph({ spacing: { before: mm(12), after: 0 }, children: [] }))
@@ -467,7 +534,8 @@ function apendiceRelatorioDocx(
       spacing: { line: ENTRELINHA, after: mm(6) }
     })
   ]
-  for (const a of anexos) blocos.push(...figuraAnexoDocx(a, referenciaAnexoRelatorio(rel, a), imagens.get(a.id)))
+  for (const a of anexos)
+    blocos.push(...figuraAnexoDocx(a, referenciaAnexoRelatorio(rel, a), imagens.get(a.id)))
   return blocos
 }
 
@@ -479,45 +547,162 @@ export function montarDocumentoRelatorioDocx(
 ): Document {
   const cidade = extrairCidade(empresa.endereco)
   const base: Orcamento = {
-    id: rel.id, numero: rel.numero, data: rel.data, clienteId: rel.clienteId,
-    destinatario: rel.destinatario, formato: rel.formato, titulo: rel.titulo,
-    introducao: rel.introducao, itensServico: rel.itensServico, materiais: [],
-    observacoes: rel.observacoes, pagamentos: rel.pagamentos, anexos: [], prazoDias: null,
-    observacaoInterna: '', valorTotal: rel.totais.servicos, status: 'rascunho',
-    criadoEm: rel.criadoEm, atualizadoEm: rel.atualizadoEm
+    id: rel.id,
+    numero: rel.numero,
+    data: rel.data,
+    clienteId: rel.clienteId,
+    destinatario: rel.destinatario,
+    formato: rel.formato,
+    titulo: rel.titulo,
+    introducao: rel.introducao,
+    itensServico: rel.itensServico,
+    materiais: [],
+    observacoes: rel.observacoes,
+    pagamentos: rel.pagamentos,
+    anexos: [],
+    prazoDias: null,
+    observacaoInterna: '',
+    valorTotal: rel.totais.servicos,
+    status: 'rascunho',
+    criadoEm: rel.criadoEm,
+    atualizadoEm: rel.atualizadoEm
   }
   const corpo: (Paragraph | Table)[] = [cabecalho(empresa)]
-  corpo.push(p(`${cidade}, ${formatDataExtenso(rel.data)}`, { spacing: { line: ENTRELINHA, before: mm(12), after: 0 } }))
-  if (rel.destinatario) corpo.push(p(destinatarioNoDocumento(rel.destinatario), { spacing: { line: ENTRELINHA, after: mm(6) } }))
-  corpo.push(p(rel.titulo || 'Relatório de Serviço', { alignment: AlignmentType.CENTER, spacing: { before: mm(4), after: mm(8) } }, { bold: true, size: 32 }))
-  if (rel.introducao) corpo.push(p(rel.introducao, { alignment: AlignmentType.BOTH, spacing: { after: mm(4) } }))
+  corpo.push(
+    p(`${cidade}, ${formatDataExtenso(rel.data)}`, {
+      spacing: { line: ENTRELINHA, before: mm(12), after: 0 }
+    })
+  )
+  if (rel.destinatario)
+    corpo.push(
+      p(destinatarioNoDocumento(rel.destinatario), { spacing: { line: ENTRELINHA, after: mm(6) } })
+    )
+  corpo.push(
+    p(
+      rel.titulo || 'Relatório de Serviço',
+      { alignment: AlignmentType.CENTER, spacing: { before: mm(4), after: mm(8) } },
+      { bold: true, size: 32 }
+    )
+  )
+  if (rel.introducao)
+    corpo.push(p(rel.introducao, { alignment: AlignmentType.BOTH, spacing: { after: mm(4) } }))
   if (rel.formato === 'tabela') {
     corpo.push(servicosTabela(base))
     corpo.push(new Paragraph({ spacing: { after: mm(4) }, children: [] }))
   } else corpo.push(...servicosCarta(base))
-  corpo.push(new Paragraph({
-    spacing: { line: ENTRELINHA, before: mm(5), after: mm(3) },
-    children: [new TextRun({ text: 'Valor total dos serviços: ', bold: true }), new TextRun({ text: formatMoeda(rel.totais.servicos) })]
-  }))
-  corpo.push(...blocoLista('Adiantamentos:', rel.adiantamentos.map((i) => `- ${formatMoeda(i.valor)}${i.descricao ? ` - ${i.descricao}` : ''}`)))
-  corpo.push(...blocoLista('Reembolsos:', rel.reembolsos.map((i) => `+ ${formatMoeda(i.valor)}${i.descricao ? ` - ${i.descricao}` : ''}`)))
-  corpo.push(new Paragraph({
-    spacing: { line: ENTRELINHA, before: mm(5), after: mm(5) },
-    children: [
-      new TextRun({ text: `Valor a ${rel.totais.tipoSaldo === 'devolver' ? 'devolver' : 'receber'}: `, bold: true }),
-      new TextRun({ text: `${formatMoeda(rel.totais.valorFinal)} (${valorPorExtenso(rel.totais.valorFinal)}).`, shading: { fill: AMARELO } })
-    ]
-  }))
-  corpo.push(...blocoLista('Observações:', rel.observacoes.map((i) => i.texto)))
-  corpo.push(...blocoLista('Forma de Pagamento:', rel.pagamentos.map((i) => i.texto)))
+  corpo.push(
+    new Paragraph({
+      spacing: { line: ENTRELINHA, before: mm(5), after: mm(3) },
+      children: [
+        new TextRun({ text: 'Valor total dos serviços: ', bold: true }),
+        new TextRun({ text: formatMoeda(rel.totais.servicos) })
+      ]
+    })
+  )
+  corpo.push(
+    ...blocoLista(
+      'Adiantamentos:',
+      rel.adiantamentos.map(
+        (i) => `- ${formatMoeda(i.valor)}${i.descricao ? ` - ${i.descricao}` : ''}`
+      )
+    )
+  )
+  corpo.push(
+    ...blocoLista(
+      'Reembolsos:',
+      rel.reembolsos.map(
+        (i) => `+ ${formatMoeda(i.valor)}${i.descricao ? ` - ${i.descricao}` : ''}`
+      )
+    )
+  )
+  corpo.push(
+    new Paragraph({
+      spacing: { line: ENTRELINHA, before: mm(5), after: mm(5) },
+      children: [
+        new TextRun({
+          text: `Valor a ${rel.totais.tipoSaldo === 'devolver' ? 'devolver' : 'receber'}: `,
+          bold: true
+        }),
+        new TextRun({
+          text: `${formatMoeda(rel.totais.valorFinal)} (${valorPorExtenso(rel.totais.valorFinal)}).`,
+          shading: { fill: AMARELO }
+        })
+      ]
+    })
+  )
+  corpo.push(
+    ...blocoLista(
+      'Observações:',
+      rel.observacoes.map((i) => i.texto)
+    )
+  )
+  corpo.push(
+    ...blocoLista(
+      'Forma de Pagamento:',
+      rel.pagamentos.map((i) => i.texto)
+    )
+  )
   corpo.push(new Paragraph({ spacing: { before: mm(12), after: 0 }, children: [] }))
   corpo.push(...assinatura(empresa))
-  corpo.push(...apendiceRelatorioDocx(rel, 'Fotos dos serviços', rel.anexos.filter((a) => a.referenciaTipo === 'servico' || a.referenciaTipo === 'solto'), imagens))
-  corpo.push(...apendiceRelatorioDocx(rel, 'Comprovantes de adiantamentos', rel.anexos.filter((a) => a.referenciaTipo === 'adiantamento'), imagens))
-  corpo.push(...apendiceRelatorioDocx(rel, 'Comprovantes de reembolsos', rel.anexos.filter((a) => a.referenciaTipo === 'reembolso'), imagens))
+  corpo.push(
+    ...apendiceRelatorioDocx(
+      rel,
+      'Fotos dos serviços',
+      rel.anexos.filter((a) => a.referenciaTipo === 'servico' || a.referenciaTipo === 'solto'),
+      imagens
+    )
+  )
+  corpo.push(
+    ...apendiceRelatorioDocx(
+      rel,
+      'Comprovantes de adiantamentos',
+      rel.anexos.filter((a) => a.referenciaTipo === 'adiantamento'),
+      imagens
+    )
+  )
+  corpo.push(
+    ...apendiceRelatorioDocx(
+      rel,
+      'Comprovantes de reembolsos',
+      rel.anexos.filter((a) => a.referenciaTipo === 'reembolso'),
+      imagens
+    )
+  )
   return new Document({
-    styles: { default: { document: { run: { font: FONTE, size: CORPO, color: '000000' }, paragraph: { spacing: { line: ENTRELINHA, after: 0 } } } } },
-    numbering: { config: [{ reference: 'marcadores', levels: [{ level: 0, format: LevelFormat.BULLET, text: '•', alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 400, hanging: 200 } } } }] }] },
-    sections: [{ properties: { page: { size: { width: mm(210), height: mm(297) }, margin: { top: mm(15), bottom: mm(15), left: mm(14), right: mm(14) } } }, children: corpo }]
+    styles: {
+      default: {
+        document: {
+          run: { font: FONTE, size: CORPO, color: '000000' },
+          paragraph: { spacing: { line: ENTRELINHA, after: 0 } }
+        }
+      }
+    },
+    numbering: {
+      config: [
+        {
+          reference: 'marcadores',
+          levels: [
+            {
+              level: 0,
+              format: LevelFormat.BULLET,
+              text: '•',
+              alignment: AlignmentType.LEFT,
+              style: { paragraph: { indent: { left: 400, hanging: 200 } } }
+            }
+          ]
+        }
+      ]
+    },
+    sections: [
+      {
+        properties: {
+          page: {
+            size: { width: mm(210), height: mm(297) },
+            margin: { top: mm(15), bottom: mm(15), left: mm(14), right: mm(14) }
+          }
+        },
+        children: corpo
+      }
+    ]
   })
 }

@@ -117,12 +117,14 @@ function secaoAnexos(orc: Orcamento): string {
   if (anexos.length === 0) return ''
   return secaoDeAnexos(
     'Anexos',
-    anexos.map((a) => figuraAnexo({
-      titulo: a.titulo,
-      referencia: referenciaDoAnexo(orc, a.itemServicoId),
-      imagem: fonteDaImagem(a),
-      descricao: a.descricao
-    }))
+    anexos.map((a) =>
+      figuraAnexo({
+        titulo: a.titulo,
+        referencia: referenciaDoAnexo(orc, a.itemServicoId),
+        imagem: fonteDaImagem(a),
+        descricao: a.descricao
+      })
+    )
   )
 }
 
@@ -287,12 +289,14 @@ function referenciaAnexoRelatorio(rel: Relatorio, anexo: AnexoRelatorio): string
 function apendiceRelatorio(rel: Relatorio, titulo: string, anexos: AnexoRelatorio[]): string {
   return secaoDeAnexos(
     titulo,
-    anexos.map((a) => figuraAnexo({
-      titulo: a.titulo,
-      referencia: referenciaAnexoRelatorio(rel, a),
-      imagem: a.imagemDataUrl || a.miniaturaDataUrl,
-      descricao: a.descricao
-    }))
+    anexos.map((a) =>
+      figuraAnexo({
+        titulo: a.titulo,
+        referencia: referenciaAnexoRelatorio(rel, a),
+        imagem: a.imagemDataUrl || a.miniaturaDataUrl,
+        descricao: a.descricao
+      })
+    )
   )
 }
 
@@ -320,7 +324,9 @@ export function gerarHtmlRelatorio(rel: Relatorio, empresa: EmpresaConfig): stri
     atualizadoEm: rel.atualizadoEm
   }
   const listaLancamentos = (itens: Relatorio['adiantamentos'], sinal: '-' | '+'): string =>
-    lista(itens.map((i) => `${sinal} ${formatMoeda(i.valor)}${i.descricao ? ` - ${i.descricao}` : ''}`))
+    lista(
+      itens.map((i) => `${sinal} ${formatMoeda(i.valor)}${i.descricao ? ` - ${i.descricao}` : ''}`)
+    )
   const resumo = `<!--RESUMO_INICIO-->
     <p class="total"><strong>Valor total dos serviços:</strong> ${formatMoeda(rel.totais.servicos)}</p>
     ${rel.adiantamentos.length ? bloco('Adiantamentos:', listaLancamentos(rel.adiantamentos, '-')) : ''}
@@ -328,7 +334,9 @@ export function gerarHtmlRelatorio(rel: Relatorio, empresa: EmpresaConfig): stri
     <p class="total"><strong>Valor a ${rel.totais.tipoSaldo === 'devolver' ? 'devolver' : 'receber'}:</strong>
       <mark>${formatMoeda(rel.totais.valorFinal)} (${valorPorExtenso(rel.totais.valorFinal)}).</mark></p>
     <!--RESUMO_FIM-->`
-  const servicos = rel.anexos.filter((a) => a.referenciaTipo === 'servico' || a.referenciaTipo === 'solto')
+  const servicos = rel.anexos.filter(
+    (a) => a.referenciaTipo === 'servico' || a.referenciaTipo === 'solto'
+  )
   const adiantamentos = rel.anexos.filter((a) => a.referenciaTipo === 'adiantamento')
   const reembolsos = rel.anexos.filter((a) => a.referenciaTipo === 'reembolso')
   const apendices = [

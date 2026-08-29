@@ -94,8 +94,12 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
           introducao: '',
           itensServico: [],
           materiais: [],
-          observacoes: observacoesPadrao.filter((o) => o.padrao && (o.aplicacao === 'ambos' || o.aplicacao === 'orcamento')).map((o) => ({ id: novoId(), texto: o.texto, origemPadraoId: o.id })),
-          pagamentos: pagamentosPadrao.filter((p) => p.padrao && (p.aplicacao === 'ambos' || p.aplicacao === 'orcamento')).map((p) => ({ id: novoId(), texto: p.texto, origemPadraoId: p.id })),
+          observacoes: observacoesPadrao
+            .filter((o) => o.padrao && (o.aplicacao === 'ambos' || o.aplicacao === 'orcamento'))
+            .map((o) => ({ id: novoId(), texto: o.texto, origemPadraoId: o.id })),
+          pagamentos: pagamentosPadrao
+            .filter((p) => p.padrao && (p.aplicacao === 'ambos' || p.aplicacao === 'orcamento'))
+            .map((p) => ({ id: novoId(), texto: p.texto, origemPadraoId: p.id })),
           anexos: [],
           prazoDias: null,
           observacaoInterna: '',
@@ -176,7 +180,10 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
     const salvo = await salvar()
     if (!salvo) return
     try {
-      const r = tipo === 'pdf' ? await api.documentos.gerarPdf(salvo.id) : await api.documentos.gerarDocx(salvo.id)
+      const r =
+        tipo === 'pdf'
+          ? await api.documentos.gerarPdf(salvo.id)
+          : await api.documentos.gerarDocx(salvo.id)
       if (r.caminho) setMensagem(`Documento gerado com sucesso: ${r.caminho}`)
     } catch (e) {
       setErro(`Não foi possível gerar o documento. ${String(e).replace(/^Error:\s*/, '')}`)
@@ -217,37 +224,64 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
         </>
       }
     >
-      {erro && <div className="mb-4 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{erro}</div>}
-      {mensagem && <div role="status" className="mb-4 rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">{mensagem}</div>}
+      {erro && (
+        <div className="mb-4 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{erro}</div>
+      )}
+      {mensagem && (
+        <div
+          role="status"
+          className="mb-4 rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800"
+        >
+          {mensagem}
+        </div>
+      )}
       <div className="space-y-5">
         <DadosGeraisCard orc={orc} set={set} clientes={dados.clientes} />
-        <ServicosCard orc={orc} set={set} dados={dados} total={total} onRemover={(id) => set(removerServicoOrcamento(orc, id))} />
+        <ServicosCard
+          orc={orc}
+          set={set}
+          dados={dados}
+          total={total}
+          onRemover={(id) => set(removerServicoOrcamento(orc, id))}
+        />
         <MateriaisCard orc={orc} set={set} />
         <TextosCard
           titulo="Observações"
           descricao="Textos que aparecem no rodapé do orçamento"
           itens={orc.observacoes}
-          sugestoes={dados.observacoesPadrao.filter((o) => o.aplicacao === 'ambos' || o.aplicacao === 'orcamento')}
+          sugestoes={dados.observacoesPadrao.filter(
+            (o) => o.aplicacao === 'ambos' || o.aplicacao === 'orcamento'
+          )}
           onChange={(observacoes) => set({ observacoes })}
         />
         <TextosCard
           titulo="Formas de pagamento"
           descricao="Podem ser várias"
           itens={orc.pagamentos}
-          sugestoes={dados.pagamentosPadrao.filter((p) => p.aplicacao === 'ambos' || p.aplicacao === 'orcamento')}
+          sugestoes={dados.pagamentosPadrao.filter(
+            (p) => p.aplicacao === 'ambos' || p.aplicacao === 'orcamento'
+          )}
           onChange={(pagamentos) => set({ pagamentos })}
         />
         <AnexosCard
           anexos={orc.anexos ?? []}
           onChange={(anexos) => set({ anexos })}
-          opcoesVinculo={orc.itensServico.map((item, indice) => ({ id: item.id, texto: `Item ${indice + 1} — ${item.descricao.slice(0, 60)}` }))}
+          opcoesVinculo={orc.itensServico.map((item, indice) => ({
+            id: item.id,
+            texto: `Item ${indice + 1} — ${item.descricao.slice(0, 60)}`
+          }))}
           valorVinculo={(anexo) => anexo.itemServicoId ?? ''}
           atualizarVinculo={(_anexo, id) => ({ itemServicoId: id || null })}
           buscarImagem={(id) => api.anexos.imagem(id)}
         />
       </div>
       {previaAberta && (
-        <PreviaModal orc={{ ...orc, valorTotal: total }} empresa={dados.empresa} tratamento={dados.clientes.find((c) => c.id === orc.clienteId)?.tratamento} onClose={() => setPreviaAberta(false)} />
+        <PreviaModal
+          orc={{ ...orc, valorTotal: total }}
+          empresa={dados.empresa}
+          tratamento={dados.clientes.find((c) => c.id === orc.clienteId)?.tratamento}
+          onClose={() => setPreviaAberta(false)}
+        />
       )}
     </PageShell>
   )
@@ -278,13 +312,19 @@ function DadosGeraisCard({
           />
         </Field>
         <Field label="Formato do documento">
-          <Select value={orc.formato} onChange={(e) => set({ formato: e.target.value as Orcamento['formato'] })}>
+          <Select
+            value={orc.formato}
+            onChange={(e) => set({ formato: e.target.value as Orcamento['formato'] })}
+          >
             <option value="carta">Carta (parágrafos)</option>
             <option value="tabela">Tabela (colunas)</option>
           </Select>
         </Field>
         <Field label="Status">
-          <Select value={orc.status} onChange={(e) => set({ status: e.target.value as Orcamento['status'] })}>
+          <Select
+            value={orc.status}
+            onChange={(e) => set({ status: e.target.value as Orcamento['status'] })}
+          >
             <option value="rascunho">Rascunho</option>
             <option value="enviado">Enviado</option>
             <option value="aprovado">Aprovado</option>
@@ -303,17 +343,25 @@ function DadosGeraisCard({
             }}
           >
             <option value="">— livre —</option>
-            {clientes.filter((c) => c.ativo || c.id === orc.clienteId).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nome}
-              </option>
-            ))}
+            {clientes
+              .filter((c) => c.ativo || c.id === orc.clienteId)
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
           </Select>
         </Field>
-        <Field label="Destinatário (sem vírgula)" hint="A vírgula será acrescentada apenas no PDF e DOCX" className="md:col-span-2">
+        <Field
+          label="Destinatário (sem vírgula)"
+          hint="A vírgula será acrescentada apenas no PDF e DOCX"
+          className="md:col-span-2"
+        >
           <Input
             value={orc.destinatario}
-            onChange={(e) => set({ destinatario: normalizarDestinatario(e.target.value), clienteId: null })}
+            onChange={(e) =>
+              set({ destinatario: normalizarDestinatario(e.target.value), clienteId: null })
+            }
             placeholder="Ex.: TMG"
           />
         </Field>
@@ -321,10 +369,21 @@ function DadosGeraisCard({
           <Input value={orc.titulo} onChange={(e) => set({ titulo: e.target.value })} />
         </Field>
         <Field label="Prazo (dias)" hint="Opcional">
-          <NumberField value={orc.prazoDias ?? 0} onChange={(v) => set({ prazoDias: v || null })} min={0} />
+          <NumberField
+            value={orc.prazoDias ?? 0}
+            onChange={(v) => set({ prazoDias: v || null })}
+            min={0}
+          />
         </Field>
-        <Field label="Introdução / apresentação" hint="Parágrafo opcional antes dos serviços" className="md:col-span-3">
-          <Textarea value={orc.introducao ?? ''} onChange={(e) => set({ introducao: e.target.value })} />
+        <Field
+          label="Introdução / apresentação"
+          hint="Parágrafo opcional antes dos serviços"
+          className="md:col-span-3"
+        >
+          <Textarea
+            value={orc.introducao ?? ''}
+            onChange={(e) => set({ introducao: e.target.value })}
+          />
         </Field>
         <AnotacaoInterna documento={orc} set={set} tipoDocumento="orcamento" />
       </div>
@@ -353,9 +412,10 @@ export function AnotacaoInterna({
     setGerando(true)
     setAviso(null)
     try {
-      const texto = tipoDocumento === 'relatorio'
-        ? await api.ia.sugerirObservacao({ tipo: 'relatorio', documento: documento as Relatorio })
-        : await api.ia.sugerirObservacao({ tipo: 'orcamento', documento: documento as Orcamento })
+      const texto =
+        tipoDocumento === 'relatorio'
+          ? await api.ia.sugerirObservacao({ tipo: 'relatorio', documento: documento as Relatorio })
+          : await api.ia.sugerirObservacao({ tipo: 'orcamento', documento: documento as Orcamento })
       if (texto) set({ observacaoInterna: texto })
       else setAviso('A IA não retornou nenhum texto.')
     } catch (e) {
@@ -411,7 +471,11 @@ export function ServicosCard({
 
   const catalogoAtual = dados.servicos.find((s) => s.id === catalogoSel)
 
-  const itemDeResultado = (r: ResultadoServico, base?: ItemServico | null, servicoId?: string | null): ItemServico => ({
+  const itemDeResultado = (
+    r: ResultadoServico,
+    base?: ItemServico | null,
+    servicoId?: string | null
+  ): ItemServico => ({
     id: base?.id ?? novoId(),
     servicoId: base?.servicoId ?? servicoId ?? null,
     descricao: r.descricao,
@@ -442,7 +506,11 @@ export function ServicosCard({
         description="Adicione com cálculo de custo ou informe o valor manualmente"
         action={
           <div className="flex items-center gap-2">
-            <Select value={catalogoSel} onChange={(e) => setCatalogoSel(e.target.value)} className="w-52">
+            <Select
+              value={catalogoSel}
+              onChange={(e) => setCatalogoSel(e.target.value)}
+              className="w-52"
+            >
               <option value="">Do catálogo…</option>
               {dados.servicos.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -488,12 +556,25 @@ export function ServicosCard({
                   </td>
                   <td className="px-3 py-2 text-right text-slate-600">{i.quantidade}</td>
                   <td className="px-3 py-2 text-slate-600">{i.unidade}</td>
-                  <td className="px-3 py-2 text-right text-slate-600">{formatMoeda(i.valorUnitario)}</td>
-                  <td className="px-3 py-2 text-right font-medium text-slate-800">{formatMoeda(i.valorTotal)}</td>
+                  <td className="px-3 py-2 text-right text-slate-600">
+                    {formatMoeda(i.valorUnitario)}
+                  </td>
+                  <td className="px-3 py-2 text-right font-medium text-slate-800">
+                    {formatMoeda(i.valorTotal)}
+                  </td>
                   <td className="px-3 py-2 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <IconButton icon={Pencil} label={`Editar serviço ${i.descricao}`} onClick={() => editarItem(i)} />
-                      <IconButton icon={X} label={`Remover serviço ${i.descricao}`} className="text-slate-400 hover:text-red-600" onClick={() => remover(i.id)} />
+                      <IconButton
+                        icon={Pencil}
+                        label={`Editar serviço ${i.descricao}`}
+                        onClick={() => editarItem(i)}
+                      />
+                      <IconButton
+                        icon={X}
+                        label={`Remover serviço ${i.descricao}`}
+                        className="text-slate-400 hover:text-red-600"
+                        onClick={() => remover(i.id)}
+                      />
                     </div>
                   </td>
                 </tr>
@@ -501,7 +582,10 @@ export function ServicosCard({
             </tbody>
             <tfoot>
               <tr className="border-t border-slate-200 bg-slate-50">
-                <td colSpan={4} className="px-3 py-2 text-right text-sm font-semibold text-slate-600">
+                <td
+                  colSpan={4}
+                  className="px-3 py-2 text-right text-sm font-semibold text-slate-600"
+                >
                   {rotuloTotal}
                 </td>
                 <td className="px-3 py-2 text-right text-base font-bold text-brand-tealDark">
@@ -526,7 +610,12 @@ export function ServicosCard({
           onCancel={() => setCalcAberto(null)}
           onConfirm={(r) => {
             if (calcAberto === 'novo') {
-              set({ itensServico: [...orc.itensServico, itemDeResultado(r, null, catalogoAtual?.id ?? null)] })
+              set({
+                itensServico: [
+                  ...orc.itensServico,
+                  itemDeResultado(r, null, catalogoAtual?.id ?? null)
+                ]
+              })
             } else {
               atualizar(itemDeResultado(r, calcAberto))
             }
@@ -540,7 +629,9 @@ export function ServicosCard({
           item={manualAberto === 'novo' ? null : manualAberto}
           descricaoInicial={manualAberto === 'novo' ? catalogoAtual?.descricaoPadrao : undefined}
           unidadeInicial={manualAberto === 'novo' ? catalogoAtual?.unidade : undefined}
-          precoRefInicial={manualAberto === 'novo' ? catalogoAtual?.precoReferencia ?? undefined : undefined}
+          precoRefInicial={
+            manualAberto === 'novo' ? (catalogoAtual?.precoReferencia ?? undefined) : undefined
+          }
           onClose={() => setManualAberto(null)}
           onSave={(item) => {
             if (manualAberto === 'novo') set({ itensServico: [...orc.itensServico, item] })
@@ -634,7 +725,12 @@ function MateriaisCard({
   set: (p: Partial<Orcamento>) => void
 }): JSX.Element {
   const add = (): void =>
-    set({ materiais: [...orc.materiais, { id: novoId(), quantidade: 1, unidade: 'un', especificacao: '' }] })
+    set({
+      materiais: [
+        ...orc.materiais,
+        { id: novoId(), quantidade: 1, unidade: 'un', especificacao: '' }
+      ]
+    })
   const upd = (id: string, patch: Partial<ItemMaterial>): void =>
     set({ materiais: orc.materiais.map((m) => (m.id === id ? { ...m, ...patch } : m)) })
   const rem = (id: string): void => set({ materiais: orc.materiais.filter((m) => m.id !== id) })
@@ -658,14 +754,27 @@ function MateriaisCard({
         <div className="space-y-2">
           {orc.materiais.map((m) => (
             <div key={m.id} className="grid grid-cols-[80px_100px_1fr_auto] gap-2">
-              <NumberField value={m.quantidade} onChange={(v) => upd(m.id, { quantidade: v })} min={0} />
-              <Input value={m.unidade} onChange={(e) => upd(m.id, { unidade: e.target.value })} placeholder="un" />
+              <NumberField
+                value={m.quantidade}
+                onChange={(v) => upd(m.id, { quantidade: v })}
+                min={0}
+              />
+              <Input
+                value={m.unidade}
+                onChange={(e) => upd(m.id, { unidade: e.target.value })}
+                placeholder="un"
+              />
               <Input
                 value={m.especificacao}
                 onChange={(e) => upd(m.id, { especificacao: e.target.value })}
                 placeholder="Especificação do material"
               />
-              <IconButton icon={X} label={`Remover material ${m.especificacao || 'sem descrição'}`} className="text-slate-400" onClick={() => rem(m.id)} />
+              <IconButton
+                icon={X}
+                label={`Remover material ${m.especificacao || 'sem descrição'}`}
+                className="text-slate-400"
+                onClick={() => rem(m.id)}
+              />
             </div>
           ))}
         </div>
@@ -688,7 +797,8 @@ export function TextosCard({
   sugestoes: Array<{ id: string; texto: string }>
   onChange: (itens: ItemTexto[]) => void
 }): JSX.Element {
-  const add = (texto = '', origemPadraoId?: string): void => onChange([...itens, { id: novoId(), texto, origemPadraoId }])
+  const add = (texto = '', origemPadraoId?: string): void =>
+    onChange([...itens, { id: novoId(), texto, origemPadraoId }])
   const upd = (id: string, texto: string): void =>
     onChange(itens.map((i) => (i.id === id ? { ...i, texto, origemPadraoId: null } : i)))
   const rem = (id: string): void => onChange(itens.filter((i) => i.id !== id))
@@ -715,7 +825,12 @@ export function TextosCard({
               onChange={(e) => upd(i.id, e.target.value)}
               className="min-h-[52px]"
             />
-            <IconButton icon={X} label="Remover observação ou texto" className="mt-1 shrink-0 text-slate-400" onClick={() => rem(i.id)} />
+            <IconButton
+              icon={X}
+              label="Remover observação ou texto"
+              className="mt-1 shrink-0 text-slate-400"
+              onClick={() => rem(i.id)}
+            />
           </div>
         ))}
       </div>

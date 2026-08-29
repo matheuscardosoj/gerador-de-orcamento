@@ -45,25 +45,72 @@ function estadoInicial(): BancoDados {
       modoImpostoPadrao: 'gross_up'
     },
     clientes: [
-      { id: uid(), nome: 'TMG', tratamento: 'A', contato: '', observacao: '', ativo: true, criadoEm: new Date().toISOString() }
+      {
+        id: uid(),
+        nome: 'TMG',
+        tratamento: 'A',
+        contato: '',
+        observacao: '',
+        ativo: true,
+        criadoEm: new Date().toISOString()
+      }
     ],
     servicos: [
-      { id: uid(), nome: 'Cerca de Arame Liso', descricaoPadrao: 'Construção de cerca de arame liso.', unidade: 'metro linear', precoReferencia: 8.5 },
-      { id: uid(), nome: 'Poda de Grama', descricaoPadrao: 'Corte e manutenção de gramados.', unidade: 'm²', precoReferencia: 2 },
-      { id: uid(), nome: 'Reformas Simples', descricaoPadrao: 'Manutenção e reparos pontuais.', unidade: 'serviço', precoReferencia: null }
+      {
+        id: uid(),
+        nome: 'Cerca de Arame Liso',
+        descricaoPadrao: 'Construção de cerca de arame liso.',
+        unidade: 'metro linear',
+        precoReferencia: 8.5
+      },
+      {
+        id: uid(),
+        nome: 'Poda de Grama',
+        descricaoPadrao: 'Corte e manutenção de gramados.',
+        unidade: 'm²',
+        precoReferencia: 2
+      },
+      {
+        id: uid(),
+        nome: 'Reformas Simples',
+        descricaoPadrao: 'Manutenção e reparos pontuais.',
+        unidade: 'serviço',
+        precoReferencia: null
+      }
     ],
     observacoesPadrao: [
-      { id: uid(), texto: 'Neste valor estão inclusas a mão de obra e as tributações necessárias. Os materiais são por conta da contratante.', padrao: true, aplicacao: 'orcamento' },
-      { id: uid(), texto: 'Caso a proposta seja aprovada, favor informar sobre o início do serviço com 15 dias úteis de antecedência.', padrao: true, aplicacao: 'orcamento' }
+      {
+        id: uid(),
+        texto:
+          'Neste valor estão inclusas a mão de obra e as tributações necessárias. Os materiais são por conta da contratante.',
+        padrao: true,
+        aplicacao: 'orcamento'
+      },
+      {
+        id: uid(),
+        texto:
+          'Caso a proposta seja aprovada, favor informar sobre o início do serviço com 15 dias úteis de antecedência.',
+        padrao: true,
+        aplicacao: 'orcamento'
+      }
     ],
     pagamentosPadrao: [
-      { id: uid(), texto: 'Via transferência bancária no Banco do Brasil, agência: 0221-6, conta: 59088-6.', padrao: true, aplicacao: 'orcamento' }
+      {
+        id: uid(),
+        texto: 'Via transferência bancária no Banco do Brasil, agência: 0221-6, conta: 59088-6.',
+        padrao: true,
+        aplicacao: 'orcamento'
+      }
     ],
     orcamentos: [],
     relatorios: [],
     seqOrcamento: 0,
     seqRelatorio: 0,
-    configIA: { modo: 'desligada', urlOllama: 'http://localhost:11434', modeloOllama: 'llama3.2:3b' }
+    configIA: {
+      modo: 'desligada',
+      urlOllama: 'http://localhost:11434',
+      modeloOllama: 'llama3.2:3b'
+    }
   }
 }
 
@@ -223,12 +270,23 @@ export function criarMockApi(): AppApi {
     relatorios: {
       list: async () => clone(db.relatorios ?? []),
       get: async (id) => clone((db.relatorios ?? []).find((x) => x.id === id) ?? null),
-      proximoNumero: async () => { let n = (db.seqRelatorio ?? 0) + 1; while (ocupadoRelatorio(n)) n++; return n },
+      proximoNumero: async () => {
+        let n = (db.seqRelatorio ?? 0) + 1
+        while (ocupadoRelatorio(n)) n++
+        return n
+      },
       create: async (dto) => {
         let numero = dto.numero ?? (db.seqRelatorio ?? 0) + 1
         while (ocupadoRelatorio(numero)) numero++
         db.seqRelatorio = Math.max(db.seqRelatorio ?? 0, numero)
-        const r: Relatorio = { ...(dto as Relatorio), id: uid(), numero, totais: calcularTotaisRelatorio(dto.itensServico, dto.adiantamentos, dto.reembolsos), criadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString() }
+        const r: Relatorio = {
+          ...(dto as Relatorio),
+          id: uid(),
+          numero,
+          totais: calcularTotaisRelatorio(dto.itensServico, dto.adiantamentos, dto.reembolsos),
+          criadoEm: new Date().toISOString(),
+          atualizadoEm: new Date().toISOString()
+        }
         ;(db.relatorios ??= []).push(r)
         return clone(r)
       },
@@ -239,22 +297,70 @@ export function criarMockApi(): AppApi {
         r.totais = calcularTotaisRelatorio(r.itensServico, r.adiantamentos, r.reembolsos)
         return clone(r)
       },
-      remove: async (id) => { const alvo = (db.relatorios ?? []).find((x) => x.id === id); db.relatorios = (db.relatorios ?? []).filter((x) => x.id !== id); if (alvo && alvo.numero === db.seqRelatorio) db.seqRelatorio = Math.max(0, alvo.numero - 1) },
-      numeracao: async () => { const lista = db.relatorios ?? []; let proximo = (db.seqRelatorio ?? 0) + 1; while (ocupadoRelatorio(proximo)) proximo++; let menor = 1; while (ocupadoRelatorio(menor)) menor++; return { proximoNumero: proximo, maiorEmUso: lista.reduce((m, r) => Math.max(m, r.numero), 0), menorLivre: menor, totalDocumentos: lista.length } },
-      definirProximoNumero: async (numero) => { if (!Number.isInteger(numero) || numero < 1 || numero > 999999) return { ok: false, erro: 'O número deve ser um inteiro entre 1 e 999999.' }; const conflito = ocupadoRelatorio(numero); if (conflito) return { ok: false, erro: `O número ${numero} já está em uso por outro relatório.` }; db.seqRelatorio = numero - 1; return { ok: true } },
-      alterarNumero: async (id, numero) => { const r = (db.relatorios ?? []).find((x) => x.id === id); if (!r) return { ok: false, erro: 'Relatório não encontrado.' }; if (!Number.isInteger(numero) || numero < 1 || numero > 999999) return { ok: false, erro: 'O número deve ser um inteiro entre 1 e 999999.' }; const conflito = ocupadoRelatorio(numero, id); if (conflito) return { ok: false, erro: `O número ${numero} já está em uso por outro relatório.` }; r.numero = numero; db.seqRelatorio = Math.max(db.seqRelatorio ?? 0, numero); return { ok: true, relatorio: clone(r) } },
+      remove: async (id) => {
+        const alvo = (db.relatorios ?? []).find((x) => x.id === id)
+        db.relatorios = (db.relatorios ?? []).filter((x) => x.id !== id)
+        if (alvo && alvo.numero === db.seqRelatorio) db.seqRelatorio = Math.max(0, alvo.numero - 1)
+      },
+      numeracao: async () => {
+        const lista = db.relatorios ?? []
+        let proximo = (db.seqRelatorio ?? 0) + 1
+        while (ocupadoRelatorio(proximo)) proximo++
+        let menor = 1
+        while (ocupadoRelatorio(menor)) menor++
+        return {
+          proximoNumero: proximo,
+          maiorEmUso: lista.reduce((m, r) => Math.max(m, r.numero), 0),
+          menorLivre: menor,
+          totalDocumentos: lista.length
+        }
+      },
+      definirProximoNumero: async (numero) => {
+        if (!Number.isInteger(numero) || numero < 1 || numero > 999999)
+          return { ok: false, erro: 'O número deve ser um inteiro entre 1 e 999999.' }
+        const conflito = ocupadoRelatorio(numero)
+        if (conflito)
+          return { ok: false, erro: `O número ${numero} já está em uso por outro relatório.` }
+        db.seqRelatorio = numero - 1
+        return { ok: true }
+      },
+      alterarNumero: async (id, numero) => {
+        const r = (db.relatorios ?? []).find((x) => x.id === id)
+        if (!r) return { ok: false, erro: 'Relatório não encontrado.' }
+        if (!Number.isInteger(numero) || numero < 1 || numero > 999999)
+          return { ok: false, erro: 'O número deve ser um inteiro entre 1 e 999999.' }
+        const conflito = ocupadoRelatorio(numero, id)
+        if (conflito)
+          return { ok: false, erro: `O número ${numero} já está em uso por outro relatório.` }
+        r.numero = numero
+        db.seqRelatorio = Math.max(db.seqRelatorio ?? 0, numero)
+        return { ok: true, relatorio: clone(r) }
+      },
       criarDeOrcamento: async (id) => {
         const o = db.orcamentos.find((x) => x.id === id)
         if (!o) return null
         const numero = (db.seqRelatorio ?? 0) + 1
         db.seqRelatorio = numero
         const r: Relatorio = {
-          id: uid(), numero, data: new Date().toISOString().slice(0, 10), clienteId: o.clienteId,
-          destinatario: o.destinatario, formato: o.formato, titulo: 'Relatório de Serviço',
-          introducao: o.introducao, itensServico: clone(o.itensServico), adiantamentos: [], reembolsos: [],
-          observacoes: [], pagamentos: [], anexos: [], status: 'rascunho',
+          id: uid(),
+          numero,
+          data: new Date().toISOString().slice(0, 10),
+          clienteId: o.clienteId,
+          destinatario: o.destinatario,
+          formato: o.formato,
+          titulo: 'Relatório de Serviço',
+          introducao: o.introducao,
+          itensServico: clone(o.itensServico),
+          adiantamentos: [],
+          reembolsos: [],
+          observacoes: [],
+          pagamentos: [],
+          anexos: [],
+          status: 'rascunho',
           origemOrcamento: { id: o.id, numero: o.numero, cliente: o.destinatario },
-          totais: calcularTotaisRelatorio(o.itensServico, [], []), criadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString()
+          totais: calcularTotaisRelatorio(o.itensServico, [], []),
+          criadoEm: new Date().toISOString(),
+          atualizadoEm: new Date().toISOString()
         }
         ;(db.relatorios ??= []).push(r)
         return clone(r)

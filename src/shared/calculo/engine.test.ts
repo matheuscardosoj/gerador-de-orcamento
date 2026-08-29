@@ -44,7 +44,10 @@ describe('mão de obra', () => {
 
   it('valor fechado: valor × funcionários (ignora dias)', () => {
     const r = calcularCustoServico(
-      base({ dias: 10, maoDeObra: [{ id: 'a', qtdFuncionarios: 2, base: 'valor_cheio', valor: 500 }] })
+      base({
+        dias: 10,
+        maoDeObra: [{ id: 'a', qtdFuncionarios: 2, base: 'valor_cheio', valor: 500 }]
+      })
     )
     expect(r.custoTotal).toBe(1000)
   })
@@ -85,7 +88,14 @@ describe('mão de obra', () => {
       base({
         dias: 30,
         maoDeObra: [
-          { id: 'a', qtdFuncionarios: 1, base: 'mensal', valor: 2000, clt: true, salarioCarteira: 2000 }
+          {
+            id: 'a',
+            qtdFuncionarios: 1,
+            base: 'mensal',
+            valor: 2000,
+            clt: true,
+            salarioCarteira: 2000
+          }
         ]
       })
     )
@@ -123,7 +133,14 @@ describe('mão de obra', () => {
       base({
         dias: 30,
         maoDeObra: [
-          { id: 'a', qtdFuncionarios: 1, base: 'valor_cheio', valor: 4000, clt: true, salarioCarteira: 2000 }
+          {
+            id: 'a',
+            qtdFuncionarios: 1,
+            base: 'valor_cheio',
+            valor: 4000,
+            clt: true,
+            salarioCarteira: 2000
+          }
         ]
       })
     )
@@ -135,7 +152,14 @@ describe('mão de obra', () => {
       base({
         dias: 10,
         maoDeObra: [
-          { id: 'a', qtdFuncionarios: 1, base: 'diaria', valor: 100, houveContratacao: true, demitidoAoFim: true }
+          {
+            id: 'a',
+            qtdFuncionarios: 1,
+            base: 'diaria',
+            valor: 100,
+            houveContratacao: true,
+            demitidoAoFim: true
+          }
         ]
       })
     )
@@ -147,7 +171,9 @@ describe('mão de obra', () => {
     const r = calcularCustoServico(
       base({
         dias: 2,
-        maoDeObra: [{ id: 'a', descricao: 'Diária a R$ 170', qtdFuncionarios: 1, base: 'diaria', valor: 170 }]
+        maoDeObra: [
+          { id: 'a', descricao: 'Diária a R$ 170', qtdFuncionarios: 1, base: 'diaria', valor: 170 }
+        ]
       })
     )
     expect(r.breakdown[0].descricao).toBe('Diária a R$ 170')
@@ -157,14 +183,20 @@ describe('mão de obra', () => {
 describe('componentes de custo', () => {
   it('alimentação diária', () => {
     const r = calcularCustoServico(
-      base({ dias: 4, alimentacoes: [{ id: 'a1', qtdPessoas: 5, valorRefeicao: 20, modo: 'diario' }] })
+      base({
+        dias: 4,
+        alimentacoes: [{ id: 'a1', qtdPessoas: 5, valorRefeicao: 20, modo: 'diario' }]
+      })
     )
     expect(r.custoTotal).toBe(400)
   })
 
   it('alimentação valor fechado ignora dias', () => {
     const r = calcularCustoServico(
-      base({ dias: 4, alimentacoes: [{ id: 'a1', qtdPessoas: 5, valorRefeicao: 20, modo: 'cheio' }] })
+      base({
+        dias: 4,
+        alimentacoes: [{ id: 'a1', qtdPessoas: 5, valorRefeicao: 20, modo: 'cheio' }]
+      })
     )
     expect(r.custoTotal).toBe(100)
   })
@@ -186,12 +218,18 @@ describe('componentes de custo', () => {
   it('combustível por consumo: cheio e diário', () => {
     // 100 km ÷ 10 km/l = 10 L × R$ 6 = R$ 60
     const cheio = calcularCustoServico(
-      base({ dias: 4, combustiveis: [{ id: 'c1', distanciaKm: 100, consumoKmL: 10, precoLitro: 6, modo: 'cheio' }] })
+      base({
+        dias: 4,
+        combustiveis: [{ id: 'c1', distanciaKm: 100, consumoKmL: 10, precoLitro: 6, modo: 'cheio' }]
+      })
     )
     expect(cheio.custoTotal).toBe(60)
     // 50 km/dia × 4 dias = 200 km ÷ 10 = 20 L × R$ 6 = R$ 120
     const diario = calcularCustoServico(
-      base({ dias: 4, combustiveis: [{ id: 'c1', distanciaKm: 50, consumoKmL: 10, precoLitro: 6, modo: 'diario' }] })
+      base({
+        dias: 4,
+        combustiveis: [{ id: 'c1', distanciaKm: 50, consumoKmL: 10, precoLitro: 6, modo: 'diario' }]
+      })
     )
     expect(diario.custoTotal).toBe(120)
   })
@@ -201,8 +239,22 @@ describe('componentes de custo', () => {
       base({
         dias: 4,
         combustiveis: [
-          { id: 'c1', descricao: 'Caminhonete', distanciaKm: 100, consumoKmL: 10, precoLitro: 6, modo: 'cheio' }, // 60
-          { id: 'c2', descricao: 'Carro de apoio', distanciaKm: 50, consumoKmL: 10, precoLitro: 6, modo: 'diario' } // 120
+          {
+            id: 'c1',
+            descricao: 'Caminhonete',
+            distanciaKm: 100,
+            consumoKmL: 10,
+            precoLitro: 6,
+            modo: 'cheio'
+          }, // 60
+          {
+            id: 'c2',
+            descricao: 'Carro de apoio',
+            distanciaKm: 50,
+            consumoKmL: 10,
+            precoLitro: 6,
+            modo: 'diario'
+          } // 120
         ]
       })
     )
@@ -214,7 +266,9 @@ describe('componentes de custo', () => {
     const r = calcularCustoServico(
       base({
         dias: 3,
-        estadias: [{ id: 'e1', tipo: 'por_pessoa', qtdPessoas: 2, valorPorPessoa: 80, modo: 'diario' }]
+        estadias: [
+          { id: 'e1', tipo: 'por_pessoa', qtdPessoas: 2, valorPorPessoa: 80, modo: 'diario' }
+        ]
       })
     )
     expect(r.custoTotal).toBe(480)
@@ -293,7 +347,10 @@ describe('componentes de custo', () => {
 describe('margem e imposto', () => {
   it('aplica margem de lucro', () => {
     const r = calcularCustoServico(
-      base({ maoDeObra: [{ id: 'a', qtdFuncionarios: 1, base: 'valor_cheio', valor: 1000 }], margemLucroPercent: 30 })
+      base({
+        maoDeObra: [{ id: 'a', qtdFuncionarios: 1, base: 'valor_cheio', valor: 1000 }],
+        margemLucroPercent: 30
+      })
     )
     expect(r.custoTotal).toBe(1000)
     expect(r.valorMargem).toBe(300)
@@ -356,7 +413,9 @@ describe('casos de borda', () => {
         dias: 4,
         maoDeObra: [{ id: 'a', qtdFuncionarios: 3, base: 'diaria', valor: 150 }], // 1800
         alimentacoes: [{ id: 'a1', qtdPessoas: 3, valorRefeicao: 20, modo: 'diario' }], // 240
-        combustiveis: [{ id: 'c1', distanciaKm: 100, consumoKmL: 10, precoLitro: 6, modo: 'cheio' }], // 60
+        combustiveis: [
+          { id: 'c1', distanciaKm: 100, consumoKmL: 10, precoLitro: 6, modo: 'cheio' }
+        ], // 60
         avulsos: [{ id: 'x', descricao: 'EPI', valor: 200, modo: 'cheio' }], // 200
         margemLucroPercent: 20
       })
@@ -390,7 +449,13 @@ describe('compatibilidade com entradas salvas antes da 1.1', () => {
     const n = normalizarEntrada(
       legado({
         alimentacao: { ativo: true, qtdPessoas: 5, valorRefeicao: 20, modo: 'diario' },
-        combustivel: { ativo: false, distanciaKm: 100, consumoKmL: 10, precoLitro: 6, modo: 'cheio' },
+        combustivel: {
+          ativo: false,
+          distanciaKm: 100,
+          consumoKmL: 10,
+          precoLitro: 6,
+          modo: 'cheio'
+        },
         estadia: { ativo: true, qtdPessoas: 2, valorPorPessoa: 80, modo: 'diario' }
       })
     )
@@ -420,7 +485,13 @@ describe('compatibilidade com entradas salvas antes da 1.1', () => {
       salarioCarteira: 3000,
       valor: 3000
     })
-    expect(n.maoDeObra[1]).toEqual({ id: 'b', qtdFuncionarios: 2, base: 'diaria', clt: false, valor: 150 })
+    expect(n.maoDeObra[1]).toEqual({
+      id: 'b',
+      qtdFuncionarios: 2,
+      base: 'diaria',
+      clt: false,
+      valor: 150
+    })
   })
 
   it('é idempotente sobre uma entrada já no formato novo', () => {
@@ -440,7 +511,13 @@ describe('compatibilidade com entradas salvas antes da 1.1', () => {
         dias: 4,
         maoDeObra: [{ id: 'a', qtdFuncionarios: 3, regime: 'diaria', valor: 150 }],
         alimentacao: { ativo: true, qtdPessoas: 3, valorRefeicao: 20, modo: 'diario' },
-        combustivel: { ativo: true, distanciaKm: 100, consumoKmL: 10, precoLitro: 6, modo: 'cheio' },
+        combustivel: {
+          ativo: true,
+          distanciaKm: 100,
+          consumoKmL: 10,
+          precoLitro: 6,
+          modo: 'cheio'
+        },
         avulsos: [{ id: 'x', descricao: 'EPI', valor: 200, modo: 'cheio' }],
         margemLucroPercent: 20
       })
@@ -454,7 +531,14 @@ describe('compatibilidade com entradas salvas antes da 1.1', () => {
       legado({
         dias: 15,
         maoDeObra: [
-          { id: 'a', qtdFuncionarios: 1, regime: 'clt', valor: 3000, houveContratacao: true, demitidoAoFim: true }
+          {
+            id: 'a',
+            qtdFuncionarios: 1,
+            regime: 'clt',
+            valor: 3000,
+            houveContratacao: true,
+            demitidoAoFim: true
+          }
         ]
       })
     )

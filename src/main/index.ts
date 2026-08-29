@@ -72,32 +72,33 @@ function createWindow(): void {
   }
 }
 
-if (temTrava) app.whenReady().then(() => {
-  electronApp.setAppUserModelId('com.gerador.orcamentos')
+if (temTrava)
+  app.whenReady().then(() => {
+    electronApp.setAppUserModelId('com.gerador.orcamentos')
 
-  // Inicializa o banco (cria arquivo, migra o JSON ou semeia) e registra o IPC.
-  try {
-    iniciarBanco()
-  } catch (e) {
-    dialog.showErrorBox(
-      'Não foi possível atualizar o banco de dados',
-      `${String(e).replace(/^Error:\s*/, '')}\n\nNenhum dado novo foi gravado. O aplicativo será encerrado.`
-    )
-    app.quit()
-    return
-  }
-  registrarIpc()
+    // Inicializa o banco (cria arquivo, migra o JSON ou semeia) e registra o IPC.
+    try {
+      iniciarBanco()
+    } catch (e) {
+      dialog.showErrorBox(
+        'Não foi possível atualizar o banco de dados',
+        `${String(e).replace(/^Error:\s*/, '')}\n\nNenhum dado novo foi gravado. O aplicativo será encerrado.`
+      )
+      app.quit()
+      return
+    }
+    registrarIpc()
 
-  app.on('browser-window-created', (_, window) => {
-    optimizer.watchWindowShortcuts(window)
+    app.on('browser-window-created', (_, window) => {
+      optimizer.watchWindowShortcuts(window)
+    })
+
+    createWindow()
+
+    app.on('activate', function () {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    })
   })
-
-  createWindow()
-
-  app.on('activate', function () {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
-  })
-})
 
 app.on('second-instance', () => {
   const win = BrowserWindow.getAllWindows()[0]

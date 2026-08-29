@@ -9,11 +9,7 @@ import type {
 } from './types'
 
 /** Custo de um grupo de mão de obra, já detalhado em linhas de breakdown. */
-function custoMaoDeObra(
-  g: GrupoMaoDeObra,
-  dias: number,
-  p: ParametrosEncargos
-): LinhaBreakdown[] {
+function custoMaoDeObra(g: GrupoMaoDeObra, dias: number, p: ParametrosEncargos): LinhaBreakdown[] {
   const linhas: LinhaBreakdown[] = []
   const qtd = Math.max(0, g.qtdFuncionarios || 0)
   const nome = g.descricao?.trim() || 'Mão de obra'
@@ -114,12 +110,7 @@ export function normalizarEntrada(e: EntradaCalculo): EntradaCalculo {
       : { ...resto, base: (g.regime ?? 'diaria') as 'diaria' | 'valor_cheio', clt: false }
   })
 
-  const {
-    alimentacao: _a,
-    combustivel: _c,
-    estadia: _es,
-    ...resto
-  } = e
+  const { alimentacao: _a, combustivel: _c, estadia: _es, ...resto } = e
   return {
     ...resto,
     maoDeObra,

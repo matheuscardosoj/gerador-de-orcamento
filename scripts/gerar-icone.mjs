@@ -5,7 +5,7 @@
 //                       a partir de build/logo-vs.png (se existir)
 //
 // Uso: `npm run icone`
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { writeFileSync, existsSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import sharp from 'sharp'

@@ -29,7 +29,15 @@ const orc: Orcamento = {
   titulo: 'Proposta de Serviço',
   introducao: '',
   itensServico: [
-    { id: 'a', descricao: 'Cerca', unidade: 'm', quantidade: 100, valorUnitario: 8, valorTotal: 800, calculo: null }
+    {
+      id: 'a',
+      descricao: 'Cerca',
+      unidade: 'm',
+      quantidade: 100,
+      valorUnitario: 8,
+      valorTotal: 800,
+      calculo: null
+    }
   ],
   materiais: [],
   observacoes: [{ id: 'o', texto: 'Materiais por conta da contratante.' }],
@@ -106,7 +114,9 @@ it('põe os anexos numa página nova, com a referência ao serviço', async () =
       }
     ]
   }
-  const xml = lerDocumentXml(Buffer.from(await Packer.toBuffer(montarDocumentoDocx(comAnexos, empresa))))
+  const xml = lerDocumentXml(
+    Buffer.from(await Packer.toBuffer(montarDocumentoDocx(comAnexos, empresa)))
+  )
   expect(xml).toContain('w:br w:type="page"')
   expect(xml).toContain('Anexos')
   expect(xml).toContain('Frente do terreno')
@@ -118,13 +128,25 @@ it('põe os anexos numa página nova, com a referência ao serviço', async () =
 
 it('gera relatório com resumo financeiro e apêndices separados', async () => {
   const relatorio: Relatorio = {
-    ...orc, id: 'r1', numero: 1, titulo: 'Relatório de Serviço', formato: 'tabela',
+    ...orc,
+    id: 'r1',
+    numero: 1,
+    titulo: 'Relatório de Serviço',
+    formato: 'tabela',
     adiantamentos: [{ id: 'a1', descricao: 'Sinal', valor: 100 }],
     reembolsos: [{ id: 'r1', descricao: 'Combustível', valor: 25 }],
-    anexos: [], status: 'emitido', origemOrcamento: { id: 'o1', numero: 4, cliente: 'TMG' },
-    totais: calcularTotaisRelatorio(orc.itensServico, [{ id: 'a1', descricao: 'Sinal', valor: 100 }], [{ id: 'r1', descricao: 'Combustível', valor: 25 }])
+    anexos: [],
+    status: 'emitido',
+    origemOrcamento: { id: 'o1', numero: 4, cliente: 'TMG' },
+    totais: calcularTotaisRelatorio(
+      orc.itensServico,
+      [{ id: 'a1', descricao: 'Sinal', valor: 100 }],
+      [{ id: 'r1', descricao: 'Combustível', valor: 25 }]
+    )
   }
-  const xml = lerDocumentXml(Buffer.from(await Packer.toBuffer(montarDocumentoRelatorioDocx(relatorio, empresa))))
+  const xml = lerDocumentXml(
+    Buffer.from(await Packer.toBuffer(montarDocumentoRelatorioDocx(relatorio, empresa)))
+  )
   expect(xml).toContain('Relatório de Serviço')
   expect(xml).toContain('Adiantamentos:')
   expect(xml).toContain('Reembolsos:')
@@ -137,21 +159,60 @@ it('mantém o mesmo padrão de anexos no relatório, sem reduzir imagens por cat
   const png =
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
   const anexos = [
-    { id: 'foto-servico', referenciaTipo: 'servico' as const, referenciaId: 'a', titulo: 'Foto horizontal', descricao: 'Serviço concluído.', mime: 'image/png', largura: 1600, altura: 900, imagemDataUrl: png },
-    { id: 'foto-adiantamento', referenciaTipo: 'adiantamento' as const, referenciaId: 'adiantamento-1', titulo: 'Comprovante vertical', descricao: 'Sinal recebido.', mime: 'image/png', largura: 900, altura: 1600, imagemDataUrl: png },
-    { id: 'foto-reembolso', referenciaTipo: 'reembolso' as const, referenciaId: 'reembolso-1', titulo: 'Comprovante quadrado', descricao: 'Combustível reembolsado.', mime: 'image/png', largura: 1000, altura: 1000, imagemDataUrl: png }
+    {
+      id: 'foto-servico',
+      referenciaTipo: 'servico' as const,
+      referenciaId: 'a',
+      titulo: 'Foto horizontal',
+      descricao: 'Serviço concluído.',
+      mime: 'image/png',
+      largura: 1600,
+      altura: 900,
+      imagemDataUrl: png
+    },
+    {
+      id: 'foto-adiantamento',
+      referenciaTipo: 'adiantamento' as const,
+      referenciaId: 'adiantamento-1',
+      titulo: 'Comprovante vertical',
+      descricao: 'Sinal recebido.',
+      mime: 'image/png',
+      largura: 900,
+      altura: 1600,
+      imagemDataUrl: png
+    },
+    {
+      id: 'foto-reembolso',
+      referenciaTipo: 'reembolso' as const,
+      referenciaId: 'reembolso-1',
+      titulo: 'Comprovante quadrado',
+      descricao: 'Combustível reembolsado.',
+      mime: 'image/png',
+      largura: 1000,
+      altura: 1000,
+      imagemDataUrl: png
+    }
   ]
   const relatorio: Relatorio = {
     ...orc,
-    id: 'r-com-anexos', numero: 2, titulo: 'Relatório de Serviço',
+    id: 'r-com-anexos',
+    numero: 2,
+    titulo: 'Relatório de Serviço',
     adiantamentos: [{ id: 'adiantamento-1', descricao: 'Sinal', valor: 100 }],
     reembolsos: [{ id: 'reembolso-1', descricao: 'Combustível', valor: 25 }],
     anexos,
-    status: 'emitido', origemOrcamento: null,
-    totais: calcularTotaisRelatorio(orc.itensServico, [{ id: 'adiantamento-1', descricao: 'Sinal', valor: 100 }], [{ id: 'reembolso-1', descricao: 'Combustível', valor: 25 }])
+    status: 'emitido',
+    origemOrcamento: null,
+    totais: calcularTotaisRelatorio(
+      orc.itensServico,
+      [{ id: 'adiantamento-1', descricao: 'Sinal', valor: 100 }],
+      [{ id: 'reembolso-1', descricao: 'Combustível', valor: 25 }]
+    )
   }
 
-  const xml = lerDocumentXml(Buffer.from(await Packer.toBuffer(montarDocumentoRelatorioDocx(relatorio, empresa))))
+  const xml = lerDocumentXml(
+    Buffer.from(await Packer.toBuffer(montarDocumentoRelatorioDocx(relatorio, empresa)))
+  )
   expect(xml).toContain('Fotos dos serviços')
   expect(xml).toContain('Comprovantes de adiantamentos')
   expect(xml).toContain('Comprovantes de reembolsos')
@@ -161,7 +222,10 @@ it('mantém o mesmo padrão de anexos no relatório, sem reduzir imagens por cat
   // Uma quebra por apêndice: serviços, adiantamentos e reembolsos.
   expect((xml.match(/w:br w:type="page"/g) ?? []).length).toBeGreaterThanOrEqual(3)
 
-  const extensoes = [...xml.matchAll(/wp:extent cx="(\d+)" cy="(\d+)"/g)].map((m) => ({ largura: Number(m[1]), altura: Number(m[2]) }))
+  const extensoes = [...xml.matchAll(/wp:extent cx="(\d+)" cy="(\d+)"/g)].map((m) => ({
+    largura: Number(m[1]),
+    altura: Number(m[2])
+  }))
   expect(extensoes).toEqual([
     { largura: 5400675, altura: 3038475 },
     { largura: 2028825, altura: 3600450 },
@@ -169,7 +233,26 @@ it('mantém o mesmo padrão de anexos no relatório, sem reduzir imagens por cat
   ])
 
   // A mesma foto horizontal ocupa exatamente a mesma área em proposta e relatório.
-  const propostaComFoto: Orcamento = { ...orc, anexos: [{ id: 'foto-orcamento', itemServicoId: 'a', titulo: 'Foto horizontal', descricao: 'Serviço concluído.', mime: 'image/png', largura: 1600, altura: 900, imagemDataUrl: png }] }
-  const xmlProposta = lerDocumentXml(Buffer.from(await Packer.toBuffer(montarDocumentoDocx(propostaComFoto, empresa))))
-  expect(xmlProposta.match(/wp:extent cx="(\d+)" cy="(\d+)"/)?.slice(1)).toEqual(['5400675', '3038475'])
+  const propostaComFoto: Orcamento = {
+    ...orc,
+    anexos: [
+      {
+        id: 'foto-orcamento',
+        itemServicoId: 'a',
+        titulo: 'Foto horizontal',
+        descricao: 'Serviço concluído.',
+        mime: 'image/png',
+        largura: 1600,
+        altura: 900,
+        imagemDataUrl: png
+      }
+    ]
+  }
+  const xmlProposta = lerDocumentXml(
+    Buffer.from(await Packer.toBuffer(montarDocumentoDocx(propostaComFoto, empresa)))
+  )
+  expect(xmlProposta.match(/wp:extent cx="(\d+)" cy="(\d+)"/)?.slice(1)).toEqual([
+    '5400675',
+    '3038475'
+  ])
 })

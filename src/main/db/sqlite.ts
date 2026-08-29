@@ -1,7 +1,16 @@
 // Conexão SQLite (node-sqlite3-wasm: WebAssembly com acesso real ao arquivo,
 // sem nenhuma dependência nativa/node-gyp — ver memória `ambiente-build-windows`).
 import { app } from 'electron'
-import { copyFileSync, existsSync, mkdirSync, openSync, closeSync, readFileSync, unlinkSync, writeFileSync } from 'fs'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  closeSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync
+} from 'fs'
 import { join } from 'path'
 import { Database } from 'node-sqlite3-wasm'
 import { aplicarMigracoes } from './schema'
@@ -31,11 +40,26 @@ function adquirirTrava(): void {
   } catch (erro) {
     if (!existsSync(caminho)) throw erro
     let pid = 0
-    try { pid = Number.parseInt(readFileSync(caminho, 'utf8').trim(), 10) } catch { pid = 0 }
+    try {
+      pid = Number.parseInt(readFileSync(caminho, 'utf8').trim(), 10)
+    } catch {
+      pid = 0
+    }
     let vivo = false
-    if (pid > 0) { try { process.kill(pid, 0); vivo = true } catch { vivo = false } }
+    if (pid > 0) {
+      try {
+        process.kill(pid, 0)
+        vivo = true
+      } catch {
+        vivo = false
+      }
+    }
     if (vivo) throw new Error('O banco de dados já está aberto por outra instância do aplicativo.')
-    try { unlinkSync(caminho) } catch { throw new Error('Não foi possível obter a trava do banco de dados.') }
+    try {
+      unlinkSync(caminho)
+    } catch {
+      throw new Error('Não foi possível obter a trava do banco de dados.')
+    }
     const fd = openSync(caminho, 'wx')
     writeFileSync(fd, `${process.pid}\n`, 'utf8')
     trava = { caminho, fd }
@@ -44,8 +68,16 @@ function adquirirTrava(): void {
 
 function liberarTrava(): void {
   if (!trava) return
-  try { closeSync(trava.fd) } catch { /* já fechado */ }
-  try { unlinkSync(trava.caminho) } catch { /* a limpeza não impede o encerramento */ }
+  try {
+    closeSync(trava.fd)
+  } catch {
+    /* já fechado */
+  }
+  try {
+    unlinkSync(trava.caminho)
+  } catch {
+    /* a limpeza não impede o encerramento */
+  }
   trava = null
 }
 
@@ -60,7 +92,9 @@ function prepararBackupPreV2(caminho: string): string | null {
   const sonda = new Database(caminho)
   let versao = 0
   try {
-    versao = Number((sonda.get('PRAGMA user_version') as { user_version?: number } | null)?.user_version ?? 0)
+    versao = Number(
+      (sonda.get('PRAGMA user_version') as { user_version?: number } | null)?.user_version ?? 0
+    )
   } finally {
     sonda.close()
   }
@@ -76,7 +110,8 @@ function prepararBackupPreV2(caminho: string): string | null {
 function verificarIntegridade(d: Database): void {
   const linha = d.get('PRAGMA integrity_check') as { integrity_check?: string } | null
   const resultado = String(linha?.integrity_check ?? '')
-  if (resultado.toLowerCase() !== 'ok') throw new Error(`Falha na integridade do banco: ${resultado || 'sem resposta'}`)
+  if (resultado.toLowerCase() !== 'ok')
+    throw new Error(`Falha na integridade do banco: ${resultado || 'sem resposta'}`)
 }
 
 /**

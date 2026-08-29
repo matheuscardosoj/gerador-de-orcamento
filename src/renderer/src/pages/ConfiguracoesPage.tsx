@@ -38,7 +38,10 @@ type Aba = 'empresa' | 'parametros' | 'observacoes' | 'pagamentos' | 'numeracao'
 export function ConfiguracoesPage(): JSX.Element {
   const [aba, setAba] = useState<Aba>('empresa')
   return (
-    <PageShell titulo="Configurações" descricao="Dados fixos, parâmetros de cálculo e textos padrão">
+    <PageShell
+      titulo="Configurações"
+      descricao="Dados fixos, parâmetros de cálculo e textos padrão"
+    >
       <Tabs
         atual={aba}
         onChange={setAba}
@@ -105,19 +108,30 @@ function SecaoEmpresa(): JSX.Element {
   return (
     <form onSubmit={salvar}>
       <Card className="p-6">
-        <SectionTitle title="Dados do cabeçalho" description="Aparecem no topo de todos os orçamentos" />
+        <SectionTitle
+          title="Dados do cabeçalho"
+          description="Aparecem no topo de todos os orçamentos"
+        />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field label="Nome fantasia (destaque)">
             <Input value={form.nome} onChange={(e) => set({ nome: e.target.value })} />
           </Field>
           <Field label="Razão social">
-            <Input value={form.razaoSocial} onChange={(e) => set({ razaoSocial: e.target.value })} />
+            <Input
+              value={form.razaoSocial}
+              onChange={(e) => set({ razaoSocial: e.target.value })}
+            />
           </Field>
-          <Field label="Nome exibido no menu do app" hint="Escolha qual nome aparece na barra lateral">
+          <Field
+            label="Nome exibido no menu do app"
+            hint="Escolha qual nome aparece na barra lateral"
+          >
             <select
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/30"
               value={form.nomeExibicao}
-              onChange={(e) => set({ nomeExibicao: e.target.value as EmpresaConfig['nomeExibicao'] })}
+              onChange={(e) =>
+                set({ nomeExibicao: e.target.value as EmpresaConfig['nomeExibicao'] })
+              }
             >
               <option value="nome">Nome fantasia</option>
               <option value="razaoSocial">Razão social</option>
@@ -147,7 +161,11 @@ function SecaoEmpresa(): JSX.Element {
             <div className="flex items-center gap-4">
               <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
                 {form.logoDataUrl ? (
-                  <img src={form.logoDataUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
+                  <img
+                    src={form.logoDataUrl}
+                    alt="Logo"
+                    className="max-h-full max-w-full object-contain"
+                  />
                 ) : (
                   <span className="text-xs text-slate-400">sem logo</span>
                 )}
@@ -235,7 +253,10 @@ function SecaoParametros(): JSX.Element {
         />
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
           <Field label="Férias (%)">
-            <NumberField value={form.percentualFerias} onChange={(v) => set({ percentualFerias: v })} />
+            <NumberField
+              value={form.percentualFerias}
+              onChange={(v) => set({ percentualFerias: v })}
+            />
           </Field>
           <Field label="13º salário (%)">
             <NumberField
@@ -259,22 +280,37 @@ function SecaoParametros(): JSX.Element {
             <NumberField value={form.diasBaseMes} onChange={(v) => set({ diasBaseMes: v })} />
           </Field>
           <Field label="Custo de contratação (R$)" hint="Por funcionário (exames, admissão)">
-            <NumberField value={form.custoContratacao} onChange={(v) => set({ custoContratacao: v })} />
+            <NumberField
+              value={form.custoContratacao}
+              onChange={(v) => set({ custoContratacao: v })}
+            />
           </Field>
         </div>
       </Card>
 
       <Card className="p-6">
-        <SectionTitle title="Padrões de preço" description="Valores iniciais sugeridos ao criar um cálculo" />
+        <SectionTitle
+          title="Padrões de preço"
+          description="Valores iniciais sugeridos ao criar um cálculo"
+        />
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
           <Field label="Margem de lucro padrão (%)">
-            <NumberField value={form.margemLucroPadrao} onChange={(v) => set({ margemLucroPadrao: v })} />
+            <NumberField
+              value={form.margemLucroPadrao}
+              onChange={(v) => set({ margemLucroPadrao: v })}
+            />
           </Field>
           <Field label="Alíquota NFS padrão (%)">
-            <NumberField value={form.aliquotaNotaPadrao} onChange={(v) => set({ aliquotaNotaPadrao: v })} />
+            <NumberField
+              value={form.aliquotaNotaPadrao}
+              onChange={(v) => set({ aliquotaNotaPadrao: v })}
+            />
           </Field>
           <Field label="Consumo do veículo padrão (km/l)">
-            <NumberField value={form.consumoVeiculoPadrao} onChange={(v) => set({ consumoVeiculoPadrao: v })} />
+            <NumberField
+              value={form.consumoVeiculoPadrao}
+              onChange={(v) => set({ consumoVeiculoPadrao: v })}
+            />
           </Field>
           <Field label="Preço do combustível padrão (R$/l)">
             <NumberField
@@ -293,7 +329,9 @@ function SecaoParametros(): JSX.Element {
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/30"
               value={form.modoImpostoPadrao}
               onChange={(e) =>
-                set({ modoImpostoPadrao: e.target.value as ParametrosFinanceiros['modoImpostoPadrao'] })
+                set({
+                  modoImpostoPadrao: e.target.value as ParametrosFinanceiros['modoImpostoPadrao']
+                })
               }
             >
               <option value="gross_up">Gross-up (dividir por 1 − alíquota)</option>
@@ -342,15 +380,19 @@ function SecaoObservacoes(): JSX.Element {
         {(data ?? []).map((o) => (
           <ItemObservacao key={o.id} obs={o} onChange={reload} />
         ))}
-        {data && data.length === 0 && (
-          <EmptyState title="Nenhuma observação cadastrada" />
-        )}
+        {data && data.length === 0 && <EmptyState title="Nenhuma observação cadastrada" />}
       </div>
     </Card>
   )
 }
 
-function ItemObservacao({ obs, onChange }: { obs: ObservacaoPadrao; onChange: () => void }): JSX.Element {
+function ItemObservacao({
+  obs,
+  onChange
+}: {
+  obs: ObservacaoPadrao
+  onChange: () => void
+}): JSX.Element {
   const [texto, setTexto] = useState(obs.texto)
   const [editando, setEditando] = useState(false)
 
@@ -364,42 +406,78 @@ function ItemObservacao({ obs, onChange }: { obs: ObservacaoPadrao; onChange: ()
     <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-[minmax(0,1fr)_220px] md:items-start">
       <div className="min-w-0">
         {editando ? (
-          <Textarea value={texto} onChange={(e) => setTexto(e.target.value)} className="min-h-[96px]" autoFocus />
+          <Textarea
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
+            className="min-h-[96px]"
+            autoFocus
+          />
         ) : (
-          <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{obs.texto}</p>
+          <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">
+            {obs.texto}
+          </p>
         )}
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-1">
-        <Checkbox label="Incluir automaticamente" checked={obs.padrao} onChange={async (v) => { await api.observacoes.update(obs.id, { padrao: v }); onChange() }} />
-        <Select value={obs.aplicacao} aria-label="Aplicação da observação" onChange={async (e) => { await api.observacoes.update(obs.id, { aplicacao: e.target.value as ObservacaoPadrao['aplicacao'] }); onChange() }}>
-          {aplicacoes.map((a) => <option key={a.valor} value={a.valor}>{a.rotulo}</option>)}
-        </Select>
-        <div className="flex flex-wrap gap-2">
-        {editando ? (
-          <>
-            <Button type="button" size="sm" onClick={salvar} disabled={!texto.trim()}>
-              Salvar
-            </Button>
-            <Button type="button" size="sm" variant="outline" onClick={() => { setTexto(obs.texto); setEditando(false) }}>
-              Cancelar
-            </Button>
-          </>
-        ) : (
-          <Button type="button" size="sm" variant="outline" onClick={() => setEditando(true)}>
-            Editar
-          </Button>
-        )}
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost" aria-label="Excluir observação"
-          onClick={async () => {
-            await api.observacoes.remove(obs.id)
+        <Checkbox
+          label="Incluir automaticamente"
+          checked={obs.padrao}
+          onChange={async (v) => {
+            await api.observacoes.update(obs.id, { padrao: v })
+            onChange()
+          }}
+        />
+        <Select
+          value={obs.aplicacao}
+          aria-label="Aplicação da observação"
+          onChange={async (e) => {
+            await api.observacoes.update(obs.id, {
+              aplicacao: e.target.value as ObservacaoPadrao['aplicacao']
+            })
             onChange()
           }}
         >
-          <AppIcon icon={Trash2} />
-        </Button>
+          {aplicacoes.map((a) => (
+            <option key={a.valor} value={a.valor}>
+              {a.rotulo}
+            </option>
+          ))}
+        </Select>
+        <div className="flex flex-wrap gap-2">
+          {editando ? (
+            <>
+              <Button type="button" size="sm" onClick={salvar} disabled={!texto.trim()}>
+                Salvar
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setTexto(obs.texto)
+                  setEditando(false)
+                }}
+              >
+                Cancelar
+              </Button>
+            </>
+          ) : (
+            <Button type="button" size="sm" variant="outline" onClick={() => setEditando(true)}>
+              Editar
+            </Button>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            aria-label="Excluir observação"
+            onClick={async () => {
+              await api.observacoes.remove(obs.id)
+              onChange()
+            }}
+          >
+            <AppIcon icon={Trash2} />
+          </Button>
         </div>
       </div>
     </div>
@@ -465,42 +543,78 @@ function ItemPagamento({
     <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-[minmax(0,1fr)_220px] md:items-start">
       <div className="min-w-0">
         {editando ? (
-          <Textarea value={texto} onChange={(e) => setTexto(e.target.value)} className="min-h-[96px]" autoFocus />
+          <Textarea
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
+            className="min-h-[96px]"
+            autoFocus
+          />
         ) : (
-          <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{pag.texto}</p>
+          <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">
+            {pag.texto}
+          </p>
         )}
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-1">
-        <Checkbox label="Incluir automaticamente" checked={pag.padrao} onChange={async (v) => { await api.pagamentos.update(pag.id, { padrao: v }); onChange() }} />
-        <Select value={pag.aplicacao} aria-label="Aplicação da forma de pagamento" onChange={async (e) => { await api.pagamentos.update(pag.id, { aplicacao: e.target.value as FormaPagamentoPadrao['aplicacao'] }); onChange() }}>
-          {aplicacoes.map((a) => <option key={a.valor} value={a.valor}>{a.rotulo}</option>)}
-        </Select>
-        <div className="flex flex-wrap gap-2">
-        {editando ? (
-          <>
-            <Button type="button" size="sm" onClick={salvar} disabled={!texto.trim()}>
-              Salvar
-            </Button>
-            <Button type="button" size="sm" variant="outline" onClick={() => { setTexto(pag.texto); setEditando(false) }}>
-              Cancelar
-            </Button>
-          </>
-        ) : (
-          <Button type="button" size="sm" variant="outline" onClick={() => setEditando(true)}>
-            Editar
-          </Button>
-        )}
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost" aria-label="Excluir forma de pagamento"
-          onClick={async () => {
-            await api.pagamentos.remove(pag.id)
+        <Checkbox
+          label="Incluir automaticamente"
+          checked={pag.padrao}
+          onChange={async (v) => {
+            await api.pagamentos.update(pag.id, { padrao: v })
+            onChange()
+          }}
+        />
+        <Select
+          value={pag.aplicacao}
+          aria-label="Aplicação da forma de pagamento"
+          onChange={async (e) => {
+            await api.pagamentos.update(pag.id, {
+              aplicacao: e.target.value as FormaPagamentoPadrao['aplicacao']
+            })
             onChange()
           }}
         >
-          <AppIcon icon={Trash2} />
-        </Button>
+          {aplicacoes.map((a) => (
+            <option key={a.valor} value={a.valor}>
+              {a.rotulo}
+            </option>
+          ))}
+        </Select>
+        <div className="flex flex-wrap gap-2">
+          {editando ? (
+            <>
+              <Button type="button" size="sm" onClick={salvar} disabled={!texto.trim()}>
+                Salvar
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setTexto(pag.texto)
+                  setEditando(false)
+                }}
+              >
+                Cancelar
+              </Button>
+            </>
+          ) : (
+            <Button type="button" size="sm" variant="outline" onClick={() => setEditando(true)}>
+              Editar
+            </Button>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            aria-label="Excluir forma de pagamento"
+            onClick={async () => {
+              await api.pagamentos.remove(pag.id)
+              onChange()
+            }}
+          >
+            <AppIcon icon={Trash2} />
+          </Button>
         </div>
       </div>
     </div>
@@ -561,7 +675,10 @@ function SecaoIA(): JSX.Element {
         />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field label="Origem do modelo">
-            <Select value={form.modo} onChange={(e) => set({ modo: e.target.value as ConfigIA['modo'] })}>
+            <Select
+              value={form.modo}
+              onChange={(e) => set({ modo: e.target.value as ConfigIA['modo'] })}
+            >
               <option value="embutida">Modelo embutido no aplicativo</option>
               <option value="ollama">Ollama instalado na máquina</option>
               <option value="desligada">Desativada</option>
@@ -570,10 +687,16 @@ function SecaoIA(): JSX.Element {
           {form.modo === 'ollama' && (
             <>
               <Field label="Endereço do Ollama">
-                <Input value={form.urlOllama} onChange={(e) => set({ urlOllama: e.target.value })} />
+                <Input
+                  value={form.urlOllama}
+                  onChange={(e) => set({ urlOllama: e.target.value })}
+                />
               </Field>
               <Field label="Modelo" hint="Ex.: llama3.2:3b, qwen2.5:3b">
-                <Input value={form.modeloOllama} onChange={(e) => set({ modeloOllama: e.target.value })} />
+                <Input
+                  value={form.modeloOllama}
+                  onChange={(e) => set({ modeloOllama: e.target.value })}
+                />
               </Field>
             </>
           )}
@@ -681,19 +804,28 @@ function PainelNumeracao({
           </Field>
           <div className="space-y-2 self-start md:pt-7">
             <p className="text-sm text-slate-500">
-              Maior número em uso: <strong className="text-slate-700">{data.maiorEmUso || '—'}</strong> ·{' '}
-              Menor número livre: <strong className="text-slate-700">{data.menorLivre}</strong> ·{' '}
-              {data.totalDocumentos} {documento}{data.totalDocumentos === 1 ? '' : 's'}
+              Maior número em uso:{' '}
+              <strong className="text-slate-700">{data.maiorEmUso || '—'}</strong> · Menor número
+              livre: <strong className="text-slate-700">{data.menorLivre}</strong> ·{' '}
+              {data.totalDocumentos} {documento}
+              {data.totalDocumentos === 1 ? '' : 's'}
             </p>
             {proximo !== data.menorLivre && (
-              <Button type="button" variant="outline" size="sm" onClick={() => definir(data.menorLivre)}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => definir(data.menorLivre)}
+              >
                 Usar o menor número livre ({data.menorLivre})
               </Button>
             )}
           </div>
         </div>
 
-        {erro && <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{erro}</p>}
+        {erro && (
+          <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{erro}</p>
+        )}
 
         <div className="mt-5 flex justify-end">
           <BotaoSalvar salvando={salvando} ok={ok} />
@@ -711,53 +843,128 @@ function SecaoDados(): JSX.Element {
   const [confirmacao, setConfirmacao] = useState<'restaurar' | 'mesclar' | null>(null)
 
   const exportar = async (): Promise<void> => {
-    setOcupado('exportar'); setResultado(null); setErro(null)
+    setOcupado('exportar')
+    setResultado(null)
+    setErro(null)
     try {
       const r = await api.dados.exportar()
       if (r.caminho) setResultado(`Cópia de segurança criada em: ${r.caminho}`)
-    } catch (e) { setErro(String(e).replace(/^Error:\s*/, '')) } finally { setOcupado(null) }
+    } catch (e) {
+      setErro(String(e).replace(/^Error:\s*/, ''))
+    } finally {
+      setOcupado(null)
+    }
   }
   const importar = async (modo: 'restaurar' | 'mesclar'): Promise<void> => {
-    setOcupado(modo); setResultado(null); setErro(null)
+    setOcupado(modo)
+    setResultado(null)
+    setErro(null)
     try {
       const r = await api.dados.importar(modo)
       if (!r) return
-      const itens = Object.entries(r.importados).filter(([, n]) => n > 0).map(([nome, n]) => `${n} ${nome.replace('_padrao', '')}`).join(', ')
+      const itens = Object.entries(r.importados)
+        .filter(([, n]) => n > 0)
+        .map(([nome, n]) => `${n} ${nome.replace('_padrao', '')}`)
+        .join(', ')
       const ignorados = Object.values(r.ignorados).reduce((a, n) => a + n, 0)
       const renumerados = r.renumerados.orcamentos + r.renumerados.relatorios
-      setResultado(modo === 'restaurar'
-        ? `Backup restaurado com segurança. A cópia anterior foi salva em: ${r.backupAntes}. Feche e abra o aplicativo para carregar os dados restaurados.`
-        : `Importação concluída${itens ? `: ${itens}` : ''}.${ignorados ? ` ${ignorados} itens iguais foram mantidos sem duplicar.` : ''}${renumerados ? ` ${renumerados} documento(s) receberam um novo número por conflito.` : ''} A cópia anterior foi salva em: ${r.backupAntes}.`)
-    } catch (e) { setErro(String(e).replace(/^Error:\s*/, '')) } finally { setOcupado(null) }
+      setResultado(
+        modo === 'restaurar'
+          ? `Backup restaurado com segurança. A cópia anterior foi salva em: ${r.backupAntes}. Feche e abra o aplicativo para carregar os dados restaurados.`
+          : `Importação concluída${itens ? `: ${itens}` : ''}.${ignorados ? ` ${ignorados} itens iguais foram mantidos sem duplicar.` : ''}${renumerados ? ` ${renumerados} documento(s) receberam um novo número por conflito.` : ''} A cópia anterior foi salva em: ${r.backupAntes}.`
+      )
+    } catch (e) {
+      setErro(String(e).replace(/^Error:\s*/, ''))
+    } finally {
+      setOcupado(null)
+    }
   }
 
   return (
     <div className="space-y-6">
       <Card className="p-6">
-        <SectionTitle title="Cópia de segurança" description="Gera um único arquivo protegido com clientes, documentos, imagens, logo e configurações." />
+        <SectionTitle
+          title="Cópia de segurança"
+          description="Gera um único arquivo protegido com clientes, documentos, imagens, logo e configurações."
+        />
         <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="max-w-2xl text-sm leading-6 text-slate-600">Guarde esse arquivo em um local seguro. Ele permite recuperar o aplicativo em outro computador sem perder os anexos.</p>
-          <Button type="button" onClick={exportar} disabled={ocupado !== null}>{ocupado === 'exportar' ? 'Exportando…' : 'Exportar backup…'}</Button>
+          <p className="max-w-2xl text-sm leading-6 text-slate-600">
+            Guarde esse arquivo em um local seguro. Ele permite recuperar o aplicativo em outro
+            computador sem perder os anexos.
+          </p>
+          <Button type="button" onClick={exportar} disabled={ocupado !== null}>
+            {ocupado === 'exportar' ? 'Exportando…' : 'Exportar backup…'}
+          </Button>
         </div>
       </Card>
       <Card className="p-6">
-        <SectionTitle title="Importar dados" description="Todo processo valida o arquivo e salva uma cópia datada do banco atual antes de alterar qualquer dado." />
+        <SectionTitle
+          title="Importar dados"
+          description="Todo processo valida o arquivo e salva uma cópia datada do banco atual antes de alterar qualquer dado."
+        />
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div className="rounded-xl border border-slate-200 p-4">
             <h3 className="font-semibold text-slate-800">Restaurar tudo</h3>
-            <p className="mt-1 text-sm leading-6 text-slate-600">Substitui documentos e configurações deste computador exatamente pelo backup selecionado.</p>
-            <Button type="button" variant="outline" className="mt-4" onClick={() => setConfirmacao('restaurar')} disabled={ocupado !== null}>{ocupado === 'restaurar' ? 'Restaurando…' : 'Escolher backup e restaurar…'}</Button>
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              Substitui documentos e configurações deste computador exatamente pelo backup
+              selecionado.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-4"
+              onClick={() => setConfirmacao('restaurar')}
+              disabled={ocupado !== null}
+            >
+              {ocupado === 'restaurar' ? 'Restaurando…' : 'Escolher backup e restaurar…'}
+            </Button>
           </div>
           <div className="rounded-xl border border-brand-teal/30 bg-brand-teal/5 p-4">
             <h3 className="font-semibold text-slate-800">Manter dados atuais</h3>
-            <p className="mt-1 text-sm leading-6 text-slate-600">Importa clientes e documentos sem apagar os existentes. Empresa, logo, parâmetros financeiros e IA deste computador são preservados.</p>
-            <Button type="button" className="mt-4" onClick={() => setConfirmacao('mesclar')} disabled={ocupado !== null}>{ocupado === 'mesclar' ? 'Importando…' : 'Escolher backup e importar…'}</Button>
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              Importa clientes e documentos sem apagar os existentes. Empresa, logo, parâmetros
+              financeiros e IA deste computador são preservados.
+            </p>
+            <Button
+              type="button"
+              className="mt-4"
+              onClick={() => setConfirmacao('mesclar')}
+              disabled={ocupado !== null}
+            >
+              {ocupado === 'mesclar' ? 'Importando…' : 'Escolher backup e importar…'}
+            </Button>
           </div>
         </div>
       </Card>
-      {resultado && <p role="status" className="rounded-xl bg-emerald-50 p-4 text-sm leading-6 text-emerald-900">{resultado}</p>}
-      {erro && <p role="alert" className="rounded-xl bg-red-50 p-4 text-sm leading-6 text-red-800">{erro}</p>}
-      <ConfirmDialog open={Boolean(confirmacao)} title={confirmacao === 'restaurar' ? 'Restaurar backup' : 'Importar mantendo dados'} description={confirmacao === 'restaurar' ? 'A restauração substituirá os dados e configurações deste computador pelo arquivo escolhido. Uma cópia automática será criada antes.' : 'A importação preservará empresa, logo, parâmetros financeiros e IA locais, conciliando os demais dados. Uma cópia automática será criada antes.'} confirmLabel="Continuar" onCancel={() => setConfirmacao(null)} onConfirm={async () => { const modo = confirmacao; setConfirmacao(null); if (modo) await importar(modo) }} />
+      {resultado && (
+        <p
+          role="status"
+          className="rounded-xl bg-emerald-50 p-4 text-sm leading-6 text-emerald-900"
+        >
+          {resultado}
+        </p>
+      )}
+      {erro && (
+        <p role="alert" className="rounded-xl bg-red-50 p-4 text-sm leading-6 text-red-800">
+          {erro}
+        </p>
+      )}
+      <ConfirmDialog
+        open={Boolean(confirmacao)}
+        title={confirmacao === 'restaurar' ? 'Restaurar backup' : 'Importar mantendo dados'}
+        description={
+          confirmacao === 'restaurar'
+            ? 'A restauração substituirá os dados e configurações deste computador pelo arquivo escolhido. Uma cópia automática será criada antes.'
+            : 'A importação preservará empresa, logo, parâmetros financeiros e IA locais, conciliando os demais dados. Uma cópia automática será criada antes.'
+        }
+        confirmLabel="Continuar"
+        onCancel={() => setConfirmacao(null)}
+        onConfirm={async () => {
+          const modo = confirmacao
+          setConfirmacao(null)
+          if (modo) await importar(modo)
+        }}
+      />
     </div>
   )
 }

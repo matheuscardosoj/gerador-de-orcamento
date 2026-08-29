@@ -54,8 +54,13 @@ function SecaoClientes(): JSX.Element {
   const [erro, setErro] = useState<string | null>(null)
   const confirmar = async (): Promise<void> => {
     if (!excluir) return
-    try { await api.clientes.remove(excluir.id); setExcluir(null); reload() }
-    catch (e) { setErro(String(e).replace(/^Error:\s*/, '')) }
+    try {
+      await api.clientes.remove(excluir.id)
+      setExcluir(null)
+      reload()
+    } catch (e) {
+      setErro(String(e).replace(/^Error:\s*/, ''))
+    }
   }
 
   return (
@@ -63,7 +68,11 @@ function SecaoClientes(): JSX.Element {
       <div className="mb-4 flex justify-end">
         <Button onClick={() => setEdit('novo')}>+ Novo cliente</Button>
       </div>
-      {erro && <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</p>}
+      {erro && (
+        <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          {erro}
+        </p>
+      )}
       <div className="divide-y divide-slate-100">
         {(data ?? []).map((c) => (
           <div key={c.id} className="flex items-center justify-between gap-4 py-3">
@@ -82,7 +91,10 @@ function SecaoClientes(): JSX.Element {
                 icon={Trash2}
                 label={`Excluir cliente ${c.nome}`}
                 size="sm"
-                onClick={() => { setErro(null); setExcluir(c) }}
+                onClick={() => {
+                  setErro(null)
+                  setExcluir(c)
+                }}
               />
             </div>
           </div>
@@ -105,7 +117,13 @@ function SecaoClientes(): JSX.Element {
           }}
         />
       )}
-      <ConfirmDialog open={Boolean(excluir)} title="Excluir cliente" description={`Excluir o cliente “${excluir?.nome ?? ''}”? Documentos já gravados continuarão preservados.`} onCancel={() => setExcluir(null)} onConfirm={confirmar} />
+      <ConfirmDialog
+        open={Boolean(excluir)}
+        title="Excluir cliente"
+        description={`Excluir o cliente “${excluir?.nome ?? ''}”? Documentos já gravados continuarão preservados.`}
+        onCancel={() => setExcluir(null)}
+        onConfirm={confirmar}
+      />
     </Card>
   )
 }
@@ -119,9 +137,7 @@ function ClienteModal({
   onClose: () => void
   onSaved: () => void
 }): JSX.Element {
-  const [form, setForm] = useState<Omit<Cliente, 'id' | 'criadoEm'>>(
-    cliente ?? clienteVazio()
-  )
+  const [form, setForm] = useState<Omit<Cliente, 'id' | 'criadoEm'>>(cliente ?? clienteVazio())
   const set = (patch: Partial<typeof form>): void => setForm({ ...form, ...patch })
 
   const salvar = async (): Promise<void> => {
@@ -148,7 +164,10 @@ function ClienteModal({
     >
       <div className="space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(170px,0.85fr)_minmax(0,1.65fr)] sm:gap-3">
-          <Field label="Tratamento" hint="Usado no PDF/Word; não aparece em listas nem no nome do arquivo">
+          <Field
+            label="Tratamento"
+            hint="Usado no PDF/Word; não aparece em listas nem no nome do arquivo"
+          >
             <Input
               value={form.tratamento}
               onChange={(e) => set({ tratamento: e.target.value })}
@@ -163,7 +182,11 @@ function ClienteModal({
           <Input value={form.contato ?? ''} onChange={(e) => set({ contato: e.target.value })} />
         </Field>
         <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-          <input type="checkbox" checked={form.ativo} onChange={(e) => set({ ativo: e.target.checked })} />
+          <input
+            type="checkbox"
+            checked={form.ativo}
+            onChange={(e) => set({ ativo: e.target.checked })}
+          />
           Cliente ativo para novos documentos
         </label>
         <Field label="Observação">
@@ -232,7 +255,19 @@ function SecaoServicos(): JSX.Element {
           }}
         />
       )}
-      <ConfirmDialog open={Boolean(excluir)} title="Excluir serviço" description={`Excluir o serviço “${excluir?.nome ?? ''}” do catálogo? Itens já gravados não serão alterados.`} onCancel={() => setExcluir(null)} onConfirm={async () => { if (excluir) { await api.servicos.remove(excluir.id); setExcluir(null); reload() } }} />
+      <ConfirmDialog
+        open={Boolean(excluir)}
+        title="Excluir serviço"
+        description={`Excluir o serviço “${excluir?.nome ?? ''}” do catálogo? Itens já gravados não serão alterados.`}
+        onCancel={() => setExcluir(null)}
+        onConfirm={async () => {
+          if (excluir) {
+            await api.servicos.remove(excluir.id)
+            setExcluir(null)
+            reload()
+          }
+        }}
+      />
     </Card>
   )
 }

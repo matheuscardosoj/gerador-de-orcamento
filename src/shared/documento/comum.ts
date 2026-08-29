@@ -1,6 +1,9 @@
 /** O destinatário é persistido sem pontuação de apresentação. */
 export function normalizarDestinatario(valor: string): string {
-  return String(valor ?? '').trim().replace(/[\s,]+$/g, '').trim()
+  return String(valor ?? '')
+    .trim()
+    .replace(/[\s,]+$/g, '')
+    .trim()
 }
 
 /** PDF e DOCX mostram exatamente uma vírgula ao fim do destinatário. */
@@ -16,7 +19,10 @@ export const LIMITE_ANEXO_MM = { largura: 150, altura: 100 } as const
  * O tratamento pertence somente à apresentação do documento. Assim, listas,
  * pesquisas e nomes de arquivos trabalham sempre com o nome limpo do cliente.
  */
-export function destinatarioComTratamento(tratamento: string | null | undefined, nome: string): string {
+export function destinatarioComTratamento(
+  tratamento: string | null | undefined,
+  nome: string
+): string {
   return [String(tratamento ?? '').trim(), normalizarDestinatario(nome)].filter(Boolean).join(' ')
 }
 
@@ -25,7 +31,11 @@ export function dataNoNomeArquivo(iso: string): string {
   if (m) return `${m[3]}.${m[2]}.${m[1]}`
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ''
-  return [String(d.getDate()).padStart(2, '0'), String(d.getMonth() + 1).padStart(2, '0'), d.getFullYear()].join('.')
+  return [
+    String(d.getDate()).padStart(2, '0'),
+    String(d.getMonth() + 1).padStart(2, '0'),
+    d.getFullYear()
+  ].join('.')
 }
 
 export function nomeSeguroArquivo(valor: string): string {

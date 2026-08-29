@@ -7,8 +7,5 @@ export function compararOrigemRelatorio(a: Relatorio, b: Relatorio): number {
   if (numeroA == null && numeroB != null) return 1
   if (numeroA != null && numeroB == null) return -1
   if (numeroA != null && numeroB != null && numeroA !== numeroB) return numeroA - numeroB
-  return (a.origemOrcamento?.cliente ?? '').localeCompare(
-    b.origemOrcamento?.cliente ?? '',
-    'pt-BR'
-  )
+  return (a.origemOrcamento?.cliente ?? '').localeCompare(b.origemOrcamento?.cliente ?? '', 'pt-BR')
 }

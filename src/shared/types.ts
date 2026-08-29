@@ -1,5 +1,10 @@
 // Entidades de domínio compartilhadas entre main e renderer.
-import type { EntradaCalculo, ResultadoCalculo, ParametrosEncargos, ModoImposto } from './calculo/types'
+import type {
+  EntradaCalculo,
+  ResultadoCalculo,
+  ParametrosEncargos,
+  ModoImposto
+} from './calculo/types'
 
 export * from './calculo/types'
 

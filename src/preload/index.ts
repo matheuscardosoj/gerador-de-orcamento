@@ -87,8 +87,8 @@ if (process.contextIsolated) {
     console.error(error)
   }
 } else {
-  // @ts-ignore (define no window)
+  // @ts-expect-error API de compatibilidade exposta no window
   window.electron = electronAPI
-  // @ts-ignore (define no window)
+  // @ts-expect-error API de compatibilidade exposta no window
   window.api = api
 }

@@ -27,7 +27,9 @@ let diagnosticoBoot = ''
 let capturandoBoot = false
 
 /** O runtime embutido é hermético: configurações LLAMA_* do usuário pertencem a outros servidores. */
-export function ambienteServidorEmbutido(origem: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+export function ambienteServidorEmbutido(
+  origem: NodeJS.ProcessEnv = process.env
+): NodeJS.ProcessEnv {
   return Object.fromEntries(
     Object.entries(origem).filter(([chave]) => !chave.toUpperCase().startsWith('LLAMA_'))
   )
@@ -39,7 +41,10 @@ function registrarDiagnostico(dado: unknown): void {
 }
 
 function detalheDiagnostico(): string {
-  const linhas = diagnosticoBoot.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+  const linhas = diagnosticoBoot
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
   const detalhe = linhas.slice(-4).join(' | ').slice(0, 700)
   return detalhe ? ` Detalhe: ${detalhe}` : ''
 }
@@ -96,11 +101,16 @@ async function garantirServidor(): Promise<number> {
     processo = spawn(
       arquivos.exe,
       [
-        '--model', arquivos.modelo,
-        '--host', '127.0.0.1',
-        '--port', String(porta),
-        '--ctx-size', '4096',
-        '--threads', String(Math.max(2, Math.min(8, cpus().length - 1))),
+        '--model',
+        arquivos.modelo,
+        '--host',
+        '127.0.0.1',
+        '--port',
+        String(porta),
+        '--ctx-size',
+        '4096',
+        '--threads',
+        String(Math.max(2, Math.min(8, cpus().length - 1))),
         '--no-webui'
       ],
       {
@@ -117,14 +127,18 @@ async function garantirServidor(): Promise<number> {
       portaAtual = 0
     })
     processo.on('exit', (codigo, sinal) => {
-      if (capturandoBoot) registrarDiagnostico(`Processo encerrado (código ${codigo ?? 'n/a'}, sinal ${sinal ?? 'n/a'}).`)
+      if (capturandoBoot)
+        registrarDiagnostico(
+          `Processo encerrado (código ${codigo ?? 'n/a'}, sinal ${sinal ?? 'n/a'}).`
+        )
       processo = null
       portaAtual = 0
     })
 
     const limite = Date.now() + TIMEOUT_BOOT_MS
     while (Date.now() < limite) {
-      if (!processo) throw new Error(`O servidor de IA encerrou durante a inicialização.${detalheDiagnostico()}`)
+      if (!processo)
+        throw new Error(`O servidor de IA encerrou durante a inicialização.${detalheDiagnostico()}`)
       try {
         const r = await fetch(`http://127.0.0.1:${porta}/health`)
         if (r.ok) {
@@ -236,7 +250,9 @@ export function resumirOrcamento(orc: Orcamento): string {
   linhas.push(`Valor total: ${formatMoeda(total || orc.valorTotal)}`)
   if (orc.prazoDias) linhas.push(`Prazo estimado: ${orc.prazoDias} dias`)
   if (orc.materiais.length) {
-    linhas.push(`Materiais: ${orc.materiais.map((m) => `${m.quantidade} ${m.unidade} ${m.especificacao}`).join('; ')}`)
+    linhas.push(
+      `Materiais: ${orc.materiais.map((m) => `${m.quantidade} ${m.unidade} ${m.especificacao}`).join('; ')}`
+    )
   }
   if (orc.pagamentos.length) {
     linhas.push(`Forma de pagamento: ${orc.pagamentos.map((p) => p.texto).join(' ')}`)
@@ -253,17 +269,25 @@ export function resumirRelatorio(rel: Relatorio): string {
     linhas.push('Serviços prestados:')
     rel.itensServico.forEach((item, indice) => {
       const quantidade = item.quantidade > 1 ? ` — ${item.quantidade} ${item.unidade}` : ''
-      linhas.push(`  ${indice + 1}. ${item.descricao}${quantidade} — ${formatMoeda(item.valorTotal)}`)
+      linhas.push(
+        `  ${indice + 1}. ${item.descricao}${quantidade} — ${formatMoeda(item.valorTotal)}`
+      )
     })
   }
   if (rel.adiantamentos.length) {
-    linhas.push(`Adiantamentos: ${rel.adiantamentos.map((item) => `${item.descricao || 'Sem descrição'} — ${formatMoeda(item.valor)}`).join('; ')}`)
+    linhas.push(
+      `Adiantamentos: ${rel.adiantamentos.map((item) => `${item.descricao || 'Sem descrição'} — ${formatMoeda(item.valor)}`).join('; ')}`
+    )
   }
   if (rel.reembolsos.length) {
-    linhas.push(`Reembolsos: ${rel.reembolsos.map((item) => `${item.descricao || 'Sem descrição'} — ${formatMoeda(item.valor)}`).join('; ')}`)
+    linhas.push(
+      `Reembolsos: ${rel.reembolsos.map((item) => `${item.descricao || 'Sem descrição'} — ${formatMoeda(item.valor)}`).join('; ')}`
+    )
   }
   linhas.push(`Valor total dos serviços: ${formatMoeda(rel.totais.servicos)}`)
-  linhas.push(`Valor a ${rel.totais.tipoSaldo === 'devolver' ? 'devolver' : 'receber'}: ${formatMoeda(rel.totais.valorFinal)}`)
+  linhas.push(
+    `Valor a ${rel.totais.tipoSaldo === 'devolver' ? 'devolver' : 'receber'}: ${formatMoeda(rel.totais.valorFinal)}`
+  )
   return linhas.join('\n')
 }
 
@@ -301,7 +325,11 @@ export function promptAnotacao(entrada: SugestaoObservacaoEntrada): string {
 export async function statusIA(): Promise<StatusIA> {
   const cfg = configIARepo.get()
   if (cfg.modo === 'desligada') {
-    return { modo: 'desligada', disponivel: false, detalhe: 'Sugestão por IA desativada nas Configurações.' }
+    return {
+      modo: 'desligada',
+      disponivel: false,
+      detalhe: 'Sugestão por IA desativada nas Configurações.'
+    }
   }
   if (cfg.modo === 'ollama') {
     const ok = await ollamaAtivo(cfg)
@@ -342,7 +370,8 @@ export async function statusIA(): Promise<StatusIA> {
 
 export async function sugerirObservacao(entrada: SugestaoObservacaoEntrada): Promise<string> {
   const cfg = configIARepo.get()
-  if (cfg.modo === 'desligada') throw new Error('A sugestão por IA está desativada nas Configurações.')
+  if (cfg.modo === 'desligada')
+    throw new Error('A sugestão por IA está desativada nas Configurações.')
 
   const prompt = promptAnotacao(entrada)
   if (cfg.modo === 'ollama') return limpar(await chamarOllama(cfg, prompt, SISTEMA))
@@ -370,7 +399,11 @@ function limpar(texto: string): string {
   // Se mesmo assim vier em tópicos, vira uma frase única separada por vírgulas.
   const emTopicos = linhas.length > 1 && linhas.every((l) => /^[-*•]/.test(l))
   if (emTopicos) {
-    return linhas.map((l) => l.replace(/^[-*•]\s*/, '')).join(', ').replace(/\s+/g, ' ').trim()
+    return linhas
+      .map((l) => l.replace(/^[-*•]\s*/, ''))
+      .join(', ')
+      .replace(/\s+/g, ' ')
+      .trim()
   }
   return linhas
     .join(' ')

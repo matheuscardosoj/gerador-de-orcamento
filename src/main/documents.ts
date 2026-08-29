@@ -2,7 +2,14 @@ import { BrowserWindow, dialog, app } from 'electron'
 import { writeFile, unlink } from 'fs/promises'
 import { join } from 'path'
 import { Packer } from 'docx'
-import { orcamentosRepo, relatoriosRepo, clientesRepo, empresaRepo, anexosRepo, anexosRelatorioRepo } from './repositories'
+import {
+  orcamentosRepo,
+  relatoriosRepo,
+  clientesRepo,
+  empresaRepo,
+  anexosRepo,
+  anexosRelatorioRepo
+} from './repositories'
 import { gerarHtmlOrcamento, gerarHtmlRelatorio } from '@shared/documento/template'
 import { paginarDocumento } from '@shared/documento/paginar'
 import { montarDocumentoDocx, montarDocumentoRelatorioDocx } from '@shared/documento/docx'
@@ -53,15 +60,26 @@ function carregarRelatorio(id: string): Relatorio {
   return rel
 }
 
-async function salvarPdfHtml(html: string, nome: string, prefixoTemp: string): Promise<DocumentoResultado> {
+async function salvarPdfHtml(
+  html: string,
+  nome: string,
+  prefixoTemp: string
+): Promise<DocumentoResultado> {
   const tmpHtml = join(app.getPath('temp'), `${prefixoTemp}-${Date.now()}.html`)
   await writeFile(tmpHtml, html, 'utf-8')
-  const win = new BrowserWindow({ show: false, webPreferences: { offscreen: false, sandbox: true } })
+  const win = new BrowserWindow({
+    show: false,
+    webPreferences: { offscreen: false, sandbox: true }
+  })
   try {
     await win.loadFile(tmpHtml)
     await win.webContents.executeJavaScript(`(${paginarDocumento.toString()})(document)`)
     const pdf = await win.webContents.printToPDF({ printBackground: true, preferCSSPageSize: true })
-    const r = await dialog.showSaveDialog({ title: 'Salvar PDF', defaultPath: nome + '.pdf', filters: [{ name: 'PDF', extensions: ['pdf'] }] })
+    const r = await dialog.showSaveDialog({
+      title: 'Salvar PDF',
+      defaultPath: nome + '.pdf',
+      filters: [{ name: 'PDF', extensions: ['pdf'] }]
+    })
     if (r.canceled || !r.filePath) return { caminho: null }
     await writeFile(r.filePath, pdf)
     return { caminho: r.filePath }
@@ -79,7 +97,11 @@ export async function gerarPdf(id: string): Promise<DocumentoResultado> {
     ...paraDocumento(orc),
     anexos: (orc.anexos ?? []).map((a) => ({ ...a, imagemDataUrl: imagens.get(a.id) ?? null }))
   }
-  return salvarPdfHtml(gerarHtmlOrcamento(orcComImagens, empresaRepo.get()), nomeBase(orc), 'orcamento')
+  return salvarPdfHtml(
+    gerarHtmlOrcamento(orcComImagens, empresaRepo.get()),
+    nomeBase(orc),
+    'orcamento'
+  )
 }
 
 export async function gerarDocx(id: string): Promise<DocumentoResultado> {
@@ -113,12 +135,20 @@ export async function gerarRelatorioPdf(id: string): Promise<DocumentoResultado>
     ...paraDocumento(rel),
     anexos: rel.anexos.map((a) => ({ ...a, imagemDataUrl: imagens.get(a.id) ?? null }))
   }
-  return salvarPdfHtml(gerarHtmlRelatorio(comImagens, empresaRepo.get()), nomeBaseRelatorio(rel), 'relatorio')
+  return salvarPdfHtml(
+    gerarHtmlRelatorio(comImagens, empresaRepo.get()),
+    nomeBaseRelatorio(rel),
+    'relatorio'
+  )
 }
 
 export async function gerarRelatorioDocx(id: string): Promise<DocumentoResultado> {
   const rel = carregarRelatorio(id)
-  const doc = montarDocumentoRelatorioDocx(paraDocumento(rel), empresaRepo.get(), imagensDoRelatorio(rel))
+  const doc = montarDocumentoRelatorioDocx(
+    paraDocumento(rel),
+    empresaRepo.get(),
+    imagensDoRelatorio(rel)
+  )
   const buffer = await Packer.toBuffer(doc)
   const r = await dialog.showSaveDialog({
     title: 'Salvar DOCX',

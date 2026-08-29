@@ -43,8 +43,16 @@ export function Icone({
   )
 }
 
-export function AppIcon({ icon: Icon, className }: { icon: LucideIcon; className?: string }): JSX.Element {
-  return <Icon aria-hidden className={cn('h-[18px] w-[18px] shrink-0', className)} strokeWidth={1.9} />
+export function AppIcon({
+  icon: Icon,
+  className
+}: {
+  icon: LucideIcon
+  className?: string
+}): JSX.Element {
+  return (
+    <Icon aria-hidden className={cn('h-[18px] w-[18px] shrink-0', className)} strokeWidth={1.9} />
+  )
 }
 
 // ------------------------------------------------------------------ Button
@@ -122,11 +130,14 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
   }
 )
 
-export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(
-  function Textarea({ className, ...props }, ref) {
-    return <textarea ref={ref} className={cn(fieldBase, 'min-h-[80px] resize-y', className)} {...props} />
-  }
-)
+export const Textarea = forwardRef<
+  HTMLTextAreaElement,
+  TextareaHTMLAttributes<HTMLTextAreaElement>
+>(function Textarea({ className, ...props }, ref) {
+  return (
+    <textarea ref={ref} className={cn(fieldBase, 'min-h-[80px] resize-y', className)} {...props} />
+  )
+})
 
 export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(
   function Select({ className, children, ...props }, ref) {
@@ -187,9 +198,14 @@ export function Field({
   const conteudo = rotulavel ? cloneElement(unico, { id: idControle } as never) : children
   return (
     <div className={cn('block space-y-1', className)}>
-      {label && (idControle
-        ? <label htmlFor={idControle} className="block text-sm font-medium text-slate-700">{label}</label>
-        : <span className="block text-sm font-medium text-slate-700">{label}</span>)}
+      {label &&
+        (idControle ? (
+          <label htmlFor={idControle} className="block text-sm font-medium text-slate-700">
+            {label}
+          </label>
+        ) : (
+          <span className="block text-sm font-medium text-slate-700">{label}</span>
+        ))}
       {conteudo}
       {hint && <span className="block text-xs text-slate-400">{hint}</span>}
     </div>
@@ -269,7 +285,12 @@ export function Badge({
     blue: 'bg-blue-100 text-blue-700'
   }
   return (
-    <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', colors[color])}>
+    <span
+      className={cn(
+        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+        colors[color]
+      )}
+    >
       {children}
     </span>
   )
@@ -314,9 +335,20 @@ export function Modal({
   const focoAnterior = useRef<HTMLElement | null>(null)
   useEffect(() => {
     if (!open) return
-    focoAnterior.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    const timer = window.setTimeout(() => caixaRef.current?.querySelector<HTMLElement>('button, input, select, textarea, [tabindex]:not([tabindex="-1"])')?.focus(), 0)
-    const teclado = (evento: KeyboardEvent): void => { if (evento.key === 'Escape') onClose() }
+    focoAnterior.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const timer = window.setTimeout(
+      () =>
+        caixaRef.current
+          ?.querySelector<HTMLElement>(
+            'button, input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          )
+          ?.focus(),
+      0
+    )
+    const teclado = (evento: KeyboardEvent): void => {
+      if (evento.key === 'Escape') onClose()
+    }
     document.addEventListener('keydown', teclado)
     return () => {
       window.clearTimeout(timer)
@@ -327,18 +359,28 @@ export function Modal({
   if (!open) return null
   const width = size === 'md' ? 'max-w-lg' : size === 'lg' ? 'max-w-2xl' : 'max-w-4xl'
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 sm:p-8" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 sm:p-8"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
       <div
         ref={caixaRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? tituloId : undefined}
-        className={cn('flex max-h-[90vh] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-2xl', width)}
+        className={cn(
+          'flex max-h-[90vh] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-2xl',
+          width
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         {title && (
           <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-6 py-4">
-            <h3 id={tituloId} className="text-base font-semibold text-slate-800">{title}</h3>
+            <h3 id={tituloId} className="text-base font-semibold text-slate-800">
+              {title}
+            </h3>
             <button
               onClick={onClose}
               className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-brand-teal/40"
@@ -350,7 +392,9 @@ export function Modal({
         )}
         <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
         {footer && (
-          <div className="flex shrink-0 justify-end gap-2 border-t border-slate-200 px-6 py-4">{footer}</div>
+          <div className="flex shrink-0 justify-end gap-2 border-t border-slate-200 px-6 py-4">
+            {footer}
+          </div>
         )}
       </div>
     </div>
@@ -384,8 +428,14 @@ export function ConfirmDialog({
       size="md"
       footer={
         <>
-          <Button variant="secondary" onClick={onCancel} disabled={busy}>Cancelar</Button>
-          <Button variant={danger ? 'danger' : 'primary'} onClick={() => void onConfirm()} disabled={busy}>
+          <Button variant="secondary" onClick={onCancel} disabled={busy}>
+            Cancelar
+          </Button>
+          <Button
+            variant={danger ? 'danger' : 'primary'}
+            onClick={() => void onConfirm()}
+            disabled={busy}
+          >
             {busy ? 'Aguarde…' : confirmLabel}
           </Button>
         </>

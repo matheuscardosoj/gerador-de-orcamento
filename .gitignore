@@ -13,3 +13,5 @@ release/
 *.tsbuildinfo
 # Runtime de IA baixado por `npm run ia` (llama-server + modelo GGUF, ~1,2 GB)
 resources/
+.claude/
+.playwright-cli/

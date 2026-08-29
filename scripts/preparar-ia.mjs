@@ -63,7 +63,8 @@ async function urlDoLlamaServer() {
   if (!r.ok) throw new Error(`GitHub respondeu ${r.status} ao listar as releases do llama.cpp.`)
   const release = await r.json()
   const asset = release.assets.find((a) => /bin-win-cpu-x64\.zip$/i.test(a.name))
-  if (!asset) throw new Error('Nenhum binário win-cpu-x64 encontrado na última release do llama.cpp.')
+  if (!asset)
+    throw new Error('Nenhum binário win-cpu-x64 encontrado na última release do llama.cpp.')
   return { url: asset.browser_download_url, nome: asset.name, versao: release.tag_name }
 }
 
@@ -100,7 +101,8 @@ async function prepararServidor() {
   copiar(temp)
   rmSync(temp, { recursive: true, force: true })
 
-  if (!existsSync(exe)) throw new Error('llama-server.exe não foi encontrado dentro do zip baixado.')
+  if (!existsSync(exe))
+    throw new Error('llama-server.exe não foi encontrado dentro do zip baixado.')
 }
 
 async function prepararModelo() {

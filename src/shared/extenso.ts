@@ -22,7 +22,18 @@ const unidades = [
   'dezoito',
   'dezenove'
 ]
-const dezenas = ['', '', 'vinte', 'trinta', 'quarenta', 'cinquenta', 'sessenta', 'setenta', 'oitenta', 'noventa']
+const dezenas = [
+  '',
+  '',
+  'vinte',
+  'trinta',
+  'quarenta',
+  'cinquenta',
+  'sessenta',
+  'setenta',
+  'oitenta',
+  'noventa'
+]
 const centenas = [
   '',
   'cento',
@@ -94,7 +105,9 @@ export function valorPorExtenso(valor: number): string {
   const parteReais =
     reais === 0 ? '' : `${inteiroPorExtenso(reais)} ${reais === 1 ? 'real' : 'reais'}`
   const parteCent =
-    centavos === 0 ? '' : `${inteiroPorExtenso(centavos)} ${centavos === 1 ? 'centavo' : 'centavos'}`
+    centavos === 0
+      ? ''
+      : `${inteiroPorExtenso(centavos)} ${centavos === 1 ? 'centavo' : 'centavos'}`
 
   if (parteReais && parteCent) return `${parteReais} e ${parteCent}`
   if (parteReais) return parteReais

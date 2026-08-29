@@ -21,7 +21,14 @@ const PNG =
 const bancoLegado = {
   seqOrcamento: 2,
   clientes: [
-    { id: 'cli-1', nome: 'TMG', tratamento: 'A', contato: '', observacao: '', criadoEm: '2026-01-01T12:00:00.000Z' }
+    {
+      id: 'cli-1',
+      nome: 'TMG',
+      tratamento: 'A',
+      contato: '',
+      observacao: '',
+      criadoEm: '2026-01-01T12:00:00.000Z'
+    }
   ],
   servicos: [],
   observacoesPadrao: [],
@@ -36,7 +43,15 @@ const bancoLegado = {
     titulo: 'Proposta de Serviço',
     introducao: '',
     itensServico: [
-      { id: 'item-a', descricao: 'Cerca', unidade: 'm', quantidade: 100, valorUnitario: 8, valorTotal: 800, calculo: null }
+      {
+        id: 'item-a',
+        descricao: 'Cerca',
+        unidade: 'm',
+        quantidade: 100,
+        valorUnitario: 8,
+        valorTotal: 800,
+        calculo: null
+      }
     ],
     materiais: [{ id: 'mat-a', quantidade: 2, unidade: 'un', especificacao: 'Mourão' }],
     observacoes: [{ id: 'obs-a', texto: 'Materiais por conta da contratante.' }],
@@ -95,7 +110,9 @@ it('gera relatório independente da proposta, com totais financeiros próprios',
   const relatorio = repos.relatoriosRepo.criarDeOrcamento(proposta.id)!
   expect(relatorio.numero).toBe(1)
   expect(relatorio.status).toBe('rascunho')
-  expect(relatorio.itensServico).toEqual(expect.arrayContaining([expect.objectContaining({ descricao: 'Cerca', valorTotal: 800 })]))
+  expect(relatorio.itensServico).toEqual(
+    expect.arrayContaining([expect.objectContaining({ descricao: 'Cerca', valorTotal: 800 })])
+  )
   const atualizado = repos.relatoriosRepo.update(relatorio.id, {
     adiantamentos: [{ id: 'a1', descricao: 'Sinal', valor: 100 }],
     reembolsos: [{ id: 'r1', descricao: 'Combustível', valor: 25 }],
@@ -129,7 +146,15 @@ function novoOrcamento(destinatario = 'A Fazenda Boa Vista,', numero?: number): 
     titulo: 'Proposta de Serviço',
     introducao: '',
     itensServico: [
-      { id: 'i1', descricao: 'Alambrado', unidade: 'm', quantidade: 50, valorUnitario: 30, valorTotal: 1500, calculo: null }
+      {
+        id: 'i1',
+        descricao: 'Alambrado',
+        unidade: 'm',
+        quantidade: 50,
+        valorUnitario: 30,
+        valorTotal: 1500,
+        calculo: null
+      }
     ],
     materiais: [],
     observacoes: [],
@@ -302,17 +327,29 @@ it('exporta e restaura relatório com anotação interna e comprovante em BLOB',
   const relatorio = repos.relatoriosRepo.list()[0]!
   const salvo = repos.relatoriosRepo.update(relatorio.id, {
     observacaoInterna: 'Backup: relatório conferido pela IA.',
-    anexos: [{
-      id: 'anexo-relatorio-backup', referenciaTipo: 'adiantamento', referenciaId: relatorio.adiantamentos[0]?.id ?? null,
-      titulo: 'Comprovante do sinal', descricao: 'Preservado no backup.', mime: 'image/png', largura: 1600, altura: 1200,
-      miniaturaDataUrl: PNG, imagemDataUrl: PNG
-    }]
+    anexos: [
+      {
+        id: 'anexo-relatorio-backup',
+        referenciaTipo: 'adiantamento',
+        referenciaId: relatorio.adiantamentos[0]?.id ?? null,
+        titulo: 'Comprovante do sinal',
+        descricao: 'Preservado no backup.',
+        mime: 'image/png',
+        largura: 1600,
+        altura: 1200,
+        miniaturaDataUrl: PNG,
+        imagemDataUrl: PNG
+      }
+    ]
   })!
   const { exportarDadosPara, importarDadosDe } = await import('../dados')
   const backup = join(raiz, 'backup-completo.gdo-backup')
   exportarDadosPara(backup)
   expect(existsSync(backup)).toBe(true)
-  repos.relatoriosRepo.update(salvo.id, { observacaoInterna: 'Alterado depois da exportação.', anexos: [] })
+  repos.relatoriosRepo.update(salvo.id, {
+    observacaoInterna: 'Alterado depois da exportação.',
+    anexos: []
+  })
 
   const resultado = importarDadosDe(backup, 'restaurar')
   expect(resultado.reiniciarNecessario).toBe(true)

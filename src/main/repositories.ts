@@ -1,7 +1,18 @@
 // Repositórios sobre SQLite. As assinaturas públicas são as mesmas de quando a
 // persistência era JSON — o IPC, o preload e o renderer não conhecem o banco.
 import { randomUUID } from 'crypto'
-import { all, get, run, tx, bool, paraBool, texto, numero, numeroOuNulo, textoOuNulo } from './db/sqlite'
+import {
+  all,
+  get,
+  run,
+  tx,
+  bool,
+  paraBool,
+  texto,
+  numero,
+  numeroOuNulo,
+  textoOuNulo
+} from './db/sqlite'
 import type { Linha } from './db/sqlite'
 import { bancoInicial, configIAPadrao } from './db/seeds'
 import type {
@@ -135,7 +146,15 @@ export const clientesRepo = {
     run(
       `INSERT INTO clientes (id, nome, tratamento, contato, observacao, ativo, criado_em)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [cliente.id, cliente.nome, cliente.tratamento, cliente.contato ?? null, cliente.observacao ?? null, bool(cliente.ativo), cliente.criadoEm]
+      [
+        cliente.id,
+        cliente.nome,
+        cliente.tratamento,
+        cliente.contato ?? null,
+        cliente.observacao ?? null,
+        bool(cliente.ativo),
+        cliente.criadoEm
+      ]
     )
     return cliente
   },
@@ -145,7 +164,14 @@ export const clientesRepo = {
     const novo = { ...atual, ...patch, id }
     run(
       `UPDATE clientes SET nome = ?, tratamento = ?, contato = ?, observacao = ?, ativo = ? WHERE id = ?`,
-      [novo.nome, novo.tratamento, novo.contato ?? null, novo.observacao ?? null, bool(novo.ativo), id]
+      [
+        novo.nome,
+        novo.tratamento,
+        novo.contato ?? null,
+        novo.observacao ?? null,
+        bool(novo.ativo),
+        id
+      ]
     )
     return novo
   },
@@ -156,7 +182,9 @@ export const clientesRepo = {
       [id, id]
     )
     if (uso) {
-      throw new Error('Este cliente já foi usado em documentos e não pode ser excluído. Marque-o como inativo.')
+      throw new Error(
+        'Este cliente já foi usado em documentos e não pode ser excluído. Marque-o como inativo.'
+      )
     }
     run('DELETE FROM clientes WHERE id = ?', [id])
   }
@@ -212,12 +240,13 @@ function repoTextoPadrao<T extends ObservacaoPadrao | FormaPagamentoPadrao>(
   update(id: string, patch: Partial<T>): T | null
   remove(id: string): void
 } {
-  const mapear = (l: Linha): T => ({
-    id: texto(l.id),
-    texto: texto(l.texto),
-    padrao: paraBool(l.padrao),
-    aplicacao: (texto(l.aplicacao) || 'orcamento') as AplicacaoTextoPadrao
-  }) as T
+  const mapear = (l: Linha): T =>
+    ({
+      id: texto(l.id),
+      texto: texto(l.texto),
+      padrao: paraBool(l.padrao),
+      aplicacao: (texto(l.aplicacao) || 'orcamento') as AplicacaoTextoPadrao
+    }) as T
 
   return {
     list: () => all(`SELECT * FROM ${tabela} ORDER BY ordem, rowid`).map(mapear),
@@ -344,16 +373,24 @@ function paraOrcamento(l: Linha, filhos: boolean, comMiniaturas = filhos): Orcam
     titulo: texto(l.titulo),
     introducao: textoOuNulo(l.introducao) ?? '',
     itensServico: filhos
-      ? all('SELECT * FROM itens_servico WHERE orcamento_id = ? ORDER BY ordem', [id]).map(paraItemServico)
+      ? all('SELECT * FROM itens_servico WHERE orcamento_id = ? ORDER BY ordem', [id]).map(
+          paraItemServico
+        )
       : [],
     materiais: filhos
       ? all('SELECT * FROM materiais WHERE orcamento_id = ? ORDER BY ordem', [id]).map(paraMaterial)
       : [],
     observacoes: filhos
-      ? all(`SELECT * FROM orcamento_textos WHERE orcamento_id = ? AND tipo = 'observacao' ORDER BY ordem`, [id]).map(paraTexto)
+      ? all(
+          `SELECT * FROM orcamento_textos WHERE orcamento_id = ? AND tipo = 'observacao' ORDER BY ordem`,
+          [id]
+        ).map(paraTexto)
       : [],
     pagamentos: filhos
-      ? all(`SELECT * FROM orcamento_textos WHERE orcamento_id = ? AND tipo = 'pagamento' ORDER BY ordem`, [id]).map(paraTexto)
+      ? all(
+          `SELECT * FROM orcamento_textos WHERE orcamento_id = ? AND tipo = 'pagamento' ORDER BY ordem`,
+          [id]
+        ).map(paraTexto)
       : [],
     anexos: filhos
       ? all(
@@ -408,14 +445,10 @@ function gravarFilhos(orcamentoId: string, orc: Orcamento): void {
 
   const gravarTextos = (itens: ItemTexto[], tipo: 'observacao' | 'pagamento'): void =>
     itens.forEach((t, ordem) => {
-      run(`INSERT INTO orcamento_textos (id, orcamento_id, tipo, ordem, texto, origem_padrao_id) VALUES (?, ?, ?, ?, ?, ?)`, [
-        t.id || randomUUID(),
-        orcamentoId,
-        tipo,
-        ordem,
-        t.texto,
-        t.origemPadraoId ?? null
-      ])
+      run(
+        `INSERT INTO orcamento_textos (id, orcamento_id, tipo, ordem, texto, origem_padrao_id) VALUES (?, ?, ?, ?, ?, ?)`,
+        [t.id || randomUUID(), orcamentoId, tipo, ordem, t.texto, t.origemPadraoId ?? null]
+      )
     })
   gravarTextos(orc.observacoes ?? [], 'observacao')
   gravarTextos(orc.pagamentos ?? [], 'pagamento')
@@ -446,14 +479,10 @@ function gravarAnexos(orcamentoId: string, anexos: AnexoOrcamento[]): void {
         [a.itemServicoId ?? null, ordem, a.titulo, a.descricao, id]
       )
       if (imagem) {
-        run(`UPDATE anexos SET imagem = ?, miniatura = ?, mime = ?, largura = ?, altura = ? WHERE id = ?`, [
-          imagem,
-          miniatura,
-          a.mime,
-          a.largura,
-          a.altura,
-          id
-        ])
+        run(
+          `UPDATE anexos SET imagem = ?, miniatura = ?, mime = ?, largura = ?, altura = ? WHERE id = ?`,
+          [imagem, miniatura, a.mime, a.largura, a.altura, id]
+        )
       }
     } else {
       run(
@@ -502,7 +531,10 @@ function seqAtual(): number {
 /** Orçamento que ocupa o número, ignorando opcionalmente um id (o próprio). */
 function donoDoNumero(numero: number, ignorarId?: string): Linha | null {
   return ignorarId
-    ? get('SELECT id, destinatario FROM orcamentos WHERE numero = ? AND id <> ?', [numero, ignorarId])
+    ? get('SELECT id, destinatario FROM orcamentos WHERE numero = ? AND id <> ?', [
+        numero,
+        ignorarId
+      ])
     : get('SELECT id, destinatario FROM orcamentos WHERE numero = ?', [numero])
 }
 
@@ -539,7 +571,9 @@ function validarNumero(numero: number, ignorarId?: string): ResultadoNumeracao |
 
 export const orcamentosRepo = {
   list: (): Orcamento[] =>
-    all('SELECT * FROM orcamentos ORDER BY criado_em DESC').map((l) => paraOrcamento(l, true, false)),
+    all('SELECT * FROM orcamentos ORDER BY criado_em DESC').map((l) =>
+      paraOrcamento(l, true, false)
+    ),
 
   get: (id: string): Orcamento | null => {
     const l = get('SELECT * FROM orcamentos WHERE id = ?', [id])
@@ -706,7 +740,10 @@ export const orcamentosRepo = {
       gravarFilhos(novoId, {
         ...original,
         id: novoId,
-        itensServico: original.itensServico.map((i) => ({ ...i, id: mapaItens.get(i.id) as string })),
+        itensServico: original.itensServico.map((i) => ({
+          ...i,
+          id: mapaItens.get(i.id) as string
+        })),
         materiais: original.materiais.map((m) => ({ ...m, id: randomUUID() })),
         observacoes: original.observacoes.map((o) => ({ ...o, id: randomUUID() })),
         pagamentos: original.pagamentos.map((p) => ({ ...p, id: randomUUID() })),
@@ -719,7 +756,7 @@ export const orcamentosRepo = {
           [
             randomUUID(),
             novoId,
-            a.itemServicoId ? mapaItens.get(a.itemServicoId) ?? null : null,
+            a.itemServicoId ? (mapaItens.get(a.itemServicoId) ?? null) : null,
             ordem,
             a.id
           ]
@@ -756,13 +793,21 @@ function paraRelatorio(l: Linha, filhos: boolean, comMiniaturas = filhos): Relat
   const clienteId = textoOuNulo(l.cliente_id)
   const cliente = clienteId ? clientesRepo.get(clienteId) : null
   const itensServico = filhos
-    ? all('SELECT * FROM relatorio_itens_servico WHERE relatorio_id = ? ORDER BY ordem', [id]).map(paraItemServico)
+    ? all('SELECT * FROM relatorio_itens_servico WHERE relatorio_id = ? ORDER BY ordem', [id]).map(
+        paraItemServico
+      )
     : []
   const adiantamentos = filhos
-    ? all(`SELECT * FROM relatorio_lancamentos WHERE relatorio_id = ? AND tipo = 'adiantamento' ORDER BY ordem`, [id]).map(paraLancamentoRelatorio)
+    ? all(
+        `SELECT * FROM relatorio_lancamentos WHERE relatorio_id = ? AND tipo = 'adiantamento' ORDER BY ordem`,
+        [id]
+      ).map(paraLancamentoRelatorio)
     : []
   const reembolsos = filhos
-    ? all(`SELECT * FROM relatorio_lancamentos WHERE relatorio_id = ? AND tipo = 'reembolso' ORDER BY ordem`, [id]).map(paraLancamentoRelatorio)
+    ? all(
+        `SELECT * FROM relatorio_lancamentos WHERE relatorio_id = ? AND tipo = 'reembolso' ORDER BY ordem`,
+        [id]
+      ).map(paraLancamentoRelatorio)
     : []
   const origemId = textoOuNulo(l.origem_orcamento_id)
   const saldo = numero(l.saldo)
@@ -779,10 +824,16 @@ function paraRelatorio(l: Linha, filhos: boolean, comMiniaturas = filhos): Relat
     adiantamentos,
     reembolsos,
     observacoes: filhos
-      ? all(`SELECT * FROM relatorio_textos WHERE relatorio_id = ? AND tipo = 'observacao' ORDER BY ordem`, [id]).map(paraTexto)
+      ? all(
+          `SELECT * FROM relatorio_textos WHERE relatorio_id = ? AND tipo = 'observacao' ORDER BY ordem`,
+          [id]
+        ).map(paraTexto)
       : [],
     pagamentos: filhos
-      ? all(`SELECT * FROM relatorio_textos WHERE relatorio_id = ? AND tipo = 'pagamento' ORDER BY ordem`, [id]).map(paraTexto)
+      ? all(
+          `SELECT * FROM relatorio_textos WHERE relatorio_id = ? AND tipo = 'pagamento' ORDER BY ordem`,
+          [id]
+        ).map(paraTexto)
       : [],
     anexos: filhos
       ? all(
@@ -816,7 +867,9 @@ function paraRelatorio(l: Linha, filhos: boolean, comMiniaturas = filhos): Relat
 
 function gravarAnexosRelatorio(relatorioId: string, anexos: AnexoRelatorio[]): void {
   const existentes = new Set(
-    all('SELECT id FROM relatorio_anexos WHERE relatorio_id = ?', [relatorioId]).map((l) => texto(l.id))
+    all('SELECT id FROM relatorio_anexos WHERE relatorio_id = ?', [relatorioId]).map((l) =>
+      texto(l.id)
+    )
   )
   const mantidos = new Set<string>()
   anexos.forEach((a, ordem) => {
@@ -830,14 +883,10 @@ function gravarAnexosRelatorio(relatorioId: string, anexos: AnexoRelatorio[]): v
         [a.referenciaTipo, a.referenciaId ?? null, ordem, a.titulo, a.descricao, id]
       )
       if (imagem) {
-        run(`UPDATE relatorio_anexos SET imagem = ?, miniatura = ?, mime = ?, largura = ?, altura = ? WHERE id = ?`, [
-          imagem,
-          miniatura,
-          a.mime,
-          a.largura,
-          a.altura,
-          id
-        ])
+        run(
+          `UPDATE relatorio_anexos SET imagem = ?, miniatura = ?, mime = ?, largura = ?, altura = ? WHERE id = ?`,
+          [imagem, miniatura, a.mime, a.largura, a.altura, id]
+        )
       }
     } else {
       run(
@@ -877,8 +926,16 @@ function gravarFilhosRelatorio(relatorioId: string, rel: Relatorio): void {
          (id, relatorio_id, ordem, servico_id, descricao, unidade, quantidade, valor_unitario, valor_total, calculo_json)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        i.id || randomUUID(), relatorioId, ordem, i.servicoId ?? null, i.descricao, i.unidade,
-        i.quantidade, i.valorUnitario, i.valorTotal, i.calculo ? JSON.stringify(i.calculo) : null
+        i.id || randomUUID(),
+        relatorioId,
+        ordem,
+        i.servicoId ?? null,
+        i.descricao,
+        i.unidade,
+        i.quantidade,
+        i.valorUnitario,
+        i.valorTotal,
+        i.calculo ? JSON.stringify(i.calculo) : null
       ]
     )
   })
@@ -941,7 +998,9 @@ function validarNumeroRelatorio(n: number, ignorarId?: string): ResultadoNumerac
 
 export const relatoriosRepo = {
   list: (): Relatorio[] =>
-    all('SELECT * FROM relatorios ORDER BY criado_em DESC').map((l) => paraRelatorio(l, true, false)),
+    all('SELECT * FROM relatorios ORDER BY criado_em DESC').map((l) =>
+      paraRelatorio(l, true, false)
+    ),
 
   get: (id: string): Relatorio | null => {
     const l = get('SELECT * FROM relatorios WHERE id = ?', [id])
@@ -951,7 +1010,9 @@ export const relatoriosRepo = {
   proximoNumero: (): number => proximoNumeroRelatorio(),
 
   numeracao: (): InfoNumeracao => {
-    const agregado = get('SELECT COALESCE(MAX(numero), 0) AS maior, COUNT(*) AS total FROM relatorios')
+    const agregado = get(
+      'SELECT COALESCE(MAX(numero), 0) AS maior, COUNT(*) AS total FROM relatorios'
+    )
     return {
       proximoNumero: proximoNumeroRelatorio(),
       maiorEmUso: numero(agregado?.maior),
@@ -1005,10 +1066,25 @@ export const relatoriosRepo = {
             total_servicos, total_adiantamentos, total_reembolsos, saldo, criado_em, atualizado_em)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          rel.id, rel.numero, rel.data, rel.clienteId ?? null, rel.destinatario, rel.formato, rel.titulo,
-          rel.introducao ?? null, rel.observacaoInterna ?? null, rel.status, rel.origemOrcamento?.id ?? null,
-          rel.origemOrcamento?.numero ?? null, rel.origemOrcamento?.cliente ?? null,
-          totais.servicos, totais.adiantamentos, totais.reembolsos, totais.saldo, rel.criadoEm, rel.atualizadoEm
+          rel.id,
+          rel.numero,
+          rel.data,
+          rel.clienteId ?? null,
+          rel.destinatario,
+          rel.formato,
+          rel.titulo,
+          rel.introducao ?? null,
+          rel.observacaoInterna ?? null,
+          rel.status,
+          rel.origemOrcamento?.id ?? null,
+          rel.origemOrcamento?.numero ?? null,
+          rel.origemOrcamento?.cliente ?? null,
+          totais.servicos,
+          totais.adiantamentos,
+          totais.reembolsos,
+          totais.saldo,
+          rel.criadoEm,
+          rel.atualizadoEm
         ]
       )
       gravarFilhosRelatorio(rel.id, rel)
@@ -1027,10 +1103,23 @@ export const relatoriosRepo = {
            status = ?, origem_orcamento_id = ?, origem_orcamento_numero = ?, origem_orcamento_cliente = ?,
            total_servicos = ?, total_adiantamentos = ?, total_reembolsos = ?, saldo = ?, atualizado_em = ? WHERE id = ?`,
         [
-          novo.data, novo.clienteId ?? null, novo.destinatario, novo.formato, novo.titulo, novo.introducao ?? null, novo.observacaoInterna ?? null,
-          novo.status, novo.origemOrcamento?.id ?? null, novo.origemOrcamento?.numero ?? null,
-          novo.origemOrcamento?.cliente ?? null, novo.totais.servicos, novo.totais.adiantamentos,
-          novo.totais.reembolsos, novo.totais.saldo, novo.atualizadoEm, id
+          novo.data,
+          novo.clienteId ?? null,
+          novo.destinatario,
+          novo.formato,
+          novo.titulo,
+          novo.introducao ?? null,
+          novo.observacaoInterna ?? null,
+          novo.status,
+          novo.origemOrcamento?.id ?? null,
+          novo.origemOrcamento?.numero ?? null,
+          novo.origemOrcamento?.cliente ?? null,
+          novo.totais.servicos,
+          novo.totais.adiantamentos,
+          novo.totais.reembolsos,
+          novo.totais.saldo,
+          novo.atualizadoEm,
+          id
         ]
       )
       gravarFilhosRelatorio(id, novo)
@@ -1059,10 +1148,16 @@ export const relatoriosRepo = {
         return { ...i, id, calculo: i.calculo ? structuredClone(i.calculo) : null }
       })
       const idsObsAmbos = new Set(
-        observacoesRepo.list().filter((o) => o.aplicacao === 'ambos').map((o) => o.id)
+        observacoesRepo
+          .list()
+          .filter((o) => o.aplicacao === 'ambos')
+          .map((o) => o.id)
       )
       const idsPagAmbos = new Set(
-        pagamentosRepo.list().filter((p) => p.aplicacao === 'ambos').map((p) => p.id)
+        pagamentosRepo
+          .list()
+          .filter((p) => p.aplicacao === 'ambos')
+          .map((p) => p.id)
       )
       const copiarTextos = (itens: ItemTexto[], permitidos: Set<string>): ItemTexto[] =>
         itens
@@ -1091,14 +1186,16 @@ export const relatoriosRepo = {
         },
         totais: calcularTotaisRelatorio(itensServico, [], [])
       })
-      orc.anexos.filter((a) => a.itemServicoId && mapaItens.has(a.itemServicoId)).forEach((a, ordem) => {
-        run(
-          `INSERT INTO relatorio_anexos
+      orc.anexos
+        .filter((a) => a.itemServicoId && mapaItens.has(a.itemServicoId))
+        .forEach((a, ordem) => {
+          run(
+            `INSERT INTO relatorio_anexos
              (id, relatorio_id, referencia_tipo, referencia_id, ordem, titulo, descricao, mime, largura, altura, imagem, miniatura)
            SELECT ?, ?, 'servico', ?, ?, titulo, descricao, mime, largura, altura, imagem, miniatura FROM anexos WHERE id = ?`,
-          [randomUUID(), rel.id, mapaItens.get(a.itemServicoId as string), ordem, a.id]
-        )
-      })
+            [randomUUID(), rel.id, mapaItens.get(a.itemServicoId as string), ordem, a.id]
+          )
+        })
       return relatoriosRepo.get(rel.id)
     })
 }

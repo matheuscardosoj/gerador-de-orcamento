@@ -42,7 +42,9 @@ function Sidebar(): JSX.Element {
       <nav className="flex-1 space-y-1 p-3">
         {itens.map((item) => {
           const ativo =
-            rota.nome === item.nome || (item.nome === 'historico' && rota.nome === 'editor') || (item.nome === 'historicoRelatorios' && rota.nome === 'editorRelatorio')
+            rota.nome === item.nome ||
+            (item.nome === 'historico' && rota.nome === 'editor') ||
+            (item.nome === 'historicoRelatorios' && rota.nome === 'editorRelatorio')
           return (
             <button
               key={item.nome}

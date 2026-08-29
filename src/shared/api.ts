@@ -52,8 +52,7 @@ export interface InfoNumeracao {
 }
 
 export type SugestaoObservacaoEntrada =
-  | { tipo: 'orcamento'; documento: Orcamento }
-  | { tipo: 'relatorio'; documento: Relatorio }
+  { tipo: 'orcamento'; documento: Orcamento } | { tipo: 'relatorio'; documento: Relatorio }
 
 export interface DocumentoResultado {
   /** Caminho do arquivo salvo, ou null se o usuário cancelou. */
@@ -112,7 +111,10 @@ export interface AppApi {
     remove(id: string): Promise<void>
     numeracao(): Promise<InfoNumeracao>
     definirProximoNumero(numero: number): Promise<ResultadoNumeracao>
-    alterarNumero(id: string, numero: number): Promise<ResultadoNumeracao & { relatorio?: Relatorio }>
+    alterarNumero(
+      id: string,
+      numero: number
+    ): Promise<ResultadoNumeracao & { relatorio?: Relatorio }>
     criarDeOrcamento(orcamentoId: string): Promise<Relatorio | null>
   }
   anexos: {

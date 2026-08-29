@@ -9,14 +9,14 @@ aplicar margem de lucro e gerar orçamentos no layout da VS Prestadora, exportan
 
 ## Scripts
 
-| Comando | O que faz |
-|---|---|
-| `npm run dev` | Roda em modo desenvolvimento (HMR) |
-| `npm run build` | Compila main + preload + renderer para `out/` |
-| `npm run start` | Compila e abre o app empacotado (preview) |
-| `npm run test` | Roda os testes (motor de cálculo, banco e geração de DOCX) |
-| `npm run ia` | Baixa o runtime de IA local para `resources/ia/` (~1,2 GB) |
-| `npm run dist` | Gera o instalador `.exe` (roda o `npm run ia` antes, via `predist`) |
+| Comando         | O que faz                                                           |
+| --------------- | ------------------------------------------------------------------- |
+| `npm run dev`   | Roda em modo desenvolvimento (HMR)                                  |
+| `npm run build` | Compila main + preload + renderer para `out/`                       |
+| `npm run start` | Compila e abre o app empacotado (preview)                           |
+| `npm run test`  | Roda os testes (motor de cálculo, banco e geração de DOCX)          |
+| `npm run ia`    | Baixa o runtime de IA local para `resources/ia/` (~1,2 GB)          |
+| `npm run dist`  | Gera o instalador `.exe` (roda o `npm run ia` antes, via `predist`) |
 
 > **Build do instalador no Windows:** o `electron-builder` baixa o `winCodeSign`,
 > que contém symlinks do macOS que o Windows só cria com o **Modo Desenvolvedor**
@@ -57,7 +57,7 @@ própria máquina**, sem internet. `npm run ia` baixa para `resources/ia/`:
 
 Esses arquivos vão dentro do instalador (`extraResources`), então o `.exe` é
 autossuficiente. O servidor sobe sob demanda e se encerra após 5 minutos ocioso.
-Em *Configurações → IA local* dá para trocar para um **Ollama** já instalado ou
+Em _Configurações → IA local_ dá para trocar para um **Ollama** já instalado ou
 desativar a sugestão. Sem os arquivos (ex.: `npm run dev` sem ter rodado `npm run ia`),
 o app tenta o Ollama automaticamente.
 
