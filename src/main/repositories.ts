@@ -44,7 +44,7 @@ import type {
 import type { InfoNumeracao, ResultadoNumeracao } from '@shared/api'
 import { calcularTotaisRelatorio } from '@shared/relatorio'
 import { normalizarDestinatario } from '@shared/documento/comum'
-import { dataCivilHoje } from '@shared/format'
+import { dataCivilHoje, normalizarDataCivil } from '@shared/format'
 import {
   exigirValidacao,
   validarParametrosFinanceiros,
@@ -119,7 +119,17 @@ export const parametrosRepo = {
 
 // --------------------------------------------------------------- Config IA
 export const configIARepo = {
-  get: (): ConfigIA => lerConfig('configIA', configIAPadrao),
+  get: (): ConfigIA => {
+    const config = lerConfig('configIA', configIAPadrao)
+    if (!validarUrlOllamaLocal(config.urlOllama).length) return config
+    // Bancos legados podiam guardar um endpoint remoto. Não o reutilizamos
+    // silenciosamente, pois o resumo enviado à IA contém dados do documento.
+    return {
+      ...config,
+      modo: config.modo === 'ollama' ? 'desligada' : config.modo,
+      urlOllama: configIAPadrao.urlOllama
+    }
+  },
   save: (patch: Partial<ConfigIA>): ConfigIA => {
     const atual = { ...configIARepo.get(), ...patch }
     if (atual.modo === 'ollama') exigirValidacao(validarUrlOllamaLocal(atual.urlOllama))
@@ -379,7 +389,7 @@ function paraOrcamento(l: Linha, filhos: boolean, comMiniaturas = filhos): Orcam
   return {
     id,
     numero: numero(l.numero),
-    data: texto(l.data),
+    data: normalizarDataCivil(texto(l.data)),
     clienteId,
     destinatario: cliente ? cliente.nome : normalizarDestinatario(texto(l.destinatario)),
     formato: texto(l.formato) as FormatoOrcamento,
@@ -440,7 +450,7 @@ function listarResumosOrcamento(): ResumoOrcamento[] {
     return {
       id,
       numero: numero(linha.numero),
-      data: texto(linha.data),
+      data: normalizarDataCivil(texto(linha.data)),
       destinatario: normalizarDestinatario(texto(linha.destinatario_resumo)),
       observacaoInterna: textoOuNulo(linha.observacao_interna) ?? '',
       valorTotal: numero(linha.valor_total),
@@ -861,7 +871,7 @@ function paraRelatorio(l: Linha, filhos: boolean, comMiniaturas = filhos): Relat
   return {
     id,
     numero: numero(l.numero),
-    data: texto(l.data),
+    data: normalizarDataCivil(texto(l.data)),
     clienteId,
     destinatario: cliente ? cliente.nome : normalizarDestinatario(texto(l.destinatario)),
     formato: texto(l.formato) as FormatoOrcamento,
@@ -924,7 +934,7 @@ function listarResumosRelatorio(): ResumoRelatorio[] {
     return {
       id: texto(linha.id),
       numero: numero(linha.numero),
-      data: texto(linha.data),
+      data: normalizarDataCivil(texto(linha.data)),
       destinatario: normalizarDestinatario(texto(linha.destinatario_resumo)),
       observacaoInterna: textoOuNulo(linha.observacao_interna) ?? '',
       status: texto(linha.status) as StatusRelatorio,

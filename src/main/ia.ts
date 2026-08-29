@@ -12,6 +12,7 @@ import { join } from 'path'
 import { createServer } from 'net'
 import { cpus } from 'os'
 import { configIARepo } from './repositories'
+import { validarUrlOllamaLocal } from '@shared/validacao'
 import { formatDataCurta, formatMoeda } from '@shared/format'
 import type { Orcamento, Relatorio, StatusIA, ConfigIA } from '@shared/types'
 import type { SugestaoObservacaoEntrada } from '@shared/api'
@@ -198,6 +199,8 @@ async function chamarEmbutida(prompt: string, sistema: string): Promise<string> 
 }
 
 async function chamarOllama(cfg: ConfigIA, prompt: string, sistema: string): Promise<string> {
+  if (validarUrlOllamaLocal(cfg.urlOllama).length)
+    throw new Error('A URL do Ollama precisa apontar para esta máquina.')
   const r = await fetch(`${cfg.urlOllama.replace(/\/$/, '')}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -217,6 +220,7 @@ async function chamarOllama(cfg: ConfigIA, prompt: string, sistema: string): Pro
 }
 
 async function ollamaAtivo(cfg: ConfigIA): Promise<boolean> {
+  if (validarUrlOllamaLocal(cfg.urlOllama).length) return false
   try {
     const r = await fetch(`${cfg.urlOllama.replace(/\/$/, '')}/api/tags`)
     return r.ok

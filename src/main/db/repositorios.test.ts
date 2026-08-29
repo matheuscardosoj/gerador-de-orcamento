@@ -4,7 +4,10 @@ import { afterAll, beforeAll, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { Database } from 'node-sqlite3-wasm'
 import type { Orcamento } from '@shared/types'
+import { aplicarMigracoes } from './schema'
+import { run } from './sqlite'
 
 const raiz = mkdtempSync(join(tmpdir(), 'orc-teste-'))
 
@@ -95,6 +98,7 @@ it('importa o banco JSON preservando números, datas e filhos', () => {
   expect(primeiroResumo.servicosBusca).toEqual(['Cerca'])
   expect('materiais' in primeiroResumo).toBe(false)
   const primeiro = repos.orcamentosRepo.get(primeiroResumo.id)!
+  expect(primeiro.data).toBe('2026-05-04')
   expect(primeiro.criadoEm).toBe('2026-01-01T12:00:00.000Z')
   expect(primeiro.itensServico).toHaveLength(1)
   expect(primeiro.itensServico[0].valorTotal).toBe(800)
@@ -106,6 +110,27 @@ it('importa o banco JSON preservando números, datas e filhos', () => {
   // O arquivo legado é arquivado, não apagado.
   expect(existsSync(join(raiz, 'data', 'banco.json'))).toBe(false)
   expect(readdirSync(join(raiz, 'data')).some((f) => f.includes('banco.json.migrado-'))).toBe(true)
+})
+
+it('migra datas ISO de um banco SQLite v5 para a data civil', () => {
+  const caminho = join(raiz, 'datas-v5.db')
+  const banco = new Database(caminho)
+  try {
+    banco.exec(`
+      CREATE TABLE orcamentos (data TEXT NOT NULL);
+      CREATE TABLE relatorios (data TEXT NOT NULL);
+      INSERT INTO orcamentos (data) VALUES ('2026-05-04T12:00:00.000Z');
+      INSERT INTO relatorios (data) VALUES ('2026-05-05T00:00:00.000Z');
+      PRAGMA user_version = 5;
+    `)
+    aplicarMigracoes(banco)
+
+    expect(banco.get('SELECT data FROM orcamentos')?.data).toBe('2026-05-04')
+    expect(banco.get('SELECT data FROM relatorios')?.data).toBe('2026-05-05')
+    expect(banco.get('PRAGMA user_version')?.user_version).toBe(6)
+  } finally {
+    banco.close()
+  }
 })
 
 it('gera relatório independente da proposta, com totais financeiros próprios', () => {
@@ -175,6 +200,7 @@ it('numera novos orçamentos a partir do contador', () => {
   expect(repos.orcamentosRepo.proximoNumero()).toBe(3)
   const novo = novoOrcamento()
   expect(novo.numero).toBe(3)
+  expect(novo.data).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   expect(novo.observacaoInterna).toBe('Cliente pediu para revisar em agosto.')
   repos.orcamentosRepo.remove(novo.id)
 })
@@ -332,6 +358,20 @@ it('salva e relê a configuração de IA', () => {
   ).toThrow('URL HTTP local')
 })
 
+it('desativa configuração Ollama legada que aponta para fora da máquina', () => {
+  const anterior = repos.configIARepo.get()
+  run('UPDATE configuracoes SET valor = ? WHERE chave = ?', [
+    JSON.stringify({ ...anterior, modo: 'ollama', urlOllama: 'https://api.externa.example' }),
+    'configIA'
+  ])
+
+  expect(repos.configIARepo.get()).toMatchObject({
+    modo: 'desligada',
+    urlOllama: 'http://localhost:11434'
+  })
+  repos.configIARepo.save(anterior)
+})
+
 it('não permite excluir cliente usado e permite inativá-lo', () => {
   const cliente = repos.clientesRepo.get('cli-1')!
   expect(() => repos.clientesRepo.remove(cliente.id)).toThrow('não pode ser excluído')
@@ -378,14 +418,21 @@ it('exporta e restaura relatório com anotação interna e comprovante em BLOB',
   expect(repos.anexosRelatorioRepo.buffer(restaurado.anexos[0].id)?.length).toBeGreaterThan(50)
 })
 
-it('mescla o mesmo backup de forma idempotente', async () => {
+it('não duplica documentos ao importar o próprio backup', async () => {
   const { exportarDadosPara, importarDadosDe } = await import('../dados')
   const backup = join(raiz, 'backup-idempotente.gdo-backup')
   exportarDadosPara(backup)
+  const orcamentosAntes = repos.orcamentosRepo.list().length
+  const relatoriosAntes = repos.relatoriosRepo.list().length
   const primeira = importarDadosDe(backup, 'mesclar')
   const segunda = importarDadosDe(backup, 'mesclar')
-  expect(primeira.importados.orcamentos + primeira.ignorados.orcamentos).toBeGreaterThan(0)
+  expect(primeira.importados.orcamentos).toBe(0)
+  expect(primeira.importados.relatorios).toBe(0)
+  expect(primeira.ignorados.orcamentos).toBe(orcamentosAntes)
+  expect(primeira.ignorados.relatorios).toBe(relatoriosAntes)
+  expect(primeira.renumerados).toEqual({ orcamentos: 0, relatorios: 0 })
   expect(segunda.importados.orcamentos).toBe(0)
   expect(segunda.importados.relatorios).toBe(0)
-  expect(segunda.ignorados.orcamentos).toBeGreaterThan(0)
+  expect(repos.orcamentosRepo.list()).toHaveLength(orcamentosAntes)
+  expect(repos.relatoriosRepo.list()).toHaveLength(relatoriosAntes)
 })

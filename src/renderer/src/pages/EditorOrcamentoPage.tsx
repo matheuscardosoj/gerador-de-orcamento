@@ -386,7 +386,7 @@ function DadosGeraisCard({
             onChange={(e) => {
               const status = e.target.value as Orcamento['status']
               if (status !== 'rascunho') {
-                const erros = validarOrcamentoFinal({ ...orc, status })
+                const erros = validarOrcamentoFinal(normalizarOrcamento({ ...orc, status }))
                 if (erros.length) {
                   onError(
                     `Complete o documento antes de alterar o status. ${mensagemValidacao(erros)}`

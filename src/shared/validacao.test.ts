@@ -3,6 +3,7 @@ import type { Orcamento, ParametrosFinanceiros, Relatorio } from './types'
 import {
   normalizarEspacos,
   normalizarOrcamento,
+  normalizarRelatorio,
   validarOrcamentoFinal,
   validarParametrosFinanceiros,
   validarRelatorioFinal,
@@ -117,6 +118,17 @@ describe('validação compartilhada', () => {
     })
     expect(normalizado.destinatario).toBe('VS Prestadora')
     expect(normalizado.introducao).toBe('Linha 1\nLinha 2')
+  })
+
+  it('aceita e persiste a parte civil de datas ISO legadas', () => {
+    const dataLegada = '2026-05-04T12:00:00.000Z'
+    const orcamentoLegado = normalizarOrcamento({ ...orcamento(), data: dataLegada })
+    const relatorioLegado = normalizarRelatorio({ ...relatorio(), data: dataLegada })
+
+    expect(orcamentoLegado.data).toBe('2026-05-04')
+    expect(relatorioLegado.data).toBe('2026-05-04')
+    expect(validarOrcamentoFinal({ ...orcamento(), data: dataLegada })).toEqual([])
+    expect(validarRelatorioFinal({ ...relatorio(), data: dataLegada })).toEqual([])
   })
 
   it('aceita apenas URL loopback para o Ollama', () => {

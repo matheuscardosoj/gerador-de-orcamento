@@ -60,7 +60,7 @@ function validar(caminho: string): void {
     const versao = Number(
       (fonte.get('PRAGMA user_version') as { user_version?: number } | null)?.user_version ?? 0
     )
-    if (versao < 1 || versao > 5)
+    if (versao < 1 || versao > 6)
       throw new Error(`Este backup usa uma versão de banco não suportada (${versao}).`)
     const obrigatorias = [
       'configuracoes',
@@ -469,6 +469,7 @@ function idLivre(
 function mesclar(fonte: Database): Resumo {
   const r = resumo()
   const origem = idOrigemFonte(fonte)
+  const mesmaOrigem = !origem.legado && origem.id === idOrigemAtual()
   const clientes = new Map<string, string>()
   const servicos = new Map<string, string>()
   const observacoes = new Map<string, string>()
@@ -492,12 +493,18 @@ function mesclar(fonte: Database): Resumo {
     pagamentosRepo.list().map((item) => [chaveTexto(item.texto, item.aplicacao), item] as const)
   )
   const chaveDocumento = (id: unknown): string => `${origem.id}:${String(id)}`
+  const documentoLocalDaMesmaOrigem = (tipo: 'orcamento' | 'relatorio', id: unknown): boolean => {
+    if (!mesmaOrigem) return false
+    const tabela = tipo === 'orcamento' ? 'orcamentos' : 'relatorios'
+    return Boolean(get(`SELECT 1 FROM ${tabela} WHERE id = ?`, [String(id)]))
+  }
   const jaImportado = (tipo: 'orcamento' | 'relatorio', id: unknown): boolean =>
     Boolean(
       get('SELECT 1 FROM importacoes_documentos WHERE tipo = ? AND origem_id = ?', [
         tipo,
         chaveDocumento(id)
       ]) ||
+      documentoLocalDaMesmaOrigem(tipo, id) ||
       (origem.legado &&
         get('SELECT 1 FROM importacoes_documentos WHERE tipo = ? AND origem_id = ?', [tipo, id]))
     )

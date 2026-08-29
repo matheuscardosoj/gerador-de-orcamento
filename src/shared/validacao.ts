@@ -7,6 +7,7 @@ import type {
   ParametrosFinanceiros,
   Relatorio
 } from './types'
+import { normalizarDataCivil } from './format'
 
 export interface ErroValidacao {
   campo: string
@@ -49,6 +50,7 @@ const normalizarLancamento = (item: LancamentoRelatorio): LancamentoRelatorio =>
 export function normalizarOrcamento<T extends Orcamento>(orcamento: T): T {
   return {
     ...orcamento,
+    data: normalizarDataCivil(orcamento.data),
     destinatario: normalizarEspacos(orcamento.destinatario),
     titulo: normalizarEspacos(orcamento.titulo),
     introducao: normalizarTextoLivre(orcamento.introducao),
@@ -69,6 +71,7 @@ export function normalizarOrcamento<T extends Orcamento>(orcamento: T): T {
 export function normalizarRelatorio<T extends Relatorio>(relatorio: T): T {
   return {
     ...relatorio,
+    data: normalizarDataCivil(relatorio.data),
     destinatario: normalizarEspacos(relatorio.destinatario),
     titulo: normalizarEspacos(relatorio.titulo),
     introducao: normalizarTextoLivre(relatorio.introducao),
@@ -88,8 +91,9 @@ export function normalizarRelatorio<T extends Relatorio>(relatorio: T): T {
 }
 
 function dataValida(data: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) return false
-  const [ano, mes, dia] = data.split('-').map(Number)
+  const civil = normalizarDataCivil(data)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(civil)) return false
+  const [ano, mes, dia] = civil.split('-').map(Number)
   const valor = new Date(Date.UTC(ano, mes - 1, dia))
   return (
     valor.getUTCFullYear() === ano && valor.getUTCMonth() === mes - 1 && valor.getUTCDate() === dia

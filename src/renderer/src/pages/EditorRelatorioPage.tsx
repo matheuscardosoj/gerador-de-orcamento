@@ -293,7 +293,9 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
               onChange={(e) => {
                 const status = e.target.value as Relatorio['status']
                 if (status !== 'rascunho') {
-                  const erros = validarRelatorioFinal({ ...rel, status, totais })
+                  const erros = validarRelatorioFinal(
+                    normalizarRelatorio({ ...rel, status, totais })
+                  )
                   if (erros.length) {
                     setErro(
                       `Complete o relatório antes de alterar o status. ${mensagemValidacao(erros)}`
