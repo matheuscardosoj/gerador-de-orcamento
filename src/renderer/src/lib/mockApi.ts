@@ -11,6 +11,7 @@ import type {
   Relatorio
 } from '@shared/types'
 import { calcularTotaisRelatorio } from '@shared/relatorio'
+import { resumirOrcamento, resumirRelatorio } from '@shared/historico'
 
 const uid = (): string => Math.random().toString(36).slice(2)
 
@@ -170,7 +171,10 @@ export function criarMockApi(): AppApi {
   }
 
   return {
-    aplicativo: { versao: async () => '1.2.2-dev' },
+    aplicativo: {
+      versao: async () => '1.3.0-dev',
+      alteracoesPendentes: async () => undefined
+    },
     empresa: {
       get: async () => clone(db.empresa),
       save: async (patch) => {
@@ -202,7 +206,7 @@ export function criarMockApi(): AppApi {
       (v) => (db.pagamentosPadrao = v)
     ) as AppApi['pagamentos'],
     orcamentos: {
-      list: async () => clone(db.orcamentos),
+      list: async () => clone(db.orcamentos.map(resumirOrcamento)),
       get: async (id) => {
         const o = db.orcamentos.find((x) => x.id === id)
         return o ? clone(o) : null
@@ -268,7 +272,7 @@ export function criarMockApi(): AppApi {
       }
     },
     relatorios: {
-      list: async () => clone(db.relatorios ?? []),
+      list: async () => clone((db.relatorios ?? []).map(resumirRelatorio)),
       get: async (id) => clone((db.relatorios ?? []).find((x) => x.id === id) ?? null),
       proximoNumero: async () => {
         let n = (db.seqRelatorio ?? 0) + 1

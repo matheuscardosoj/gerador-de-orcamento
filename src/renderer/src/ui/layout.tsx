@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react'
+import { useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { cn } from './primitives'
 
 /** Cabeçalho + container com largura máxima para as páginas. */
@@ -48,15 +48,32 @@ export function Tabs<T extends string>({
   atual: T
   onChange: (id: T) => void
 }): JSX.Element {
+  const botoes = useRef<Array<HTMLButtonElement | null>>([])
+  const moverFoco = (evento: KeyboardEvent<HTMLButtonElement>, indice: number): void => {
+    let destino = indice
+    if (evento.key === 'ArrowRight') destino = (indice + 1) % tabs.length
+    else if (evento.key === 'ArrowLeft') destino = (indice - 1 + tabs.length) % tabs.length
+    else if (evento.key === 'Home') destino = 0
+    else if (evento.key === 'End') destino = tabs.length - 1
+    else return
+    evento.preventDefault()
+    onChange(tabs[destino].id)
+    botoes.current[destino]?.focus()
+  }
   return (
     <div className="mb-5 flex flex-wrap gap-1 border-b border-slate-200" role="tablist">
-      {tabs.map((t) => (
+      {tabs.map((t, indice) => (
         <button
           key={t.id}
+          ref={(elemento) => {
+            botoes.current[indice] = elemento
+          }}
           type="button"
           role="tab"
           aria-selected={atual === t.id}
+          tabIndex={atual === t.id ? 0 : -1}
           onClick={() => onChange(t.id)}
+          onKeyDown={(evento) => moverFoco(evento, indice)}
           className={cn(
             '-mb-px whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
             atual === t.id

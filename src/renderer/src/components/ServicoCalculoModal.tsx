@@ -14,11 +14,13 @@ import {
   Field,
   IconButton,
   Input,
+  Modal,
   NumberField,
   Select,
   cn
 } from '../ui/primitives'
 import { novoId, type ResultadoServico } from './tipos'
+import { mensagemValidacao, validarEntradaCalculo } from '@shared/validacao'
 
 interface Props {
   parametros: ParametrosFinanceiros
@@ -85,6 +87,7 @@ export function ServicoCalculoModal({
   const [e, setE] = useState<EntradaCalculo>(() =>
     normalizarEntrada(entradaInicial ?? criarEntradaCalculo(parametros))
   )
+  const [erro, setErro] = useState<string | null>(null)
 
   const set = (patch: Partial<EntradaCalculo>): void => setE((prev) => ({ ...prev, ...patch }))
   const resultado = useMemo(() => calcularCustoServico(e), [e])
@@ -92,9 +95,20 @@ export function ServicoCalculoModal({
   const valorUnitario = quantidade > 0 ? resultado.precoFinal / quantidade : resultado.precoFinal
 
   const confirmar = (): void => {
+    const erros = validarEntradaCalculo(e)
+    if (!descricao.trim())
+      erros.unshift({ campo: 'descricao', mensagem: 'Informe a descrição do serviço.' })
+    if (!unidade.trim())
+      erros.unshift({ campo: 'unidade', mensagem: 'Informe a unidade do serviço.' })
+    if (!Number.isFinite(quantidade) || quantidade <= 0)
+      erros.unshift({ campo: 'quantidade', mensagem: 'A quantidade deve ser maior que zero.' })
+    if (erros.length) {
+      setErro(mensagemValidacao(erros))
+      return
+    }
     onConfirm({
-      descricao: descricao.trim() || 'Serviço',
-      unidade,
+      descricao: descricao.trim(),
+      unidade: unidade.trim(),
       quantidade,
       valorUnitario,
       valorTotal: resultado.precoFinal,
@@ -103,150 +117,149 @@ export function ServicoCalculoModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-slate-50 shadow-2xl">
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
-          <h3 className="text-base font-semibold text-slate-800">Calcular custo do serviço</h3>
-          <button
-            onClick={onCancel}
-            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"
-            aria-label="Fechar"
-          >
-            <X aria-hidden className="h-[18px] w-[18px]" />
-          </button>
+    <Modal open onClose={onCancel} title="Calcular custo do serviço" size="2xl">
+      {erro && (
+        <p role="alert" className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          {erro}
+        </p>
+      )}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+        {/* Coluna de entradas */}
+        <div className="space-y-4">
+          <Bloco titulo="Serviço">
+            <div className="space-y-3">
+              <Field label="Descrição do serviço">
+                <Input
+                  value={descricao}
+                  onChange={(ev) => setDescricao(ev.target.value)}
+                  placeholder="Ex.: Construção de 400m de cerca…"
+                />
+              </Field>
+              <div className="grid grid-cols-3 gap-3">
+                <Field label="Unidade">
+                  <Input value={unidade} onChange={(ev) => setUnidade(ev.target.value)} />
+                </Field>
+                <Field label="Quantidade" hint="Para derivar valor unitário">
+                  <NumberField value={quantidade} onChange={setQuantidade} min={1} />
+                </Field>
+                <Field label="Dias de serviço" hint="Multiplica custos 'por dia'">
+                  <NumberField value={e.dias} onChange={(v) => set({ dias: v })} min={1} />
+                </Field>
+              </div>
+            </div>
+          </Bloco>
+
+          <MaoDeObraBloco e={e} set={set} />
+          <AlimentacaoBloco e={e} set={set} parametros={parametros} />
+          <FerramentasBloco e={e} set={set} />
+          <CombustivelBloco e={e} set={set} parametros={parametros} />
+          <EstadiaBloco e={e} set={set} />
+          <AvulsosBloco e={e} set={set} />
+
+          <Bloco titulo="Nota fiscal e acréscimo">
+            <div className="space-y-3">
+              <Checkbox
+                label="Emitir Nota Fiscal de Serviço (adiciona imposto ao preço)"
+                checked={e.emitirNota}
+                onChange={(v) => set({ emitirNota: v })}
+              />
+              {e.emitirNota && (
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Alíquota da nota (%)">
+                    <NumberField
+                      value={e.aliquotaNotaPercent}
+                      onChange={(v) => set({ aliquotaNotaPercent: v })}
+                      min={0}
+                      max={e.modoImposto === 'gross_up' ? 99.99 : 100}
+                    />
+                  </Field>
+                  <Field label="Modo do imposto">
+                    <Select
+                      value={e.modoImposto}
+                      onChange={(ev) =>
+                        set({ modoImposto: ev.target.value as EntradaCalculo['modoImposto'] })
+                      }
+                    >
+                      <option value="gross_up">Gross-up (preserva o valor líquido)</option>
+                      <option value="simples">Simples (soma alíquota)</option>
+                    </Select>
+                  </Field>
+                </div>
+              )}
+              <Field
+                label="Acréscimo sobre o custo (%)"
+                hint="Percentual somado ao custo total; não representa margem sobre o preço final"
+              >
+                <NumberField
+                  value={e.margemLucroPercent}
+                  onChange={(v) => set({ margemLucroPercent: v })}
+                  min={0}
+                  max={100}
+                />
+              </Field>
+            </div>
+          </Bloco>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 overflow-y-auto p-6 lg:grid-cols-[1fr_340px]">
-          {/* Coluna de entradas */}
-          <div className="space-y-4">
-            <Bloco titulo="Serviço">
-              <div className="space-y-3">
-                <Field label="Descrição do serviço">
-                  <Input
-                    value={descricao}
-                    onChange={(ev) => setDescricao(ev.target.value)}
-                    placeholder="Ex.: Construção de 400m de cerca…"
-                  />
-                </Field>
-                <div className="grid grid-cols-3 gap-3">
-                  <Field label="Unidade">
-                    <Input value={unidade} onChange={(ev) => setUnidade(ev.target.value)} />
-                  </Field>
-                  <Field label="Quantidade" hint="Para derivar valor unitário">
-                    <NumberField value={quantidade} onChange={setQuantidade} min={0} />
-                  </Field>
-                  <Field label="Dias de serviço" hint="Multiplica custos 'por dia'">
-                    <NumberField value={e.dias} onChange={(v) => set({ dias: v })} min={0} />
-                  </Field>
-                </div>
-              </div>
-            </Bloco>
-
-            <MaoDeObraBloco e={e} set={set} />
-            <AlimentacaoBloco e={e} set={set} parametros={parametros} />
-            <FerramentasBloco e={e} set={set} />
-            <CombustivelBloco e={e} set={set} parametros={parametros} />
-            <EstadiaBloco e={e} set={set} />
-            <AvulsosBloco e={e} set={set} />
-
-            <Bloco titulo="Nota fiscal e margem">
-              <div className="space-y-3">
-                <Checkbox
-                  label="Emitir Nota Fiscal de Serviço (adiciona imposto ao preço)"
-                  checked={e.emitirNota}
-                  onChange={(v) => set({ emitirNota: v })}
-                />
-                {e.emitirNota && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="Alíquota da nota (%)">
-                      <NumberField
-                        value={e.aliquotaNotaPercent}
-                        onChange={(v) => set({ aliquotaNotaPercent: v })}
-                      />
-                    </Field>
-                    <Field label="Modo do imposto">
-                      <Select
-                        value={e.modoImposto}
-                        onChange={(ev) =>
-                          set({ modoImposto: ev.target.value as EntradaCalculo['modoImposto'] })
-                        }
-                      >
-                        <option value="gross_up">Gross-up (preserva margem)</option>
-                        <option value="simples">Simples (soma alíquota)</option>
-                      </Select>
-                    </Field>
-                  </div>
-                )}
-                <Field label="Margem de lucro (%)">
-                  <NumberField
-                    value={e.margemLucroPercent}
-                    onChange={(v) => set({ margemLucroPercent: v })}
-                  />
-                </Field>
-              </div>
-            </Bloco>
-          </div>
-
-          {/* Coluna de resumo */}
-          <div className="lg:sticky lg:top-4 lg:self-start">
-            <Card className="overflow-hidden">
-              <div className="border-b border-slate-200 bg-white px-4 py-3">
-                <h4 className="text-sm font-semibold text-slate-700">Resumo do cálculo</h4>
-              </div>
-              <div className="max-h-[40vh] space-y-1.5 overflow-y-auto px-4 py-3">
-                {resultado.breakdown.length === 0 && (
-                  <p className="py-4 text-center text-xs text-slate-400">
-                    Adicione custos para ver o detalhamento
-                  </p>
-                )}
-                {resultado.breakdown.map((l) => (
-                  <div key={l.chave} className="flex justify-between gap-2 text-xs">
-                    <span className="text-slate-500" title={l.detalhe}>
-                      {l.descricao}
-                    </span>
-                    <span className="shrink-0 font-medium text-slate-700">
-                      {formatMoeda(l.valor)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div className="space-y-1.5 border-t border-slate-200 bg-white px-4 py-3 text-sm">
-                <Linha label="Custo total" valor={resultado.custoTotal} />
-                <Linha
-                  label={`Margem (${resultado.margemLucroPercent}%)`}
-                  valor={resultado.valorMargem}
-                />
-                {resultado.emitirNota && (
-                  <Linha
-                    label={`Imposto NFS (${resultado.aliquotaNotaPercent}%)`}
-                    valor={resultado.impostoNota}
-                  />
-                )}
-                <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-2">
-                  <span className="font-semibold text-slate-800">Preço final</span>
-                  <span className="text-lg font-bold text-brand-tealDark">
-                    {formatMoeda(resultado.precoFinal)}
+        {/* Coluna de resumo */}
+        <div className="lg:sticky lg:top-4 lg:self-start">
+          <Card className="overflow-hidden">
+            <div className="border-b border-slate-200 bg-white px-4 py-3">
+              <h4 className="text-sm font-semibold text-slate-700">Resumo do cálculo</h4>
+            </div>
+            <div className="max-h-[40vh] space-y-1.5 overflow-y-auto px-4 py-3">
+              {resultado.breakdown.length === 0 && (
+                <p className="py-4 text-center text-xs text-slate-400">
+                  Adicione custos para ver o detalhamento
+                </p>
+              )}
+              {resultado.breakdown.map((l) => (
+                <div key={l.chave} className="flex justify-between gap-2 text-xs">
+                  <span className="text-slate-500" title={l.detalhe}>
+                    {l.descricao}
+                  </span>
+                  <span className="shrink-0 font-medium text-slate-700">
+                    {formatMoeda(l.valor)}
                   </span>
                 </div>
-                {quantidade > 0 && (
-                  <p className="text-right text-xs text-slate-400">
-                    {formatMoeda(valorUnitario)} / {unidade}
-                  </p>
-                )}
-              </div>
-            </Card>
-            <div className="mt-3 flex gap-2">
-              <Button variant="secondary" className="flex-1" onClick={onCancel}>
-                Cancelar
-              </Button>
-              <Button className="flex-1" onClick={confirmar}>
-                Usar no orçamento
-              </Button>
+              ))}
             </div>
+            <div className="space-y-1.5 border-t border-slate-200 bg-white px-4 py-3 text-sm">
+              <Linha label="Custo total" valor={resultado.custoTotal} />
+              <Linha
+                label={`Acréscimo (${resultado.margemLucroPercent}%)`}
+                valor={resultado.valorMargem}
+              />
+              {resultado.emitirNota && (
+                <Linha
+                  label={`Imposto NFS (${resultado.aliquotaNotaPercent}%)`}
+                  valor={resultado.impostoNota}
+                />
+              )}
+              <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-2">
+                <span className="font-semibold text-slate-800">Preço final</span>
+                <span className="text-lg font-bold text-brand-tealDark">
+                  {formatMoeda(resultado.precoFinal)}
+                </span>
+              </div>
+              {quantidade > 0 && (
+                <p className="text-right text-xs text-slate-400">
+                  {formatMoeda(valorUnitario)} / {unidade}
+                </p>
+              )}
+            </div>
+          </Card>
+          <div className="mt-3 flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={onCancel}>
+              Cancelar
+            </Button>
+            <Button className="flex-1" onClick={confirmar}>
+              Usar no orçamento
+            </Button>
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -364,7 +377,7 @@ function MaoDeObraBloco({ e, set }: BlocoProps): JSX.Element {
                       onChange={(v) => upd(g.id, { houveContratacao: v })}
                     />
                     <Checkbox
-                      label="Demitido ao fim (rescisão)"
+                      label="Incluir provisão rescisória estimada"
                       checked={!!g.demitidoAoFim}
                       onChange={(v) => upd(g.id, { demitidoAoFim: v })}
                     />

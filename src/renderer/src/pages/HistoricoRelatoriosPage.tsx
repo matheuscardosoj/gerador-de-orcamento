@@ -8,7 +8,7 @@ import { Badge, Button, ConfirmDialog, EmptyState, IconButton, Input } from '../
 import { DataTableFrame, Pagination, SortableHeader, TableActions } from '../ui/dataTable'
 import { formatDataCurta, formatMoeda } from '@shared/format'
 import { compararOrigemRelatorio } from '@shared/historico'
-import type { Relatorio, StatusRelatorio } from '@shared/types'
+import type { ResumoRelatorio, StatusRelatorio } from '@shared/types'
 
 const status: Record<StatusRelatorio, { label: string; cor: 'slate' | 'blue' | 'green' }> = {
   rascunho: { label: 'Rascunho', cor: 'slate' },
@@ -20,12 +20,12 @@ const POR_PAGINA = 12
 
 export function HistoricoRelatoriosPage(): JSX.Element {
   const { navegar } = useNav()
-  const { data, loading, reload } = useAsync(() => api.relatorios.list(), [])
+  const { data, loading, error: erroCarga, reload } = useAsync(() => api.relatorios.list(), [])
   const [busca, setBusca] = useState('')
   const [campo, setCampo] = useState<Campo>('numero')
   const [dir, setDir] = useState<'asc' | 'desc'>('desc')
   const [pagina, setPagina] = useState(1)
-  const [excluir, setExcluir] = useState<Relatorio | null>(null)
+  const [excluir, setExcluir] = useState<ResumoRelatorio | null>(null)
   const [excluindo, setExcluindo] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const relatorios = useMemo(() => data ?? [], [data])
@@ -101,13 +101,19 @@ export function HistoricoRelatoriosPage(): JSX.Element {
           />
         </div>
       )}
-      {erro && (
+      {(erro || erroCarga) && (
         <p role="alert" className="mb-4 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">
-          {erro}
+          {erro ?? `Não foi possível carregar os relatórios. ${erroCarga}`}
         </p>
       )}
       {loading ? (
         <p className="text-sm text-slate-500">Carregando…</p>
+      ) : erroCarga && !data ? (
+        <EmptyState
+          title="Falha ao carregar os relatórios"
+          description="Verifique o banco de dados e tente novamente."
+          action={<Button onClick={reload}>Tentar novamente</Button>}
+        />
       ) : !ordenados.length ? (
         <EmptyState
           title={relatorios.length ? 'Nada encontrado' : 'Nenhum relatório ainda'}

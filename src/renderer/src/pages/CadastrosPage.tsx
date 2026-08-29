@@ -48,7 +48,7 @@ const clienteVazio = (): Omit<Cliente, 'id' | 'criadoEm'> => ({
 })
 
 function SecaoClientes(): JSX.Element {
-  const { data, reload } = useAsync(() => api.clientes.list(), [])
+  const { data, error: erroCarga, reload } = useAsync(() => api.clientes.list(), [])
   const [edit, setEdit] = useState<Cliente | 'novo' | null>(null)
   const [excluir, setExcluir] = useState<Cliente | null>(null)
   const [erro, setErro] = useState<string | null>(null)
@@ -71,6 +71,11 @@ function SecaoClientes(): JSX.Element {
       {erro && (
         <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
           {erro}
+        </p>
+      )}
+      {erroCarga && (
+        <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          Não foi possível carregar os clientes. {erroCarga}
         </p>
       )}
       <div className="divide-y divide-slate-100">
@@ -209,7 +214,7 @@ const servicoVazio = (): Omit<ServicoCatalogo, 'id'> => ({
 })
 
 function SecaoServicos(): JSX.Element {
-  const { data, reload } = useAsync(() => api.servicos.list(), [])
+  const { data, error: erroCarga, reload } = useAsync(() => api.servicos.list(), [])
   const [edit, setEdit] = useState<ServicoCatalogo | 'novo' | null>(null)
   const [excluir, setExcluir] = useState<ServicoCatalogo | null>(null)
 
@@ -218,6 +223,11 @@ function SecaoServicos(): JSX.Element {
       <div className="mb-4 flex justify-end">
         <Button onClick={() => setEdit('novo')}>+ Novo serviço</Button>
       </div>
+      {erroCarga && (
+        <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          Não foi possível carregar os serviços. {erroCarga}
+        </p>
+      )}
       <div className="divide-y divide-slate-100">
         {(data ?? []).map((s) => (
           <div key={s.id} className="flex items-start justify-between gap-4 py-3">

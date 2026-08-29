@@ -15,7 +15,10 @@ function crud<T, C>(dominio: string): CrudApi<T, C> {
 }
 
 const api: AppApi = {
-  aplicativo: { versao: () => invoke('aplicativo.versao') as never },
+  aplicativo: {
+    versao: () => invoke('aplicativo.versao') as never,
+    alteracoesPendentes: (ativo) => invoke('aplicativo.alteracoesPendentes', ativo) as never
+  },
   empresa: {
     get: () => invoke('empresa.get') as never,
     save: (patch) => invoke('empresa.save', patch) as never

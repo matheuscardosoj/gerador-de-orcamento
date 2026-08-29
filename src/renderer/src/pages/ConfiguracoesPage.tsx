@@ -26,6 +26,11 @@ import type {
   StatusIA
 } from '@shared/types'
 import type { InfoNumeracao } from '@shared/api'
+import {
+  mensagemValidacao,
+  validarParametrosFinanceiros,
+  validarUrlOllamaLocal
+} from '@shared/validacao'
 
 const aplicacoes = [
   { valor: 'ambos', rotulo: 'Orçamento e relatório' },
@@ -76,7 +81,7 @@ function BotaoSalvar({ salvando, ok }: { salvando: boolean; ok: boolean }): JSX.
 
 // --------------------------------------------------------------- Empresa
 function SecaoEmpresa(): JSX.Element {
-  const { data } = useAsync(() => api.empresa.get(), [])
+  const { data, error: erroCarga } = useAsync(() => api.empresa.get(), [])
   const [form, setForm] = useState<EmpresaConfig | null>(null)
   const [salvando, setSalvando] = useState(false)
   const [ok, setOk] = useState(false)
@@ -85,7 +90,12 @@ function SecaoEmpresa(): JSX.Element {
     if (data) setForm(data)
   }, [data])
 
-  if (!form) return <p className="text-sm text-slate-500">Carregando…</p>
+  if (!form)
+    return (
+      <p className={erroCarga ? 'text-sm text-red-700' : 'text-sm text-slate-500'}>
+        {erroCarga ? `Não foi possível carregar os dados da empresa. ${erroCarga}` : 'Carregando…'}
+      </p>
+    )
 
   const set = (patch: Partial<EmpresaConfig>): void => {
     setForm({ ...form, ...patch })
@@ -220,16 +230,22 @@ function SecaoEmpresa(): JSX.Element {
 
 // ------------------------------------------------------------ Parâmetros
 function SecaoParametros(): JSX.Element {
-  const { data } = useAsync(() => api.parametros.get(), [])
+  const { data, error: erroCarga } = useAsync(() => api.parametros.get(), [])
   const [form, setForm] = useState<ParametrosFinanceiros | null>(null)
   const [salvando, setSalvando] = useState(false)
   const [ok, setOk] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
 
   useEffect(() => {
     if (data) setForm(data)
   }, [data])
 
-  if (!form) return <p className="text-sm text-slate-500">Carregando…</p>
+  if (!form)
+    return (
+      <p className={erroCarga ? 'text-sm text-red-700' : 'text-sm text-slate-500'}>
+        {erroCarga ? `Não foi possível carregar os parâmetros. ${erroCarga}` : 'Carregando…'}
+      </p>
+    )
 
   const set = (patch: Partial<ParametrosFinanceiros>): void => {
     setForm({ ...form, ...patch })
@@ -238,10 +254,22 @@ function SecaoParametros(): JSX.Element {
 
   const salvar = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
+    const erros = validarParametrosFinanceiros(form)
+    if (erros.length) {
+      setErro(mensagemValidacao(erros))
+      setOk(false)
+      return
+    }
     setSalvando(true)
-    await api.parametros.save(form)
-    setSalvando(false)
-    setOk(true)
+    setErro(null)
+    try {
+      await api.parametros.save(form)
+      setOk(true)
+    } catch (e) {
+      setErro(String(e).replace(/^Error:\s*/, ''))
+    } finally {
+      setSalvando(false)
+    }
   }
 
   return (
@@ -249,40 +277,68 @@ function SecaoParametros(): JSX.Element {
       <Card className="p-6">
         <SectionTitle
           title="Encargos CLT (%)"
-          description="Aplicados sobre o salário proporcional no cálculo de mão de obra com carteira assinada"
+          description="Estimativa configurável aplicada sobre o salário proporcional; confirme percentuais com o contador ou a folha"
         />
+        <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+          A provisão rescisória não substitui o cálculo oficial: a multa do FGTS depende do
+          histórico integral dos depósitos e a contribuição patronal varia conforme o enquadramento
+          tributário.
+        </p>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
           <Field label="Férias (%)">
             <NumberField
               value={form.percentualFerias}
               onChange={(v) => set({ percentualFerias: v })}
+              min={0}
+              max={100}
             />
           </Field>
           <Field label="13º salário (%)">
             <NumberField
               value={form.percentualDecimoTerceiro}
               onChange={(v) => set({ percentualDecimoTerceiro: v })}
+              min={0}
+              max={100}
             />
           </Field>
           <Field label="FGTS (%)">
-            <NumberField value={form.percentualFgts} onChange={(v) => set({ percentualFgts: v })} />
+            <NumberField
+              value={form.percentualFgts}
+              onChange={(v) => set({ percentualFgts: v })}
+              min={0}
+              max={100}
+            />
           </Field>
           <Field label="INSS patronal (%)">
-            <NumberField value={form.percentualInss} onChange={(v) => set({ percentualInss: v })} />
+            <NumberField
+              value={form.percentualInss}
+              onChange={(v) => set({ percentualInss: v })}
+              min={0}
+              max={100}
+            />
           </Field>
-          <Field label="Multa/rescisão (%)">
+          <Field label="Provisão rescisória estimada (%)">
             <NumberField
               value={form.percentualMultaRescisao}
               onChange={(v) => set({ percentualMultaRescisao: v })}
+              min={0}
+              max={100}
             />
           </Field>
           <Field label="Dias base do mês" hint="Divisor do salário mensal (ex.: 30)">
-            <NumberField value={form.diasBaseMes} onChange={(v) => set({ diasBaseMes: v })} />
+            <NumberField
+              value={form.diasBaseMes}
+              onChange={(v) => set({ diasBaseMes: v })}
+              min={1}
+              max={31}
+              step={1}
+            />
           </Field>
           <Field label="Custo de contratação (R$)" hint="Por funcionário (exames, admissão)">
             <NumberField
               value={form.custoContratacao}
               onChange={(v) => set({ custoContratacao: v })}
+              min={0}
             />
           </Field>
         </div>
@@ -294,37 +350,44 @@ function SecaoParametros(): JSX.Element {
           description="Valores iniciais sugeridos ao criar um cálculo"
         />
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-          <Field label="Margem de lucro padrão (%)">
+          <Field label="Acréscimo padrão sobre o custo (%)">
             <NumberField
               value={form.margemLucroPadrao}
               onChange={(v) => set({ margemLucroPadrao: v })}
+              min={0}
+              max={100}
             />
           </Field>
           <Field label="Alíquota NFS padrão (%)">
             <NumberField
               value={form.aliquotaNotaPadrao}
               onChange={(v) => set({ aliquotaNotaPadrao: v })}
+              min={0}
+              max={form.modoImpostoPadrao === 'gross_up' ? 99.99 : 100}
             />
           </Field>
           <Field label="Consumo do veículo padrão (km/l)">
             <NumberField
               value={form.consumoVeiculoPadrao}
               onChange={(v) => set({ consumoVeiculoPadrao: v })}
+              min={0}
             />
           </Field>
           <Field label="Preço do combustível padrão (R$/l)">
             <NumberField
               value={form.precoCombustivelPadrao}
               onChange={(v) => set({ precoCombustivelPadrao: v })}
+              min={0}
             />
           </Field>
           <Field label="Valor da refeição padrão (R$)">
             <NumberField
               value={form.valorRefeicaoPadrao}
               onChange={(v) => set({ valorRefeicaoPadrao: v })}
+              min={0}
             />
           </Field>
-          <Field label="Modo do imposto padrão" hint="Gross-up preserva a margem líquida">
+          <Field label="Modo do imposto padrão" hint="Gross-up preserva o valor líquido calculado">
             <select
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/30"
               value={form.modoImpostoPadrao}
@@ -339,6 +402,11 @@ function SecaoParametros(): JSX.Element {
             </select>
           </Field>
         </div>
+        {erro && (
+          <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+            {erro}
+          </p>
+        )}
         <div className="mt-6 flex justify-end">
           <BotaoSalvar salvando={salvando} ok={ok} />
         </div>
@@ -349,7 +417,7 @@ function SecaoParametros(): JSX.Element {
 
 // ----------------------------------------------------------- Observações
 function SecaoObservacoes(): JSX.Element {
-  const { data, reload } = useAsync(() => api.observacoes.list(), [])
+  const { data, error: erroCarga, reload } = useAsync(() => api.observacoes.list(), [])
   const [novo, setNovo] = useState('')
 
   const adicionar = async (): Promise<void> => {
@@ -365,6 +433,11 @@ function SecaoObservacoes(): JSX.Element {
         title="Observações padrão"
         description="Defina onde o texto pode ser usado e se ele entra automaticamente em documentos novos"
       />
+      {erroCarga && (
+        <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          Não foi possível carregar as observações. {erroCarga}
+        </p>
+      )}
       <div className="mb-4 flex flex-col gap-2 sm:flex-row">
         <Textarea
           value={novo}
@@ -486,7 +559,7 @@ function ItemObservacao({
 
 // ------------------------------------------------------------- Pagamentos
 function SecaoPagamentos(): JSX.Element {
-  const { data, reload } = useAsync(() => api.pagamentos.list(), [])
+  const { data, error: erroCarga, reload } = useAsync(() => api.pagamentos.list(), [])
   const [novo, setNovo] = useState('')
 
   const adicionar = async (): Promise<void> => {
@@ -502,6 +575,11 @@ function SecaoPagamentos(): JSX.Element {
         title="Formas de pagamento padrão"
         description="Defina onde o texto pode ser usado e se ele entra automaticamente em documentos novos"
       />
+      {erroCarga && (
+        <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          Não foi possível carregar as formas de pagamento. {erroCarga}
+        </p>
+      )}
       <div className="mb-4 flex flex-col gap-2 sm:flex-row">
         <Textarea
           value={novo}
@@ -627,7 +705,7 @@ function ItemPagamento({
  * própria máquina: ou o modelo que veio no instalador, ou um Ollama já instalado.
  */
 function SecaoIA(): JSX.Element {
-  const { data } = useAsync(() => api.ia.get(), [])
+  const { data, error: erroCarga } = useAsync(() => api.ia.get(), [])
   const [form, setForm] = useState<ConfigIA | null>(null)
   const [salvando, setSalvando] = useState(false)
   const [ok, setOk] = useState(false)
@@ -638,7 +716,12 @@ function SecaoIA(): JSX.Element {
     if (data) setForm(data)
   }, [data])
 
-  if (!form) return <p className="text-sm text-slate-500">Carregando…</p>
+  if (!form)
+    return (
+      <p className={erroCarga ? 'text-sm text-red-700' : 'text-sm text-slate-500'}>
+        {erroCarga ? `Não foi possível carregar a configuração de IA. ${erroCarga}` : 'Carregando…'}
+      </p>
+    )
 
   const set = (patch: Partial<ConfigIA>): void => {
     setForm({ ...form, ...patch })
@@ -648,10 +731,24 @@ function SecaoIA(): JSX.Element {
 
   const salvar = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
+    const erros = form.modo === 'ollama' ? validarUrlOllamaLocal(form.urlOllama) : []
+    if (erros.length) {
+      setStatus({ modo: form.modo, disponivel: false, detalhe: mensagemValidacao(erros) })
+      return
+    }
     setSalvando(true)
-    await api.ia.save(form)
-    setSalvando(false)
-    setOk(true)
+    try {
+      await api.ia.save(form)
+      setOk(true)
+    } catch (e) {
+      setStatus({
+        modo: form.modo,
+        disponivel: false,
+        detalhe: String(e).replace(/^Error:\s*/, '')
+      })
+    } finally {
+      setSalvando(false)
+    }
   }
 
   const testar = async (): Promise<void> => {
@@ -686,7 +783,10 @@ function SecaoIA(): JSX.Element {
           </Field>
           {form.modo === 'ollama' && (
             <>
-              <Field label="Endereço do Ollama">
+              <Field
+                label="Endereço do Ollama"
+                hint="Somente HTTP local: localhost, 127.0.0.1 ou ::1"
+              >
                 <Input
                   value={form.urlOllama}
                   onChange={(e) => set({ urlOllama: e.target.value })}
@@ -756,7 +856,7 @@ function PainelNumeracao({
   carregar: () => Promise<InfoNumeracao>
   definirNumero: (numero: number) => Promise<{ ok: boolean; erro?: string }>
 }): JSX.Element {
-  const { data, reload } = useAsync(carregar, [])
+  const { data, error: erroCarga, reload } = useAsync(carregar, [])
   const [proximo, setProximo] = useState<number | null>(null)
   const [salvando, setSalvando] = useState(false)
   const [ok, setOk] = useState(false)
@@ -766,7 +866,12 @@ function PainelNumeracao({
     if (data) setProximo(data.proximoNumero)
   }, [data])
 
-  if (!data || proximo === null) return <p className="text-sm text-slate-500">Carregando…</p>
+  if (!data || proximo === null)
+    return (
+      <p className={erroCarga ? 'text-sm text-red-700' : 'text-sm text-slate-500'}>
+        {erroCarga ? `Não foi possível carregar a numeração. ${erroCarga}` : 'Carregando…'}
+      </p>
+    )
 
   const definir = (v: number): void => {
     setProximo(v)

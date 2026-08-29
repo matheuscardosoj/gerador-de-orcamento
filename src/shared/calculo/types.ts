@@ -38,7 +38,7 @@ export interface GrupoMaoDeObra {
   salarioCarteira?: number
   /** CLT: houve contratação para este serviço (soma custo de contratação). */
   houveContratacao?: boolean
-  /** CLT: será demitido ao fim do serviço (soma custo de rescisão / quebra de contrato). */
+  /** CLT: inclui a provisão rescisória estimada configurada para o período. */
   demitidoAoFim?: boolean
   /** @deprecated formato anterior à 1.1; lido por `normalizarEntrada`. */
   regime?: RegimeMaoDeObra

@@ -165,6 +165,21 @@ export interface Orcamento {
   atualizadoEm: string
 }
 
+/** Dados compactos usados no histórico; não inclui coleções nem imagens. */
+export interface ResumoOrcamento {
+  id: string
+  numero: number
+  data: string
+  destinatario: string
+  observacaoInterna: string
+  valorTotal: number
+  status: StatusOrcamento
+  criadoEm: string
+  atualizadoEm: string
+  /** Descrições carregadas em uma consulta única apenas para a busca do histórico. */
+  servicosBusca: string[]
+}
+
 export type StatusRelatorio = 'rascunho' | 'emitido' | 'pago'
 export type TipoLancamentoRelatorio = 'adiantamento' | 'reembolso'
 export type TipoReferenciaAnexoRelatorio = 'servico' | TipoLancamentoRelatorio | 'solto'
@@ -222,6 +237,20 @@ export interface Relatorio {
   anexos: AnexoRelatorio[]
   /** Anotação interna: aparece no histórico e pode ser sugerida pela IA; não sai no documento. */
   observacaoInterna?: string
+  status: StatusRelatorio
+  origemOrcamento?: OrigemOrcamentoRelatorio | null
+  totais: TotaisRelatorio
+  criadoEm: string
+  atualizadoEm: string
+}
+
+/** Dados compactos usados no histórico de relatórios. */
+export interface ResumoRelatorio {
+  id: string
+  numero: number
+  data: string
+  destinatario: string
+  observacaoInterna: string
   status: StatusRelatorio
   origemOrcamento?: OrigemOrcamentoRelatorio | null
   totais: TotaisRelatorio

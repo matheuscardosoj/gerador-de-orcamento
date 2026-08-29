@@ -345,7 +345,7 @@ describe('componentes de custo', () => {
 })
 
 describe('margem e imposto', () => {
-  it('aplica margem de lucro', () => {
+  it('aplica acréscimo sobre o custo sem alterar a fórmula legada', () => {
     const r = calcularCustoServico(
       base({
         maoDeObra: [{ id: 'a', qtdFuncionarios: 1, base: 'valor_cheio', valor: 1000 }],
@@ -358,7 +358,7 @@ describe('margem e imposto', () => {
     expect(r.precoFinal).toBe(1300)
   })
 
-  it('imposto gross-up preserva a margem', () => {
+  it('imposto gross-up preserva o valor líquido', () => {
     const r = calcularCustoServico(
       base({
         maoDeObra: [{ id: 'a', qtdFuncionarios: 1, base: 'valor_cheio', valor: 1000 }],

@@ -16,6 +16,7 @@ import { montarDocumentoDocx, montarDocumentoRelatorioDocx } from '@shared/docum
 import { destinatarioComTratamento, nomeBaseDocumento } from '@shared/documento/comum'
 import type { DocumentoResultado } from '@shared/api'
 import type { Orcamento, Relatorio } from '@shared/types'
+import { exigirValidacao, validarOrcamentoFinal, validarRelatorioFinal } from '@shared/validacao'
 
 function nomeBase(orc: Orcamento): string {
   const cliente = orc.clienteId ? clientesRepo.get(orc.clienteId)?.nome : null
@@ -51,12 +52,14 @@ function imagensDosAnexos(orc: Orcamento): Map<string, string> {
 function carregarOrcamento(id: string): Orcamento {
   const orc = orcamentosRepo.get(id)
   if (!orc) throw new Error('Orçamento não encontrado')
+  exigirValidacao(validarOrcamentoFinal(orc))
   return orc
 }
 
 function carregarRelatorio(id: string): Relatorio {
   const rel = relatoriosRepo.get(id)
   if (!rel) throw new Error('Relatório não encontrado')
+  exigirValidacao(validarRelatorioFinal(rel))
   return rel
 }
 

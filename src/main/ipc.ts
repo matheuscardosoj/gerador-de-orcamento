@@ -18,6 +18,16 @@ import { gerarPdf, gerarDocx, gerarRelatorioPdf, gerarRelatorioDocx } from './do
 import { statusIA, sugerirObservacao } from './ia'
 import { exportarDados, importarDados } from './dados'
 
+let alteracoesPendentes = false
+
+export function haAlteracoesPendentes(): boolean {
+  return alteracoesPendentes
+}
+
+export function liberarAlteracoesPendentes(): void {
+  alteracoesPendentes = false
+}
+
 async function selecionarLogo(): Promise<string | null> {
   const r = await dialog.showOpenDialog({
     title: 'Selecionar logo',
@@ -36,6 +46,9 @@ async function selecionarLogo(): Promise<string | null> {
 // A geração de documentos (documentos.*) é registrada na Fase 5.
 const handlers: Record<string, (...args: unknown[]) => unknown> = {
   'aplicativo.versao': () => app.getVersion(),
+  'aplicativo.alteracoesPendentes': (ativo) => {
+    alteracoesPendentes = Boolean(ativo)
+  },
   'empresa.get': () => empresaRepo.get(),
   'empresa.save': (patch) => empresaRepo.save(patch as never),
 

@@ -49,6 +49,7 @@ function Sidebar(): JSX.Element {
             <button
               key={item.nome}
               onClick={() => navegar({ nome: item.nome })}
+              aria-current={ativo ? 'page' : undefined}
               className={cn(
                 'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                 ativo ? 'bg-brand-teal/10 text-brand-tealDark' : 'text-slate-600 hover:bg-slate-100'

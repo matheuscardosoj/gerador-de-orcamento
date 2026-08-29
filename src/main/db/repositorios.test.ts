@@ -91,7 +91,10 @@ it('importa o banco JSON preservando números, datas e filhos', () => {
   // Ordenação por criação, mais novo primeiro (igual à tela de histórico).
   expect(lista[0].numero).toBe(2)
 
-  const primeiro = lista.find((o) => o.numero === 1)!
+  const primeiroResumo = lista.find((o) => o.numero === 1)!
+  expect(primeiroResumo.servicosBusca).toEqual(['Cerca'])
+  expect('materiais' in primeiroResumo).toBe(false)
+  const primeiro = repos.orcamentosRepo.get(primeiroResumo.id)!
   expect(primeiro.criadoEm).toBe('2026-01-01T12:00:00.000Z')
   expect(primeiro.itensServico).toHaveLength(1)
   expect(primeiro.itensServico[0].valorTotal).toBe(800)
@@ -176,6 +179,16 @@ it('numera novos orçamentos a partir do contador', () => {
   repos.orcamentosRepo.remove(novo.id)
 })
 
+it('permite rascunho incompleto e bloqueia status final sem campos essenciais', () => {
+  const rascunho = novoOrcamento('   ')
+  expect(rascunho.status).toBe('rascunho')
+  expect(rascunho.destinatario).toBe('')
+  expect(() => repos.orcamentosRepo.update(rascunho.id, { status: 'enviado' })).toThrow(
+    'Informe o destinatário'
+  )
+  repos.orcamentosRepo.remove(rascunho.id)
+})
+
 it('recua o contador ao excluir o orçamento de maior número', () => {
   const a = novoOrcamento('A Sítio das Palmeiras,') // nº 3
   const b = novoOrcamento('A Chácara do Zé,') // nº 4
@@ -242,7 +255,8 @@ it('altera o número de um orçamento e bloqueia duplicidade', () => {
 })
 
 it('grava a foto como BLOB e devolve só a miniatura na leitura', () => {
-  const alvo = repos.orcamentosRepo.list().find((o) => o.numero === 1)!
+  const resumo = repos.orcamentosRepo.list().find((o) => o.numero === 1)!
+  const alvo = repos.orcamentosRepo.get(resumo.id)!
   const atualizado = repos.orcamentosRepo.update(alvo.id, {
     anexos: [
       {
@@ -271,10 +285,9 @@ it('grava a foto como BLOB e devolve só a miniatura na leitura', () => {
 })
 
 it('mantém o BLOB quando o orçamento é salvo de novo sem reenviar a imagem', () => {
-  // A listagem traz os metadados do anexo, mas não o BLOB da miniatura.
+  // A listagem compacta não traz anexos; o editor sempre carrega o documento completo por id.
   const daListagem = repos.orcamentosRepo.list().find((o) => o.numero === 1)!
-  expect(daListagem.anexos).toHaveLength(1)
-  expect(daListagem.anexos[0].miniaturaDataUrl).toBeUndefined()
+  expect('anexos' in daListagem).toBe(false)
 
   const alvo = repos.orcamentosRepo.get(daListagem.id)!
   expect(alvo.anexos[0].miniaturaDataUrl).toContain('data:image/png;base64,')
@@ -314,6 +327,9 @@ it('salva e relê a configuração de IA', () => {
   expect(repos.configIARepo.get().modeloOllama).toBe('qwen2.5:3b')
   // Campos não informados permanecem.
   expect(repos.configIARepo.get().urlOllama).toBe('http://localhost:11434')
+  expect(() =>
+    repos.configIARepo.save({ modo: 'ollama', urlOllama: 'https://api.externa.example' })
+  ).toThrow('URL HTTP local')
 })
 
 it('não permite excluir cliente usado e permite inativá-lo', () => {
@@ -324,7 +340,9 @@ it('não permite excluir cliente usado e permite inativá-lo', () => {
 })
 
 it('exporta e restaura relatório com anotação interna e comprovante em BLOB', async () => {
-  const relatorio = repos.relatoriosRepo.list()[0]!
+  const resumoRelatorio = repos.relatoriosRepo.list()[0]!
+  expect('adiantamentos' in resumoRelatorio).toBe(false)
+  const relatorio = repos.relatoriosRepo.get(resumoRelatorio.id)!
   const salvo = repos.relatoriosRepo.update(relatorio.id, {
     observacaoInterna: 'Backup: relatório conferido pela IA.',
     anexos: [
@@ -358,4 +376,16 @@ it('exporta e restaura relatório com anotação interna e comprovante em BLOB',
   expect(restaurado.observacaoInterna).toBe('Backup: relatório conferido pela IA.')
   expect(restaurado.anexos).toHaveLength(1)
   expect(repos.anexosRelatorioRepo.buffer(restaurado.anexos[0].id)?.length).toBeGreaterThan(50)
+})
+
+it('mescla o mesmo backup de forma idempotente', async () => {
+  const { exportarDadosPara, importarDadosDe } = await import('../dados')
+  const backup = join(raiz, 'backup-idempotente.gdo-backup')
+  exportarDadosPara(backup)
+  const primeira = importarDadosDe(backup, 'mesclar')
+  const segunda = importarDadosDe(backup, 'mesclar')
+  expect(primeira.importados.orcamentos + primeira.ignorados.orcamentos).toBeGreaterThan(0)
+  expect(segunda.importados.orcamentos).toBe(0)
+  expect(segunda.importados.relatorios).toBe(0)
+  expect(segunda.ignorados.orcamentos).toBeGreaterThan(0)
 })

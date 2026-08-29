@@ -21,8 +21,9 @@ import { novoId } from '../components/tipos'
 import { PreviaRelatorioModal } from '../components/PreviaRelatorioModal'
 import { AnotacaoInterna, ServicosCard, TextosCard, type Dados } from './EditorOrcamentoPage'
 import { AnexosCard } from '../components/AnexosCard'
-import { useNav } from '../lib/nav'
+import { useBloqueioEdicao, useNav } from '../lib/nav'
 import { removerLancamentoRelatorio, removerServicoRelatorio } from '@shared/edicao'
+import { mensagemValidacao, normalizarRelatorio, validarRelatorioFinal } from '@shared/validacao'
 
 type Base = Pick<
   Dados,
@@ -34,61 +35,70 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
   const { navegar } = useNav()
   const [dados, setDados] = useState<Base | null>(null)
   const [rel, setRel] = useState<Relatorio | null>(null)
-  const [salvando, setSalvando] = useState(false)
+  const [ocupado, setOcupado] = useState<'salvar' | 'pdf' | 'docx' | null>(null)
   const [erro, setErro] = useState<string | null>(null)
+  const [mensagem, setMensagem] = useState<string | null>(null)
+  const [snapshotSalvo, setSnapshotSalvo] = useState<string | null>(null)
   const [previa, setPrevia] = useState(false)
   const [numeroOriginal, setNumeroOriginal] = useState<number | null>(null)
   useEffect(() => {
     let vivo = true
     void (async () => {
-      const [empresa, parametros, clientes, servicos, observacoesPadrao, pagamentosPadrao] =
-        await Promise.all([
-          api.empresa.get(),
-          api.parametros.get(),
-          api.clientes.list(),
-          api.servicos.list(),
-          api.observacoes.list(),
-          api.pagamentos.list()
-        ])
-      if (!vivo) return
-      setDados({ empresa, parametros, clientes, servicos, observacoesPadrao, pagamentosPadrao })
-      if (relatorioId) {
-        const existente = await api.relatorios.get(relatorioId)
-        if (existente) {
+      try {
+        const [empresa, parametros, clientes, servicos, observacoesPadrao, pagamentosPadrao] =
+          await Promise.all([
+            api.empresa.get(),
+            api.parametros.get(),
+            api.clientes.list(),
+            api.servicos.list(),
+            api.observacoes.list(),
+            api.pagamentos.list()
+          ])
+        if (!vivo) return
+        setDados({ empresa, parametros, clientes, servicos, observacoesPadrao, pagamentosPadrao })
+        if (relatorioId) {
+          const existente = await api.relatorios.get(relatorioId)
+          if (!existente) throw new Error('Relatório não encontrado.')
           setRel(existente)
+          setSnapshotSalvo(JSON.stringify(existente))
           setNumeroOriginal(existente.numero)
+          return
         }
-        return
+        const numero = await api.relatorios.proximoNumero()
+        if (!vivo) return
+        const novo: Relatorio = {
+          id: '',
+          numero,
+          data: dataCivilHoje(),
+          clienteId: null,
+          destinatario: '',
+          formato: 'tabela',
+          titulo: 'Relatório de Serviço',
+          introducao: '',
+          itensServico: [],
+          adiantamentos: [],
+          reembolsos: [],
+          observacoes: observacoesPadrao
+            .filter((x) => x.padrao && (x.aplicacao === 'ambos' || x.aplicacao === 'relatorio'))
+            .map((x) => ({ id: novoId(), texto: x.texto, origemPadraoId: x.id })),
+          pagamentos: pagamentosPadrao
+            .filter((x) => x.padrao && (x.aplicacao === 'ambos' || x.aplicacao === 'relatorio'))
+            .map((x) => ({ id: novoId(), texto: x.texto, origemPadraoId: x.id })),
+          anexos: [],
+          observacaoInterna: '',
+          status: 'rascunho',
+          origemOrcamento: null,
+          totais: calcularTotaisRelatorio([], [], []),
+          criadoEm: agora(),
+          atualizadoEm: agora()
+        }
+        setNumeroOriginal(numero)
+        setRel(novo)
+        setSnapshotSalvo(JSON.stringify(novo))
+      } catch (e) {
+        if (vivo)
+          setErro(`Não foi possível carregar o editor. ${String(e).replace(/^Error:\s*/, '')}`)
       }
-      const numero = await api.relatorios.proximoNumero()
-      if (!vivo) return
-      setNumeroOriginal(numero)
-      setRel({
-        id: '',
-        numero,
-        data: dataCivilHoje(),
-        clienteId: null,
-        destinatario: '',
-        formato: 'tabela',
-        titulo: 'Relatório de Serviço',
-        introducao: '',
-        itensServico: [],
-        adiantamentos: [],
-        reembolsos: [],
-        observacoes: observacoesPadrao
-          .filter((x) => x.padrao && (x.aplicacao === 'ambos' || x.aplicacao === 'relatorio'))
-          .map((x) => ({ id: novoId(), texto: x.texto, origemPadraoId: x.id })),
-        pagamentos: pagamentosPadrao
-          .filter((x) => x.padrao && (x.aplicacao === 'ambos' || x.aplicacao === 'relatorio'))
-          .map((x) => ({ id: novoId(), texto: x.texto, origemPadraoId: x.id })),
-        anexos: [],
-        observacaoInterna: '',
-        status: 'rascunho',
-        origemOrcamento: null,
-        totais: calcularTotaisRelatorio([], [], []),
-        criadoEm: agora(),
-        atualizadoEm: agora()
-      })
     })()
     return () => {
       vivo = false
@@ -99,6 +109,8 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
       rel ? calcularTotaisRelatorio(rel.itensServico, rel.adiantamentos, rel.reembolsos) : null,
     [rel]
   )
+  const sujo = rel !== null && snapshotSalvo !== null && JSON.stringify(rel) !== snapshotSalvo
+  useBloqueioEdicao(sujo)
   const set = (patch: Partial<Relatorio>): void => {
     setRel((atual) => {
       if (!atual) return atual
@@ -113,11 +125,18 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
       }
     })
   }
-  const salvar = async (): Promise<Relatorio | null> => {
+  const persistir = async (exigirFinal: boolean): Promise<Relatorio | null> => {
     if (!rel || !totais) return null
-    setSalvando(true)
     setErro(null)
     try {
+      const payload = normalizarRelatorio({ ...rel, totais })
+      if (exigirFinal || payload.status !== 'rascunho') {
+        const erros = validarRelatorioFinal(payload)
+        if (erros.length) {
+          setErro(`Complete o relatório antes desta ação. ${mensagemValidacao(erros)}`)
+          return null
+        }
+      }
       const numeroMudou = numeroOriginal !== null && rel.numero !== numeroOriginal
       let gravado: Relatorio | null
       if (rel.id) {
@@ -128,7 +147,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
             return null
           }
         }
-        gravado = await api.relatorios.update(rel.id, { ...rel, totais })
+        gravado = await api.relatorios.update(rel.id, payload)
       } else {
         const {
           id: _id,
@@ -136,12 +155,16 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
           criadoEm: _criadoEm,
           atualizadoEm: _atualizadoEm,
           ...novo
-        } = { ...rel, totais }
+        } = payload
         gravado = await api.relatorios.create(numeroMudou ? { ...novo, numero } : novo)
       }
       if (!gravado) throw new Error('Relatório não encontrado.')
       setRel(gravado)
+      setSnapshotSalvo(JSON.stringify(gravado))
       setNumeroOriginal(gravado.numero)
+      setMensagem(
+        `Alterações salvas às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`
+      )
       if (!rel.id && numeroMudou && gravado.numero !== rel.numero)
         setErro(
           `O número ${rel.numero} já estava em uso. O relatório foi salvo com o número ${gravado.numero}.`
@@ -150,11 +173,59 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
     } catch (e) {
       setErro(String(e).replace(/^Error:\s*/, ''))
       return null
-    } finally {
-      setSalvando(false)
     }
   }
-  if (!dados || !rel || !totais) return <p className="p-8 text-sm text-slate-500">Carregando…</p>
+  const executar = async (
+    operacao: NonNullable<typeof ocupado>,
+    tarefa: () => Promise<void>
+  ): Promise<void> => {
+    if (ocupado) return
+    setOcupado(operacao)
+    setMensagem(null)
+    try {
+      await tarefa()
+    } finally {
+      setOcupado(null)
+    }
+  }
+  const salvar = (): void => {
+    void executar('salvar', async () => {
+      await persistir(false)
+    })
+  }
+  const exportar = (tipo: 'pdf' | 'docx'): void => {
+    void executar(tipo, async () => {
+      const gravado = await persistir(true)
+      if (!gravado) return
+      try {
+        const resultado =
+          tipo === 'pdf'
+            ? await api.documentos.gerarRelatorioPdf(gravado.id)
+            : await api.documentos.gerarRelatorioDocx(gravado.id)
+        if (resultado.caminho) setMensagem(`Documento gerado com sucesso: ${resultado.caminho}`)
+      } catch (e) {
+        setErro(`Não foi possível gerar o documento. ${String(e).replace(/^Error:\s*/, '')}`)
+      }
+    })
+  }
+  const abrirPrevia = (): void => {
+    if (!rel || !totais) return
+    const erros = validarRelatorioFinal(normalizarRelatorio({ ...rel, totais }))
+    if (erros.length) {
+      setErro(`Complete o relatório antes da prévia final. ${mensagemValidacao(erros)}`)
+      return
+    }
+    setErro(null)
+    setPrevia(true)
+  }
+  if (!dados || !rel || !totais)
+    return (
+      <PageShell titulo={erro ? 'Falha ao abrir o relatório' : 'Carregando…'}>
+        <p className={erro ? 'text-sm text-red-700' : 'text-sm text-slate-500'}>
+          {erro ?? 'Carregando dados…'}
+        </p>
+      </PageShell>
+    )
   const orcAdaptado: Orcamento = {
     ...rel,
     materiais: [],
@@ -167,32 +238,17 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
       <Button variant="ghost" onClick={() => navegar({ nome: 'historicoRelatorios' })}>
         Voltar
       </Button>
-      <Button variant="outline" onClick={() => setPrevia(true)}>
+      <Button variant="outline" onClick={abrirPrevia} disabled={ocupado !== null}>
         Prévia
       </Button>
-      <Button
-        variant="outline"
-        onClick={() => {
-          void salvar().then((r) => r && api.documentos.gerarRelatorioPdf(r.id))
-        }}
-      >
+      <Button variant="outline" onClick={() => exportar('pdf')} disabled={ocupado !== null}>
         PDF
       </Button>
-      <Button
-        variant="outline"
-        onClick={() => {
-          void salvar().then((r) => r && api.documentos.gerarRelatorioDocx(r.id))
-        }}
-      >
+      <Button variant="outline" onClick={() => exportar('docx')} disabled={ocupado !== null}>
         Word
       </Button>
-      <Button
-        disabled={salvando}
-        onClick={() => {
-          void salvar()
-        }}
-      >
-        {salvando ? 'Salvando…' : 'Salvar'}
+      <Button disabled={ocupado !== null} onClick={salvar}>
+        {ocupado === 'salvar' ? 'Salvando…' : 'Salvar'}
       </Button>
     </div>
   )
@@ -203,6 +259,11 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
       acoes={acoes}
     >
       {erro && <p className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{erro}</p>}
+      {mensagem && (
+        <p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
+          {mensagem}
+        </p>
+      )}
       {rel.origemOrcamento && (
         <p className="mb-4 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-800">
           Gerado da proposta Nº {rel.origemOrcamento.numero}. Alterações aqui não mudam a proposta.
@@ -229,7 +290,20 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
           <Field label="Status">
             <Select
               value={rel.status}
-              onChange={(e) => set({ status: e.target.value as Relatorio['status'] })}
+              onChange={(e) => {
+                const status = e.target.value as Relatorio['status']
+                if (status !== 'rascunho') {
+                  const erros = validarRelatorioFinal({ ...rel, status, totais })
+                  if (erros.length) {
+                    setErro(
+                      `Complete o relatório antes de alterar o status. ${mensagemValidacao(erros)}`
+                    )
+                    return
+                  }
+                }
+                setErro(null)
+                set({ status })
+              }}
             >
               <option value="rascunho">Rascunho</option>
               <option value="emitido">Emitido</option>

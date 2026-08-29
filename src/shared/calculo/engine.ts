@@ -70,9 +70,9 @@ function custoMaoDeObra(g: GrupoMaoDeObra, dias: number, p: ParametrosEncargos):
   if (g.demitidoAoFim && p.percentualMultaRescisao > 0) {
     linhas.push({
       chave: `mo:${g.id}:resc`,
-      descricao: `Rescisão / quebra de contrato (${round2(p.percentualMultaRescisao)}%)`,
+      descricao: `Provisão rescisória estimada (${round2(p.percentualMultaRescisao)}%)`,
       valor: baseEncargos * (p.percentualMultaRescisao / 100),
-      detalhe: 'Aviso e multa sobre a carteira do período'
+      detalhe: 'Estimativa configurável sobre a base salarial do período'
     })
   }
 
@@ -123,7 +123,7 @@ export function normalizarEntrada(e: EntradaCalculo): EntradaCalculo {
 }
 
 /**
- * Calcula o custo total de um serviço, aplica a margem de lucro e o imposto da
+ * Calcula o custo total de um serviço, aplica o acréscimo sobre custo e o imposto da
  * nota (quando houver), retornando o preço final e o detalhamento.
  */
 export function calcularCustoServico(entrada: EntradaCalculo): ResultadoCalculo {
@@ -214,7 +214,7 @@ export function calcularCustoServico(entrada: EntradaCalculo): ResultadoCalculo 
   const precoComMargem = round2(custoTotal + valorMargem)
 
   // Imposto da nota: incide sobre o faturamento.
-  //  - gross_up: divide por (1 - alíquota) para preservar a margem líquida (padrão).
+  //  - gross_up: divide por (1 - alíquota) para preservar o valor líquido (padrão).
   //  - simples: soma a alíquota sobre o preço com margem.
   const aliquotaNotaPercent = e.aliquotaNotaPercent || 0
   let impostoNota = 0

@@ -1,7 +1,7 @@
 # Gerador de Orçamentos — VS Prestadora de Serviços
 
 Aplicação **desktop** (Electron + React + TypeScript) para calcular o custo de serviços,
-aplicar margem de lucro e gerar orçamentos no layout da VS Prestadora, exportando **PDF** e **DOCX**.
+aplicar acréscimo sobre o custo e gerar orçamentos no layout da VS Prestadora, exportando **PDF** e **DOCX**.
 
 ## Requisitos
 

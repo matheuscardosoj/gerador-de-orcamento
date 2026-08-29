@@ -7,7 +7,7 @@ import { PageShell } from '../ui/layout'
 import { Badge, Button, ConfirmDialog, EmptyState, IconButton, Input } from '../ui/primitives'
 import { DataTableFrame, Pagination, SortableHeader, TableActions } from '../ui/dataTable'
 import { formatMoeda, formatDataCurta } from '@shared/format'
-import type { Orcamento, StatusOrcamento } from '@shared/types'
+import type { ResumoOrcamento, StatusOrcamento } from '@shared/types'
 
 const statusInfo: Record<
   StatusOrcamento,
@@ -23,12 +23,12 @@ const POR_PAGINA = 12
 
 export function HistoricoPage(): JSX.Element {
   const { navegar } = useNav()
-  const { data, loading, reload } = useAsync(() => api.orcamentos.list(), [])
+  const { data, loading, error: erroCarga, reload } = useAsync(() => api.orcamentos.list(), [])
   const [busca, setBusca] = useState('')
   const [campo, setCampo] = useState<Campo>('numero')
   const [dir, setDir] = useState<'asc' | 'desc'>('desc')
   const [pagina, setPagina] = useState(1)
-  const [excluir, setExcluir] = useState<Orcamento | null>(null)
+  const [excluir, setExcluir] = useState<ResumoOrcamento | null>(null)
   const [excluindo, setExcluindo] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const orcamentos = useMemo(() => data ?? [], [data])
@@ -40,7 +40,7 @@ export function HistoricoPage(): JSX.Element {
         String(o.numero).includes(q) ||
         o.destinatario.toLowerCase().includes(q) ||
         (o.observacaoInterna ?? '').toLowerCase().includes(q) ||
-        o.itensServico.some((i) => i.descricao.toLowerCase().includes(q)) ||
+        o.servicosBusca.some((descricao) => descricao.toLowerCase().includes(q)) ||
         String(o.valorTotal).includes(q) ||
         formatMoeda(o.valorTotal).toLowerCase().includes(q)
     )
@@ -109,13 +109,19 @@ export function HistoricoPage(): JSX.Element {
           />
         </div>
       )}
-      {erro && (
+      {(erro || erroCarga) && (
         <p role="alert" className="mb-4 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">
-          {erro}
+          {erro ?? `Não foi possível carregar os orçamentos. ${erroCarga}`}
         </p>
       )}
       {loading ? (
         <p className="text-sm text-slate-500">Carregando…</p>
+      ) : erroCarga && !data ? (
+        <EmptyState
+          title="Falha ao carregar os orçamentos"
+          description="Verifique o banco de dados e tente novamente."
+          action={<Button onClick={reload}>Tentar novamente</Button>}
+        />
       ) : !ordenados.length ? (
         <EmptyState
           title={orcamentos.length ? 'Nada encontrado' : 'Nenhum orçamento ainda'}

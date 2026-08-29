@@ -13,7 +13,14 @@ import {
   pagamentosRepo
 } from './repositories'
 import type { ResultadoImportacaoDados } from '@shared/api'
-import type { ItemMaterial, ItemServico, ItemTexto, LancamentoRelatorio } from '@shared/types'
+import type {
+  FormaPagamentoPadrao,
+  ItemMaterial,
+  ItemServico,
+  ItemTexto,
+  LancamentoRelatorio,
+  ObservacaoPadrao
+} from '@shared/types'
 
 type Modo = 'restaurar' | 'mesclar'
 type Resumo = Pick<ResultadoImportacaoDados, 'importados' | 'ignorados' | 'renumerados'>
@@ -466,6 +473,24 @@ function mesclar(fonte: Database): Resumo {
   const servicos = new Map<string, string>()
   const observacoes = new Map<string, string>()
   const pagamentos = new Map<string, string>()
+  const clientesExistentes = new Map(
+    clientesRepo.list().map((cliente) => [normal(cliente.nome), cliente] as const)
+  )
+  const chaveServico = (nome: unknown, unidade: unknown): string =>
+    `${normal(nome)}\u0000${normal(unidade)}`
+  const servicosExistentes = new Map(
+    servicosRepo
+      .list()
+      .map((servico) => [chaveServico(servico.nome, servico.unidade), servico] as const)
+  )
+  const chaveTexto = (texto: unknown, aplicacao: unknown): string =>
+    `${normal(texto)}\u0000${String(aplicacao)}`
+  const observacoesExistentes = new Map(
+    observacoesRepo.list().map((item) => [chaveTexto(item.texto, item.aplicacao), item] as const)
+  )
+  const pagamentosExistentes = new Map(
+    pagamentosRepo.list().map((item) => [chaveTexto(item.texto, item.aplicacao), item] as const)
+  )
   const chaveDocumento = (id: unknown): string => `${origem.id}:${String(id)}`
   const jaImportado = (tipo: 'orcamento' | 'relatorio', id: unknown): boolean =>
     Boolean(
@@ -480,7 +505,7 @@ function mesclar(fonte: Database): Resumo {
   for (const registro of linhas(fonte, 'SELECT * FROM clientes')) {
     const x = linha(registro)
     const origemId = String(x.id)
-    const equivalente = clientesRepo.list().find((atual) => normal(atual.nome) === normal(x.nome))
+    const equivalente = clientesExistentes.get(normal(x.nome))
     if (equivalente) {
       clientes.set(origemId, equivalente.id)
       contar(r, 'clientes', 'ignorados')
@@ -496,18 +521,14 @@ function mesclar(fonte: Database): Resumo {
       ativo: x.ativo == null || Number(x.ativo) === 1
     })
     clientes.set(origemId, novo.id)
+    clientesExistentes.set(normal(novo.nome), novo)
     contar(r, 'clientes', 'importados')
   }
 
   for (const registro of linhas(fonte, 'SELECT * FROM servicos')) {
     const x = linha(registro)
     const origemId = String(x.id)
-    const equivalente = servicosRepo
-      .list()
-      .find(
-        (atual) =>
-          normal(atual.nome) === normal(x.nome) && normal(atual.unidade) === normal(x.unidade)
-      )
+    const equivalente = servicosExistentes.get(chaveServico(x.nome, x.unidade))
     if (equivalente) {
       servicos.set(origemId, equivalente.id)
       contar(r, 'servicos', 'ignorados')
@@ -521,21 +542,21 @@ function mesclar(fonte: Database): Resumo {
       precoReferencia: x.preco_referencia == null ? null : Number(x.preco_referencia)
     })
     servicos.set(origemId, novo.id)
+    servicosExistentes.set(chaveServico(novo.nome, novo.unidade), novo)
     contar(r, 'servicos', 'importados')
   }
 
   const importarTextos = (
     tabela: 'observacoes_padrao' | 'pagamentos_padrao',
     repo: typeof observacoesRepo | typeof pagamentosRepo,
-    mapa: Map<string, string>
+    mapa: Map<string, string>,
+    existentes: Map<string, ObservacaoPadrao | FormaPagamentoPadrao>
   ): void => {
     for (const registro of linhas(fonte, `SELECT * FROM ${tabela}`)) {
       const x = linha(registro)
       const origemId = String(x.id)
       const aplicacao = String(x.aplicacao ?? 'orcamento')
-      const equivalente = repo
-        .list()
-        .find((atual) => normal(atual.texto) === normal(x.texto) && atual.aplicacao === aplicacao)
+      const equivalente = existentes.get(chaveTexto(x.texto, aplicacao))
       if (equivalente) {
         mapa.set(origemId, equivalente.id)
         contar(r, tabela, 'ignorados')
@@ -548,11 +569,12 @@ function mesclar(fonte: Database): Resumo {
         aplicacao
       } as never)
       mapa.set(origemId, novo.id)
+      existentes.set(chaveTexto(novo.texto, novo.aplicacao), novo)
       contar(r, tabela, 'importados')
     }
   }
-  importarTextos('observacoes_padrao', observacoesRepo, observacoes)
-  importarTextos('pagamentos_padrao', pagamentosRepo, pagamentos)
+  importarTextos('observacoes_padrao', observacoesRepo, observacoes, observacoesExistentes)
+  importarTextos('pagamentos_padrao', pagamentosRepo, pagamentos, pagamentosExistentes)
 
   for (const registro of linhas(fonte, 'SELECT * FROM orcamentos ORDER BY criado_em')) {
     const x = linha(registro)

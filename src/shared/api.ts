@@ -9,7 +9,9 @@ import type {
   Orcamento,
   Relatorio,
   ConfigIA,
-  StatusIA
+  StatusIA,
+  ResumoOrcamento,
+  ResumoRelatorio
 } from './types'
 
 export interface CrudApi<T, C> {
@@ -71,6 +73,7 @@ export interface ResultadoImportacaoDados {
 export interface AppApi {
   aplicativo: {
     versao(): Promise<string>
+    alteracoesPendentes(ativo: boolean): Promise<void>
   }
   empresa: {
     get(): Promise<EmpresaConfig>
@@ -85,7 +88,7 @@ export interface AppApi {
   observacoes: CrudApi<ObservacaoPadrao, Omit<ObservacaoPadrao, 'id'>>
   pagamentos: CrudApi<FormaPagamentoPadrao, Omit<FormaPagamentoPadrao, 'id'>>
   orcamentos: {
-    list(): Promise<Orcamento[]>
+    list(): Promise<ResumoOrcamento[]>
     get(id: string): Promise<Orcamento | null>
     proximoNumero(): Promise<number>
     create(dto: NovoOrcamento): Promise<Orcamento>
@@ -103,7 +106,7 @@ export interface AppApi {
     ): Promise<ResultadoNumeracao & { orcamento?: Orcamento }>
   }
   relatorios: {
-    list(): Promise<Relatorio[]>
+    list(): Promise<ResumoRelatorio[]>
     get(id: string): Promise<Relatorio | null>
     proximoNumero(): Promise<number>
     create(dto: NovoRelatorio): Promise<Relatorio>

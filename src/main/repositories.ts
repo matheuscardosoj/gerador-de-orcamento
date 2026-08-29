@@ -37,12 +37,23 @@ import type {
   StatusRelatorio,
   TipoLancamentoRelatorio,
   TipoReferenciaAnexoRelatorio,
-  AplicacaoTextoPadrao
+  AplicacaoTextoPadrao,
+  ResumoOrcamento,
+  ResumoRelatorio
 } from '@shared/types'
 import type { InfoNumeracao, ResultadoNumeracao } from '@shared/api'
 import { calcularTotaisRelatorio } from '@shared/relatorio'
 import { normalizarDestinatario } from '@shared/documento/comum'
 import { dataCivilHoje } from '@shared/format'
+import {
+  exigirValidacao,
+  validarParametrosFinanceiros,
+  validarUrlOllamaLocal,
+  normalizarOrcamento,
+  normalizarRelatorio,
+  validarOrcamentoFinal,
+  validarRelatorioFinal
+} from '@shared/validacao'
 
 const nowIso = (): string => new Date().toISOString()
 
@@ -100,6 +111,7 @@ export const parametrosRepo = {
   get: (): ParametrosFinanceiros => lerConfig('parametros', bancoInicial().parametros),
   save: (patch: Partial<ParametrosFinanceiros>): ParametrosFinanceiros => {
     const atual = { ...parametrosRepo.get(), ...patch }
+    exigirValidacao(validarParametrosFinanceiros(atual))
     gravarConfig('parametros', atual)
     return atual
   }
@@ -110,6 +122,7 @@ export const configIARepo = {
   get: (): ConfigIA => lerConfig('configIA', configIAPadrao),
   save: (patch: Partial<ConfigIA>): ConfigIA => {
     const atual = { ...configIARepo.get(), ...patch }
+    if (atual.modo === 'ollama') exigirValidacao(validarUrlOllamaLocal(atual.urlOllama))
     gravarConfig('configIA', atual)
     return atual
   }
@@ -409,6 +422,36 @@ function paraOrcamento(l: Linha, filhos: boolean, comMiniaturas = filhos): Orcam
   }
 }
 
+function listarResumosOrcamento(): ResumoOrcamento[] {
+  const servicosPorOrcamento = new Map<string, string[]>()
+  for (const linha of all('SELECT orcamento_id, descricao FROM itens_servico ORDER BY ordem')) {
+    const id = texto(linha.orcamento_id)
+    const descricoes = servicosPorOrcamento.get(id) ?? []
+    descricoes.push(texto(linha.descricao))
+    servicosPorOrcamento.set(id, descricoes)
+  }
+  return all(
+    `SELECT o.*, COALESCE(c.nome, o.destinatario) AS destinatario_resumo
+       FROM orcamentos o
+       LEFT JOIN clientes c ON c.id = o.cliente_id
+      ORDER BY o.criado_em DESC`
+  ).map((linha) => {
+    const id = texto(linha.id)
+    return {
+      id,
+      numero: numero(linha.numero),
+      data: texto(linha.data),
+      destinatario: normalizarDestinatario(texto(linha.destinatario_resumo)),
+      observacaoInterna: textoOuNulo(linha.observacao_interna) ?? '',
+      valorTotal: numero(linha.valor_total),
+      status: texto(linha.status) as StatusOrcamento,
+      criadoEm: texto(linha.criado_em),
+      atualizadoEm: texto(linha.atualizado_em),
+      servicosBusca: servicosPorOrcamento.get(id) ?? []
+    }
+  })
+}
+
 /** Regrava todas as coleções filhas do orçamento na ordem em que chegaram. */
 function gravarFilhos(orcamentoId: string, orc: Orcamento): void {
   run('DELETE FROM itens_servico WHERE orcamento_id = ?', [orcamentoId])
@@ -570,10 +613,7 @@ function validarNumero(numero: number, ignorarId?: string): ResultadoNumeracao |
 }
 
 export const orcamentosRepo = {
-  list: (): Orcamento[] =>
-    all('SELECT * FROM orcamentos ORDER BY criado_em DESC').map((l) =>
-      paraOrcamento(l, true, false)
-    ),
+  list: (): ResumoOrcamento[] => listarResumosOrcamento(),
 
   get: (id: string): Orcamento | null => {
     const l = get('SELECT * FROM orcamentos WHERE id = ?', [id])
@@ -631,13 +671,14 @@ export const orcamentosRepo = {
       // estourar o UNIQUE — a validação amigável acontece antes, na interface.
       const numero = pedido && !donoDoNumero(pedido) ? pedido : proximoNumeroLivre()
       gravarConfig('seqOrcamento', Math.max(numero, seqAtual()))
-      const orc: Orcamento = {
+      const orc = normalizarOrcamento<Orcamento>({
         ...dto,
         id: randomUUID(),
         numero,
         criadoEm: original?.criadoEm ?? nowIso(),
         atualizadoEm: original?.atualizadoEm ?? nowIso()
-      }
+      })
+      if (!original && orc.status !== 'rascunho') exigirValidacao(validarOrcamentoFinal(orc))
       run(
         `INSERT INTO orcamentos
            (id, numero, data, cliente_id, destinatario, formato, titulo, introducao,
@@ -668,7 +709,13 @@ export const orcamentosRepo = {
     tx(() => {
       const atual = orcamentosRepo.get(id)
       if (!atual) return null
-      const novo: Orcamento = { ...atual, ...patch, id, atualizadoEm: nowIso() }
+      const novo = normalizarOrcamento<Orcamento>({
+        ...atual,
+        ...patch,
+        id,
+        atualizadoEm: nowIso()
+      })
+      if (novo.status !== 'rascunho') exigirValidacao(validarOrcamentoFinal(novo))
       run(
         `UPDATE orcamentos SET data = ?, cliente_id = ?, destinatario = ?, formato = ?, titulo = ?,
            introducao = ?, prazo_dias = ?, observacao_interna = ?, valor_total = ?, status = ?, atualizado_em = ?
@@ -865,6 +912,43 @@ function paraRelatorio(l: Linha, filhos: boolean, comMiniaturas = filhos): Relat
   }
 }
 
+function listarResumosRelatorio(): ResumoRelatorio[] {
+  return all(
+    `SELECT r.*, COALESCE(c.nome, r.destinatario) AS destinatario_resumo
+       FROM relatorios r
+       LEFT JOIN clientes c ON c.id = r.cliente_id
+      ORDER BY r.criado_em DESC`
+  ).map((linha) => {
+    const origemId = textoOuNulo(linha.origem_orcamento_id)
+    const saldo = numero(linha.saldo)
+    return {
+      id: texto(linha.id),
+      numero: numero(linha.numero),
+      data: texto(linha.data),
+      destinatario: normalizarDestinatario(texto(linha.destinatario_resumo)),
+      observacaoInterna: textoOuNulo(linha.observacao_interna) ?? '',
+      status: texto(linha.status) as StatusRelatorio,
+      origemOrcamento: origemId
+        ? {
+            id: origemId,
+            numero: numero(linha.origem_orcamento_numero),
+            cliente: texto(linha.origem_orcamento_cliente)
+          }
+        : null,
+      totais: {
+        servicos: numero(linha.total_servicos),
+        adiantamentos: numero(linha.total_adiantamentos),
+        reembolsos: numero(linha.total_reembolsos),
+        saldo,
+        valorFinal: Math.abs(saldo),
+        tipoSaldo: saldo < 0 ? 'devolver' : 'receber'
+      },
+      criadoEm: texto(linha.criado_em),
+      atualizadoEm: texto(linha.atualizado_em)
+    }
+  })
+}
+
 function gravarAnexosRelatorio(relatorioId: string, anexos: AnexoRelatorio[]): void {
   const existentes = new Set(
     all('SELECT id FROM relatorio_anexos WHERE relatorio_id = ?', [relatorioId]).map((l) =>
@@ -997,10 +1081,7 @@ function validarNumeroRelatorio(n: number, ignorarId?: string): ResultadoNumerac
 }
 
 export const relatoriosRepo = {
-  list: (): Relatorio[] =>
-    all('SELECT * FROM relatorios ORDER BY criado_em DESC').map((l) =>
-      paraRelatorio(l, true, false)
-    ),
+  list: (): ResumoRelatorio[] => listarResumosRelatorio(),
 
   get: (id: string): Relatorio | null => {
     const l = get('SELECT * FROM relatorios WHERE id = ?', [id])
@@ -1050,7 +1131,7 @@ export const relatoriosRepo = {
       gravarConfig('seqRelatorio', Math.max(numeroRel, seqRelatorioAtual()))
       const totais = calcularTotaisRelatorio(dto.itensServico, dto.adiantamentos, dto.reembolsos)
       const agora = nowIso()
-      const rel: Relatorio = {
+      const rel = normalizarRelatorio<Relatorio>({
         ...dto,
         destinatario: normalizarDestinatario(dto.destinatario),
         totais,
@@ -1058,7 +1139,8 @@ export const relatoriosRepo = {
         numero: numeroRel,
         criadoEm: original?.criadoEm ?? agora,
         atualizadoEm: original?.atualizadoEm ?? agora
-      }
+      })
+      if (!original && rel.status !== 'rascunho') exigirValidacao(validarRelatorioFinal(rel))
       run(
         `INSERT INTO relatorios
            (id, numero, data, cliente_id, destinatario, formato, titulo, introducao, observacao_interna, status,
@@ -1095,7 +1177,13 @@ export const relatoriosRepo = {
     tx(() => {
       const atual = relatoriosRepo.get(id)
       if (!atual) return null
-      const novo = { ...atual, ...patch, id, atualizadoEm: nowIso() }
+      const novo = normalizarRelatorio<Relatorio>({
+        ...atual,
+        ...patch,
+        id,
+        atualizadoEm: nowIso()
+      })
+      if (novo.status !== 'rascunho') exigirValidacao(validarRelatorioFinal(novo))
       novo.destinatario = normalizarDestinatario(novo.destinatario)
       novo.totais = calcularTotaisRelatorio(novo.itensServico, novo.adiantamentos, novo.reembolsos)
       run(

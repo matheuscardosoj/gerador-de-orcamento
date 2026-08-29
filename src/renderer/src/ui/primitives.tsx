@@ -12,6 +12,7 @@ import {
   type SelectHTMLAttributes,
   type ReactNode
 } from 'react'
+import { createPortal } from 'react-dom'
 import { X, type LucideIcon } from 'lucide-react'
 
 export function cn(...parts: Array<string | false | null | undefined>): string {
@@ -183,19 +184,38 @@ export function NumberField({
 export function Field({
   label,
   hint,
+  error,
   children,
   className
 }: {
   label?: ReactNode
   hint?: ReactNode
+  error?: ReactNode
   children: ReactNode
   className?: string
 }): JSX.Element {
   const gerado = useId()
+  const hintId = hint ? `${gerado}-hint` : undefined
+  const errorId = error ? `${gerado}-error` : undefined
   const unico = Children.count(children) === 1 && isValidElement(children) ? children : null
   const rotulavel = unico && [Input, Textarea, Select, NumberField].includes(unico.type as never)
   const idControle = rotulavel ? String((unico.props as { id?: string }).id ?? gerado) : undefined
-  const conteudo = rotulavel ? cloneElement(unico, { id: idControle } as never) : children
+  const descricoes = [
+    String(
+      (unico?.props as { 'aria-describedby'?: string } | undefined)?.['aria-describedby'] ?? ''
+    ),
+    hintId,
+    errorId
+  ]
+    .filter(Boolean)
+    .join(' ')
+  const conteudo = rotulavel
+    ? cloneElement(unico, {
+        id: idControle,
+        'aria-describedby': descricoes || undefined,
+        'aria-invalid': error ? true : undefined
+      } as never)
+    : children
   return (
     <div className={cn('block space-y-1', className)}>
       {label &&
@@ -207,7 +227,16 @@ export function Field({
           <span className="block text-sm font-medium text-slate-700">{label}</span>
         ))}
       {conteudo}
-      {hint && <span className="block text-xs text-slate-400">{hint}</span>}
+      {hint && (
+        <span id={hintId} className="block text-xs text-slate-500">
+          {hint}
+        </span>
+      )}
+      {error && (
+        <span id={errorId} role="alert" className="block text-xs text-red-600">
+          {error}
+        </span>
+      )}
     </div>
   )
 }
@@ -260,7 +289,7 @@ export function SectionTitle({
   action?: ReactNode
 }): JSX.Element {
   return (
-    <div className="mb-4 flex items-start justify-between gap-4">
+    <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
       <div>
         <h2 className="text-lg font-semibold text-slate-800">{title}</h2>
         {description && <p className="mt-0.5 text-sm text-slate-500">{description}</p>}
@@ -321,14 +350,16 @@ export function Modal({
   title,
   children,
   footer,
-  size = 'lg'
+  size = 'lg',
+  busy = false
 }: {
   open: boolean
   onClose: () => void
   title?: ReactNode
   children: ReactNode
   footer?: ReactNode
-  size?: 'md' | 'lg' | 'xl'
+  size?: 'md' | 'lg' | 'xl' | '2xl'
+  busy?: boolean
 }): JSX.Element | null {
   const tituloId = useId()
   const caixaRef = useRef<HTMLDivElement>(null)
@@ -346,23 +377,53 @@ export function Modal({
           ?.focus(),
       0
     )
+    const raiz = document.getElementById('root')
+    const ariaAnterior = raiz?.getAttribute('aria-hidden')
+    raiz?.setAttribute('inert', '')
+    raiz?.setAttribute('aria-hidden', 'true')
     const teclado = (evento: KeyboardEvent): void => {
-      if (evento.key === 'Escape') onClose()
+      if (evento.key === 'Escape' && !busy) onClose()
+      if (evento.key !== 'Tab' || !caixaRef.current) return
+      const focaveis = [
+        ...caixaRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+        )
+      ]
+      if (!focaveis.length) return
+      const primeiro = focaveis[0]
+      const ultimo = focaveis[focaveis.length - 1]
+      if (evento.shiftKey && document.activeElement === primeiro) {
+        evento.preventDefault()
+        ultimo.focus()
+      } else if (!evento.shiftKey && document.activeElement === ultimo) {
+        evento.preventDefault()
+        primeiro.focus()
+      }
     }
     document.addEventListener('keydown', teclado)
     return () => {
       window.clearTimeout(timer)
       document.removeEventListener('keydown', teclado)
+      raiz?.removeAttribute('inert')
+      if (ariaAnterior === null || ariaAnterior === undefined) raiz?.removeAttribute('aria-hidden')
+      else raiz?.setAttribute('aria-hidden', ariaAnterior)
       focoAnterior.current?.focus()
     }
-  }, [open, onClose])
+  }, [busy, open, onClose])
   if (!open) return null
-  const width = size === 'md' ? 'max-w-lg' : size === 'lg' ? 'max-w-2xl' : 'max-w-4xl'
-  return (
+  const width =
+    size === 'md'
+      ? 'max-w-lg'
+      : size === 'lg'
+        ? 'max-w-2xl'
+        : size === 'xl'
+          ? 'max-w-4xl'
+          : 'max-w-5xl'
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 sm:p-8"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose()
+        if (e.target === e.currentTarget && !busy) onClose()
       }}
     >
       <div
@@ -383,6 +444,7 @@ export function Modal({
             </h3>
             <button
               onClick={onClose}
+              disabled={busy}
               className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-brand-teal/40"
               aria-label="Fechar"
             >
@@ -397,7 +459,8 @@ export function Modal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -406,6 +469,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = 'Excluir',
+  cancelLabel = 'Cancelar',
   danger = true,
   busy = false,
   onCancel,
@@ -415,6 +479,7 @@ export function ConfirmDialog({
   title: ReactNode
   description: ReactNode
   confirmLabel?: string
+  cancelLabel?: string
   danger?: boolean
   busy?: boolean
   onCancel: () => void
@@ -426,10 +491,11 @@ export function ConfirmDialog({
       onClose={onCancel}
       title={title}
       size="md"
+      busy={busy}
       footer={
         <>
           <Button variant="secondary" onClick={onCancel} disabled={busy}>
-            Cancelar
+            {cancelLabel}
           </Button>
           <Button
             variant={danger ? 'danger' : 'primary'}

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Pencil, X } from 'lucide-react'
 import { api } from '../lib/api'
-import { useNav } from '../lib/nav'
+import { useBloqueioEdicao, useNav } from '../lib/nav'
 import { PageShell } from '../ui/layout'
 import {
   Button,
@@ -37,6 +37,7 @@ import { AnexosCard } from '../components/AnexosCard'
 import { novoId, type ResultadoServico } from '../components/tipos'
 import { normalizarDestinatario } from '@shared/documento/comum'
 import { removerServicoOrcamento } from '@shared/edicao'
+import { mensagemValidacao, normalizarOrcamento, validarOrcamentoFinal } from '@shared/validacao'
 
 export interface Dados {
   empresa: EmpresaConfig
@@ -51,9 +52,10 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
   const { navegar } = useNav()
   const [dados, setDados] = useState<Dados | null>(null)
   const [orc, setOrc] = useState<Orcamento | null>(null)
-  const [salvando, setSalvando] = useState(false)
+  const [ocupado, setOcupado] = useState<'salvar' | 'pdf' | 'docx' | 'relatorio' | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [mensagem, setMensagem] = useState<string | null>(null)
+  const [snapshotSalvo, setSnapshotSalvo] = useState<string | null>(null)
   const [previaAberta, setPreviaAberta] = useState(false)
   // Número com que o orçamento foi carregado: só mexemos na numeração se mudou.
   const [numeroOriginal, setNumeroOriginal] = useState<number | null>(null)
@@ -61,53 +63,62 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
   useEffect(() => {
     let vivo = true
     ;(async () => {
-      const [empresa, parametros, clientes, servicos, observacoesPadrao, pagamentosPadrao] =
-        await Promise.all([
-          api.empresa.get(),
-          api.parametros.get(),
-          api.clientes.list(),
-          api.servicos.list(),
-          api.observacoes.list(),
-          api.pagamentos.list()
-        ])
-      if (!vivo) return
-      setDados({ empresa, parametros, clientes, servicos, observacoesPadrao, pagamentosPadrao })
-
-      if (orcamentoId) {
-        const existente = await api.orcamentos.get(orcamentoId)
-        if (vivo && existente) {
-          setOrc(existente)
-          setNumeroOriginal(existente.numero)
-        }
-      } else {
-        const numero = await api.orcamentos.proximoNumero()
+      try {
+        const [empresa, parametros, clientes, servicos, observacoesPadrao, pagamentosPadrao] =
+          await Promise.all([
+            api.empresa.get(),
+            api.parametros.get(),
+            api.clientes.list(),
+            api.servicos.list(),
+            api.observacoes.list(),
+            api.pagamentos.list()
+          ])
         if (!vivo) return
-        setNumeroOriginal(numero)
-        setOrc({
-          id: '',
-          numero,
-          data: dataCivilHoje(),
-          clienteId: null,
-          destinatario: '',
-          formato: 'carta',
-          titulo: 'Proposta de Serviço',
-          introducao: '',
-          itensServico: [],
-          materiais: [],
-          observacoes: observacoesPadrao
-            .filter((o) => o.padrao && (o.aplicacao === 'ambos' || o.aplicacao === 'orcamento'))
-            .map((o) => ({ id: novoId(), texto: o.texto, origemPadraoId: o.id })),
-          pagamentos: pagamentosPadrao
-            .filter((p) => p.padrao && (p.aplicacao === 'ambos' || p.aplicacao === 'orcamento'))
-            .map((p) => ({ id: novoId(), texto: p.texto, origemPadraoId: p.id })),
-          anexos: [],
-          prazoDias: null,
-          observacaoInterna: '',
-          valorTotal: 0,
-          status: 'rascunho',
-          criadoEm: new Date().toISOString(),
-          atualizadoEm: new Date().toISOString()
-        })
+        setDados({ empresa, parametros, clientes, servicos, observacoesPadrao, pagamentosPadrao })
+
+        if (orcamentoId) {
+          const existente = await api.orcamentos.get(orcamentoId)
+          if (!existente) throw new Error('Orçamento não encontrado.')
+          if (vivo) {
+            setOrc(existente)
+            setSnapshotSalvo(JSON.stringify(existente))
+            setNumeroOriginal(existente.numero)
+          }
+        } else {
+          const numero = await api.orcamentos.proximoNumero()
+          if (!vivo) return
+          const novo: Orcamento = {
+            id: '',
+            numero,
+            data: dataCivilHoje(),
+            clienteId: null,
+            destinatario: '',
+            formato: 'carta',
+            titulo: 'Proposta de Serviço',
+            introducao: '',
+            itensServico: [],
+            materiais: [],
+            observacoes: observacoesPadrao
+              .filter((o) => o.padrao && (o.aplicacao === 'ambos' || o.aplicacao === 'orcamento'))
+              .map((o) => ({ id: novoId(), texto: o.texto, origemPadraoId: o.id })),
+            pagamentos: pagamentosPadrao
+              .filter((p) => p.padrao && (p.aplicacao === 'ambos' || p.aplicacao === 'orcamento'))
+              .map((p) => ({ id: novoId(), texto: p.texto, origemPadraoId: p.id })),
+            anexos: [],
+            prazoDias: null,
+            observacaoInterna: '',
+            valorTotal: 0,
+            status: 'rascunho',
+            criadoEm: new Date().toISOString(),
+            atualizadoEm: new Date().toISOString()
+          }
+          setNumeroOriginal(numero)
+          setOrc(novo)
+          setSnapshotSalvo(JSON.stringify(novo))
+        }
+      } catch (e) {
+        if (vivo)
+          setErro(`Não foi possível carregar o editor. ${String(e).replace(/^Error:\s*/, '')}`)
       }
     })()
     return () => {
@@ -119,22 +130,32 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
     () => (orc ? round2(orc.itensServico.reduce((s, i) => s + (i.valorTotal || 0), 0)) : 0),
     [orc]
   )
+  const sujo = orc !== null && snapshotSalvo !== null && JSON.stringify(orc) !== snapshotSalvo
+  useBloqueioEdicao(sujo)
 
   if (!orc || !dados) {
     return (
-      <PageShell titulo="Carregando…">
-        <p className="text-sm text-slate-500">Carregando dados…</p>
+      <PageShell titulo={erro ? 'Falha ao abrir o orçamento' : 'Carregando…'}>
+        <p className={erro ? 'text-sm text-red-700' : 'text-sm text-slate-500'}>
+          {erro ?? 'Carregando dados…'}
+        </p>
       </PageShell>
     )
   }
 
   const set = (patch: Partial<Orcamento>): void => setOrc({ ...orc, ...patch })
 
-  const salvar = async (): Promise<Orcamento | null> => {
-    setSalvando(true)
+  const persistir = async (exigirFinal: boolean): Promise<Orcamento | null> => {
     setErro(null)
     try {
-      const payload = { ...orc, valorTotal: total }
+      const payload = normalizarOrcamento({ ...orc, valorTotal: total })
+      if (exigirFinal || payload.status !== 'rascunho') {
+        const erros = validarOrcamentoFinal(payload)
+        if (erros.length) {
+          setErro(`Complete o documento antes desta ação. ${mensagemValidacao(erros)}`)
+          return null
+        }
+      }
       const numeroMudou = numeroOriginal !== null && orc.numero !== numeroOriginal
       let salvo: Orcamento | null
 
@@ -158,7 +179,11 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
 
       if (salvo) {
         setOrc(salvo)
+        setSnapshotSalvo(JSON.stringify(salvo))
         setNumeroOriginal(salvo.numero)
+        setMensagem(
+          `Alterações salvas às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`
+        )
         // Orçamento novo com número já ocupado: o main usa o próximo livre em
         // vez de perder o que foi digitado — mas o usuário precisa saber disso.
         if (!orc.id && numeroMudou && salvo.numero !== orc.numero) {
@@ -171,30 +196,62 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
     } catch (e) {
       setErro(String(e).replace(/^Error:\s*/, ''))
       return null
-    } finally {
-      setSalvando(false)
     }
+  }
+
+  const executar = async (
+    operacao: NonNullable<typeof ocupado>,
+    tarefa: () => Promise<void>
+  ): Promise<void> => {
+    if (ocupado) return
+    setOcupado(operacao)
+    setMensagem(null)
+    try {
+      await tarefa()
+    } finally {
+      setOcupado(null)
+    }
+  }
+
+  const salvar = (): void => {
+    void executar('salvar', async () => {
+      await persistir(false)
+    })
   }
 
   const exportar = async (tipo: 'pdf' | 'docx'): Promise<void> => {
-    const salvo = await salvar()
-    if (!salvo) return
-    try {
-      const r =
-        tipo === 'pdf'
-          ? await api.documentos.gerarPdf(salvo.id)
-          : await api.documentos.gerarDocx(salvo.id)
-      if (r.caminho) setMensagem(`Documento gerado com sucesso: ${r.caminho}`)
-    } catch (e) {
-      setErro(`Não foi possível gerar o documento. ${String(e).replace(/^Error:\s*/, '')}`)
-    }
+    await executar(tipo, async () => {
+      const salvo = await persistir(true)
+      if (!salvo) return
+      try {
+        const r =
+          tipo === 'pdf'
+            ? await api.documentos.gerarPdf(salvo.id)
+            : await api.documentos.gerarDocx(salvo.id)
+        if (r.caminho) setMensagem(`Documento gerado com sucesso: ${r.caminho}`)
+      } catch (e) {
+        setErro(`Não foi possível gerar o documento. ${String(e).replace(/^Error:\s*/, '')}`)
+      }
+    })
   }
 
   const gerarRelatorio = async (): Promise<void> => {
-    const salvo = await salvar()
-    if (!salvo) return
-    const rel = await api.relatorios.criarDeOrcamento(salvo.id)
-    if (rel) navegar({ nome: 'editorRelatorio', relatorioId: rel.id })
+    await executar('relatorio', async () => {
+      const salvo = await persistir(true)
+      if (!salvo) return
+      const rel = await api.relatorios.criarDeOrcamento(salvo.id)
+      if (rel) navegar({ nome: 'editorRelatorio', relatorioId: rel.id })
+    })
+  }
+
+  const abrirPrevia = (): void => {
+    const erros = validarOrcamentoFinal(normalizarOrcamento({ ...orc, valorTotal: total }))
+    if (erros.length) {
+      setErro(`Complete o documento antes da prévia final. ${mensagemValidacao(erros)}`)
+      return
+    }
+    setErro(null)
+    setPreviaAberta(true)
   }
 
   return (
@@ -206,20 +263,20 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
           <Button variant="ghost" onClick={() => navegar({ nome: 'historico' })}>
             Voltar
           </Button>
-          <Button variant="outline" onClick={() => setPreviaAberta(true)}>
+          <Button variant="outline" onClick={abrirPrevia} disabled={ocupado !== null}>
             Prévia
           </Button>
-          <Button variant="outline" onClick={gerarRelatorio}>
+          <Button variant="outline" onClick={gerarRelatorio} disabled={ocupado !== null}>
             Gerar relatório
           </Button>
-          <Button variant="outline" onClick={() => exportar('docx')}>
+          <Button variant="outline" onClick={() => exportar('docx')} disabled={ocupado !== null}>
             DOCX
           </Button>
-          <Button variant="outline" onClick={() => exportar('pdf')}>
+          <Button variant="outline" onClick={() => exportar('pdf')} disabled={ocupado !== null}>
             PDF
           </Button>
-          <Button onClick={salvar} disabled={salvando}>
-            {salvando ? 'Salvando…' : 'Salvar'}
+          <Button onClick={salvar} disabled={ocupado !== null}>
+            {ocupado === 'salvar' ? 'Salvando…' : 'Salvar'}
           </Button>
         </>
       }
@@ -236,7 +293,7 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
         </div>
       )}
       <div className="space-y-5">
-        <DadosGeraisCard orc={orc} set={set} clientes={dados.clientes} />
+        <DadosGeraisCard orc={orc} set={set} clientes={dados.clientes} onError={setErro} />
         <ServicosCard
           orc={orc}
           set={set}
@@ -291,11 +348,13 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
 function DadosGeraisCard({
   orc,
   set,
-  clientes
+  clientes,
+  onError
 }: {
   orc: Orcamento
   set: (p: Partial<Orcamento>) => void
   clientes: Cliente[]
+  onError: (mensagem: string | null) => void
 }): JSX.Element {
   return (
     <Card className="p-6">
@@ -323,7 +382,20 @@ function DadosGeraisCard({
         <Field label="Status">
           <Select
             value={orc.status}
-            onChange={(e) => set({ status: e.target.value as Orcamento['status'] })}
+            onChange={(e) => {
+              const status = e.target.value as Orcamento['status']
+              if (status !== 'rascunho') {
+                const erros = validarOrcamentoFinal({ ...orc, status })
+                if (erros.length) {
+                  onError(
+                    `Complete o documento antes de alterar o status. ${mensagemValidacao(erros)}`
+                  )
+                  return
+                }
+              }
+              onError(null)
+              set({ status })
+            }}
           >
             <option value="rascunho">Rascunho</option>
             <option value="enviado">Enviado</option>

@@ -6,6 +6,7 @@
 // é rebaixado — dá para rodar quantas vezes quiser.
 import {
   copyFileSync,
+  createReadStream,
   createWriteStream,
   existsSync,
   mkdirSync,
@@ -16,9 +17,10 @@ import {
 } from 'fs'
 import { Readable } from 'stream'
 import { pipeline } from 'stream/promises'
-import { execFileSync } from 'child_process'
+import { execFileSync, spawnSync } from 'child_process'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import { createHash } from 'crypto'
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..')
 const destino = join(raiz, 'resources', 'ia')
@@ -27,10 +29,46 @@ const temp = join(raiz, 'resources', '.tmp-ia')
 const MODELO = {
   arquivo: 'qwen2.5-1.5b-instruct-q4_k_m.gguf',
   url: 'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf?download=true',
-  tamanhoMinimoMB: 800
+  tamanhoMinimoMB: 800,
+  sha256: '6A1A2EB6D15622BF3C96857206351BA97E1AF16C30D7A74EE38970E434E9407E'
+}
+
+const LLAMA = {
+  build: '10087',
+  commit: '1f66c3ce1',
+  nome: 'llama-b10087-bin-win-cpu-x64.zip',
+  url: 'https://github.com/ggml-org/llama.cpp/releases/download/b10087/llama-b10087-bin-win-cpu-x64.zip'
 }
 
 const mb = (bytes) => (bytes / 1024 / 1024).toFixed(1)
+
+async function sha256(caminho) {
+  const hash = createHash('sha256')
+  for await (const trecho of createReadStream(caminho)) hash.update(trecho)
+  return hash.digest('hex').toUpperCase()
+}
+
+function ambienteSemLlama() {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(([chave]) => !chave.toUpperCase().startsWith('LLAMA_'))
+  )
+}
+
+function validarServidor(exe) {
+  const processo = spawnSync(exe, ['--version'], {
+    encoding: 'utf8',
+    env: ambienteSemLlama(),
+    windowsHide: true
+  })
+  if (processo.error) throw processo.error
+  const versao = `${processo.stdout ?? ''}\n${processo.stderr ?? ''}`
+  if (!versao.includes(LLAMA.build) || !versao.includes(LLAMA.commit)) {
+    throw new Error(
+      `llama-server divergente. Esperado build ${LLAMA.build} (${LLAMA.commit}); recebido: ${versao.trim()}`
+    )
+  }
+  process.stdout.write(`[ia] runtime validado: build ${LLAMA.build} (${LLAMA.commit}).\n`)
+}
 
 async function baixar(url, caminho, rotulo) {
   process.stdout.write(`[ia] baixando ${rotulo}…\n`)
@@ -55,32 +93,18 @@ async function baixar(url, caminho, rotulo) {
   process.stdout.write(`[ia] ok: ${rotulo} (${mb(statSync(caminho).size)} MB)\n`)
 }
 
-/** Última release do llama.cpp com o binário de CPU para Windows x64. */
-async function urlDoLlamaServer() {
-  const r = await fetch('https://api.github.com/repos/ggml-org/llama.cpp/releases/latest', {
-    headers: { 'User-Agent': 'gerador-de-orcamento' }
-  })
-  if (!r.ok) throw new Error(`GitHub respondeu ${r.status} ao listar as releases do llama.cpp.`)
-  const release = await r.json()
-  const asset = release.assets.find((a) => /bin-win-cpu-x64\.zip$/i.test(a.name))
-  if (!asset)
-    throw new Error('Nenhum binário win-cpu-x64 encontrado na última release do llama.cpp.')
-  return { url: asset.browser_download_url, nome: asset.name, versao: release.tag_name }
-}
-
 async function prepararServidor() {
   const exe = join(destino, 'llama-server.exe')
   if (existsSync(exe)) {
-    process.stdout.write('[ia] llama-server.exe já presente — pulando.\n')
+    validarServidor(exe)
     return
   }
-  const { url, nome, versao } = await urlDoLlamaServer()
-  process.stdout.write(`[ia] release do llama.cpp: ${versao}\n`)
+  process.stdout.write(`[ia] release fixa do llama.cpp: b${LLAMA.build} (${LLAMA.commit})\n`)
 
   rmSync(temp, { recursive: true, force: true })
   mkdirSync(temp, { recursive: true })
-  const zip = join(temp, nome)
-  await baixar(url, zip, nome)
+  const zip = join(temp, LLAMA.nome)
+  await baixar(LLAMA.url, zip, LLAMA.nome)
 
   // `tar` do Windows 10+ (bsdtar) lê zip — evita depender de outra biblioteca.
   execFileSync('tar', ['-xf', zip, '-C', temp], { stdio: 'inherit' })
@@ -103,19 +127,31 @@ async function prepararServidor() {
 
   if (!existsSync(exe))
     throw new Error('llama-server.exe não foi encontrado dentro do zip baixado.')
+  validarServidor(exe)
 }
 
 async function prepararModelo() {
   const caminho = join(destino, MODELO.arquivo)
   if (existsSync(caminho) && statSync(caminho).size > MODELO.tamanhoMinimoMB * 1024 * 1024) {
-    process.stdout.write('[ia] modelo já presente — pulando.\n')
-    return
+    const hash = await sha256(caminho)
+    if (hash === MODELO.sha256) {
+      process.stdout.write(`[ia] modelo validado por SHA-256: ${hash}\n`)
+      return
+    }
+    process.stdout.write(`[ia] modelo divergente (${hash}); baixando novamente.\n`)
+    rmSync(caminho, { force: true })
   }
   await baixar(MODELO.url, caminho, MODELO.arquivo)
   if (statSync(caminho).size < MODELO.tamanhoMinimoMB * 1024 * 1024) {
     rmSync(caminho)
     throw new Error('O download do modelo veio incompleto. Rode o comando novamente.')
   }
+  const hash = await sha256(caminho)
+  if (hash !== MODELO.sha256) {
+    rmSync(caminho, { force: true })
+    throw new Error(`SHA-256 do modelo inválido. Esperado ${MODELO.sha256}; recebido ${hash}.`)
+  }
+  process.stdout.write(`[ia] modelo validado por SHA-256: ${hash}\n`)
 }
 
 /**

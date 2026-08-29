@@ -5,7 +5,7 @@ import { abrirBanco, fecharBanco } from './db/sqlite'
 import { migrarJsonSeExistir } from './db/migrar-json'
 import { bancoVazio, semear } from './repositories'
 import { encerrarIA } from './ia'
-import { registrarIpc } from './ipc'
+import { haAlteracoesPendentes, liberarAlteracoesPendentes, registrarIpc } from './ipc'
 
 // Usado só por testes automatizados e validações de pacote. Nunca é definido
 // pelo instalador, portanto o perfil normal do usuário continua inalterado.
@@ -58,6 +58,22 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
+  })
+
+  mainWindow.on('close', (evento) => {
+    if (!haAlteracoesPendentes()) return
+    const escolha = dialog.showMessageBoxSync(mainWindow, {
+      type: 'warning',
+      title: 'Alterações não salvas',
+      message: 'Existem alterações não salvas neste editor.',
+      detail: 'Se fechar agora, as alterações serão perdidas.',
+      buttons: ['Continuar editando', 'Descartar alterações'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true
+    })
+    if (escolha === 0) evento.preventDefault()
+    else liberarAlteracoesPendentes()
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
