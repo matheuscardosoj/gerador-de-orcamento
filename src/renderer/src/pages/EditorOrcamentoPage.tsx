@@ -37,7 +37,12 @@ import { AnexosCard } from '../components/AnexosCard'
 import { novoId, type ResultadoServico } from '../components/tipos'
 import { normalizarDestinatario } from '@shared/documento/comum'
 import { removerServicoOrcamento } from '@shared/edicao'
-import { mensagemValidacao, normalizarOrcamento, validarOrcamentoFinal } from '@shared/validacao'
+import {
+  mensagemValidacao,
+  normalizarOrcamento,
+  validarOrcamentoFinal,
+  type ErroValidacao
+} from '@shared/validacao'
 import { DataTableViewport } from '../ui/dataTable'
 
 export interface Dados {
@@ -49,12 +54,21 @@ export interface Dados {
   pagamentosPadrao: FormaPagamentoPadrao[]
 }
 
+function mensagemDoCampo(erros: ErroValidacao[], campo: string): string | undefined {
+  return erros.find((erro) => erro.campo === campo)?.mensagem
+}
+
+function errosDoGrupo(erros: ErroValidacao[], grupo: string): ErroValidacao[] {
+  return erros.filter((erro) => erro.campo === grupo || erro.campo.startsWith(`${grupo}.`))
+}
+
 export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): JSX.Element {
   const { navegar } = useNav()
   const [dados, setDados] = useState<Dados | null>(null)
   const [orc, setOrc] = useState<Orcamento | null>(null)
   const [ocupado, setOcupado] = useState<'salvar' | 'pdf' | 'docx' | 'relatorio' | null>(null)
   const [erro, setErro] = useState<string | null>(null)
+  const [errosValidacao, setErrosValidacao] = useState<ErroValidacao[]>([])
   const [mensagem, setMensagem] = useState<string | null>(null)
   const [snapshotSalvo, setSnapshotSalvo] = useState<string | null>(null)
   const [previaAberta, setPreviaAberta] = useState(false)
@@ -144,7 +158,21 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
     )
   }
 
-  const set = (patch: Partial<Orcamento>): void => setOrc({ ...orc, ...patch })
+  const limparErrosValidacao = (campos: string[]): void => {
+    setErrosValidacao((atuais) =>
+      atuais.filter(
+        (erro) =>
+          !campos.some((campo) => erro.campo === campo || erro.campo.startsWith(`${campo}.`))
+      )
+    )
+  }
+
+  const set = (patch: Partial<Orcamento>): void => {
+    setOrc({ ...orc, ...patch })
+    limparErrosValidacao(Object.keys(patch))
+  }
+
+  const erroDoCampo = (campo: string): string | undefined => mensagemDoCampo(errosValidacao, campo)
 
   const persistir = async (exigirFinal: boolean): Promise<Orcamento | null> => {
     setErro(null)
@@ -153,9 +181,10 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
       if (exigirFinal || payload.status !== 'rascunho') {
         const erros = validarOrcamentoFinal(payload)
         if (erros.length) {
-          setErro(`Complete o documento antes desta ação. ${mensagemValidacao(erros)}`)
+          setErrosValidacao(erros)
           return null
         }
+        setErrosValidacao([])
       }
       const numeroMudou = numeroOriginal !== null && orc.numero !== numeroOriginal
       let salvo: Orcamento | null
@@ -248,10 +277,11 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
   const abrirPrevia = (): void => {
     const erros = validarOrcamentoFinal(normalizarOrcamento({ ...orc, valorTotal: total }))
     if (erros.length) {
-      setErro(`Complete o documento antes da prévia final. ${mensagemValidacao(erros)}`)
+      setErrosValidacao(erros)
       return
     }
     setErro(null)
+    setErrosValidacao([])
     setPreviaAberta(true)
   }
 
@@ -283,7 +313,15 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
       }
     >
       {erro && (
-        <div className="mb-4 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{erro}</div>
+        <div role="alert" className="mb-4 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">
+          {erro}
+        </div>
+      )}
+      {errosValidacao.length > 0 && (
+        <div role="alert" className="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="font-medium">Revise os campos destacados antes de concluir o documento.</p>
+          <p className="mt-1">{mensagemValidacao(errosValidacao)}</p>
+        </div>
       )}
       {mensagem && (
         <div
@@ -294,15 +332,22 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
         </div>
       )}
       <div className="space-y-5">
-        <DadosGeraisCard orc={orc} set={set} clientes={dados.clientes} onError={setErro} />
+        <DadosGeraisCard
+          orc={orc}
+          set={set}
+          clientes={dados.clientes}
+          erroDoCampo={erroDoCampo}
+          onValidacao={setErrosValidacao}
+        />
         <ServicosCard
           orc={orc}
           set={set}
           dados={dados}
           total={total}
+          errosValidacao={errosDoGrupo(errosValidacao, 'itensServico')}
           onRemover={(id) => set(removerServicoOrcamento(orc, id))}
         />
-        <MateriaisCard orc={orc} set={set} />
+        <MateriaisCard orc={orc} set={set} erroDoCampo={erroDoCampo} />
         <TextosCard
           titulo="Observações"
           descricao="Textos que aparecem no rodapé do orçamento"
@@ -350,12 +395,14 @@ function DadosGeraisCard({
   orc,
   set,
   clientes,
-  onError
+  erroDoCampo,
+  onValidacao
 }: {
   orc: Orcamento
   set: (p: Partial<Orcamento>) => void
   clientes: Cliente[]
-  onError: (mensagem: string | null) => void
+  erroDoCampo: (campo: string) => string | undefined
+  onValidacao: (erros: ErroValidacao[]) => void
 }): JSX.Element {
   return (
     <Card className="p-6">
@@ -364,7 +411,7 @@ function DadosGeraisCard({
         <Field label="Número" hint="Sugerido automaticamente; pode ser ajustado">
           <NumberField value={orc.numero} onChange={(v) => set({ numero: v })} min={1} step={1} />
         </Field>
-        <Field label="Data">
+        <Field label="Data" error={erroDoCampo('data')}>
           <Input
             type="date"
             value={normalizarDataCivil(orc.data)}
@@ -388,13 +435,11 @@ function DadosGeraisCard({
               if (status !== 'rascunho') {
                 const erros = validarOrcamentoFinal(normalizarOrcamento({ ...orc, status }))
                 if (erros.length) {
-                  onError(
-                    `Complete o documento antes de alterar o status. ${mensagemValidacao(erros)}`
-                  )
+                  onValidacao(erros)
                   return
                 }
               }
-              onError(null)
+              onValidacao([])
               set({ status })
             }}
           >
@@ -429,6 +474,7 @@ function DadosGeraisCard({
           label="Destinatário (sem vírgula)"
           hint="A vírgula será acrescentada apenas no PDF e DOCX"
           className="md:col-span-2"
+          error={erroDoCampo('destinatario')}
         >
           <Input
             value={orc.destinatario}
@@ -438,7 +484,7 @@ function DadosGeraisCard({
             placeholder="Ex.: TMG"
           />
         </Field>
-        <Field label="Título" className="md:col-span-2">
+        <Field label="Título" className="md:col-span-2" error={erroDoCampo('titulo')}>
           <Input value={orc.titulo} onChange={(e) => set({ titulo: e.target.value })} />
         </Field>
         <Field label="Prazo (dias)" hint="Opcional">
@@ -528,6 +574,7 @@ export function ServicosCard({
   total,
   titulo = 'Serviços a executar',
   rotuloTotal = 'Total do orçamento',
+  errosValidacao = [],
   onRemover
 }: {
   orc: Orcamento
@@ -536,6 +583,7 @@ export function ServicosCard({
   total: number
   titulo?: string
   rotuloTotal?: string
+  errosValidacao?: ErroValidacao[]
   onRemover?: (id: string) => void
 }): JSX.Element {
   const [calcAberto, setCalcAberto] = useState<ItemServico | 'novo' | null>(null)
@@ -601,6 +649,12 @@ export function ServicosCard({
         }
       />
 
+      {errosValidacao.length > 0 && (
+        <p role="alert" className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Revise os serviços destacados antes de concluir o documento.
+        </p>
+      )}
+
       {orc.itensServico.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 py-8 text-center text-sm text-slate-500">
           Nenhum serviço adicionado.
@@ -626,41 +680,52 @@ export function ServicosCard({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {orc.itensServico.map((i) => (
-              <tr key={i.id}>
-                <td className="min-w-0 px-3 py-2 align-middle">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="min-w-0 break-words text-slate-700">{i.descricao}</span>
-                    {i.calculo && <Badge color="green">calculado</Badge>}
-                  </div>
-                </td>
-                <td className="whitespace-nowrap px-3 py-2 text-right text-slate-600">
-                  {i.quantidade}
-                </td>
-                <td className="min-w-0 break-words px-3 py-2 text-slate-600">{i.unidade}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-right text-slate-600">
-                  {formatMoeda(i.valorUnitario)}
-                </td>
-                <td className="whitespace-nowrap px-3 py-2 text-right font-medium text-slate-800">
-                  {formatMoeda(i.valorTotal)}
-                </td>
-                <td className="px-3 py-2 text-right align-middle">
-                  <div className="flex items-center justify-end gap-1 whitespace-nowrap">
-                    <IconButton
-                      icon={Pencil}
-                      label={`Editar serviço ${i.descricao}`}
-                      onClick={() => editarItem(i)}
-                    />
-                    <IconButton
-                      icon={X}
-                      label={`Remover serviço ${i.descricao}`}
-                      className="text-slate-400 hover:text-red-600"
-                      onClick={() => remover(i.id)}
-                    />
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {orc.itensServico.map((i, indice) => {
+              const errosItem = errosDoGrupo(errosValidacao, `itensServico.${indice}`)
+              return (
+                <tr key={i.id} className={errosItem.length ? 'bg-amber-50/70' : undefined}>
+                  <td className="min-w-0 px-3 py-2 align-middle">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="min-w-0 break-words text-slate-700">{i.descricao}</span>
+                        {i.calculo && <Badge color="green">calculado</Badge>}
+                      </div>
+                      {errosItem.length > 0 && (
+                        <p className="text-xs text-amber-800">
+                          {errosItem.map((erro) => erro.mensagem).join(' ')} Edite o serviço para
+                          corrigir.
+                        </p>
+                      )}
+                    </div>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right text-slate-600">
+                    {i.quantidade}
+                  </td>
+                  <td className="min-w-0 break-words px-3 py-2 text-slate-600">{i.unidade}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right text-slate-600">
+                    {formatMoeda(i.valorUnitario)}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right font-medium text-slate-800">
+                    {formatMoeda(i.valorTotal)}
+                  </td>
+                  <td className="px-3 py-2 text-right align-middle">
+                    <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+                      <IconButton
+                        icon={Pencil}
+                        label={`Editar serviço ${i.descricao}`}
+                        onClick={() => editarItem(i)}
+                      />
+                      <IconButton
+                        icon={X}
+                        label={`Remover serviço ${i.descricao}`}
+                        className="text-slate-400 hover:text-red-600"
+                        onClick={() => remover(i.id)}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
           <tfoot>
             <tr className="border-t border-slate-200 bg-slate-50">
@@ -797,10 +862,12 @@ function ServicoManualModal({
 // ---------------------------------------------------------------- Materiais
 function MateriaisCard({
   orc,
-  set
+  set,
+  erroDoCampo
 }: {
   orc: Orcamento
   set: (p: Partial<Orcamento>) => void
+  erroDoCampo: (campo: string) => string | undefined
 }): JSX.Element {
   const add = (): void =>
     set({
@@ -830,27 +897,39 @@ function MateriaisCard({
         </p>
       ) : (
         <div className="space-y-2">
-          {orc.materiais.map((m) => (
-            <div key={m.id} className="grid grid-cols-[80px_100px_1fr_auto] gap-2">
-              <NumberField
-                value={m.quantidade}
-                onChange={(v) => upd(m.id, { quantidade: v })}
-                min={0}
-              />
-              <Input
-                value={m.unidade}
-                onChange={(e) => upd(m.id, { unidade: e.target.value })}
-                placeholder="un"
-              />
-              <Input
-                value={m.especificacao}
-                onChange={(e) => upd(m.id, { especificacao: e.target.value })}
-                placeholder="Especificação do material"
-              />
+          {orc.materiais.map((m, indice) => (
+            <div
+              key={m.id}
+              className="grid grid-cols-1 gap-2 sm:grid-cols-[80px_100px_minmax(0,1fr)_auto]"
+            >
+              <Field error={erroDoCampo(`materiais.${indice}.quantidade`)}>
+                <NumberField
+                  value={m.quantidade}
+                  onChange={(v) => upd(m.id, { quantidade: v })}
+                  min={0}
+                  aria-label={`Quantidade do material ${indice + 1}`}
+                />
+              </Field>
+              <Field error={erroDoCampo(`materiais.${indice}.unidade`)}>
+                <Input
+                  value={m.unidade}
+                  onChange={(e) => upd(m.id, { unidade: e.target.value })}
+                  placeholder="un"
+                  aria-label={`Unidade do material ${indice + 1}`}
+                />
+              </Field>
+              <Field error={erroDoCampo(`materiais.${indice}.especificacao`)}>
+                <Input
+                  value={m.especificacao}
+                  onChange={(e) => upd(m.id, { especificacao: e.target.value })}
+                  placeholder="Especificação do material"
+                  aria-label={`Especificação do material ${indice + 1}`}
+                />
+              </Field>
               <IconButton
                 icon={X}
                 label={`Remover material ${m.especificacao || 'sem descrição'}`}
-                className="text-slate-400"
+                className="self-start text-slate-400"
                 onClick={() => rem(m.id)}
               />
             </div>

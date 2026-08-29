@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAsync } from '../lib/hooks'
@@ -71,19 +71,71 @@ export function ConfiguracoesPage(): JSX.Element {
   )
 }
 
-function BotaoSalvar({ salvando, ok }: { salvando: boolean; ok: boolean }): JSX.Element {
+function BotaoSalvar({
+  salvando,
+  ok,
+  disabled = salvando
+}: {
+  salvando: boolean
+  ok: boolean
+  disabled?: boolean
+}): JSX.Element {
   return (
-    <Button type="submit" disabled={salvando}>
+    <Button type="submit" disabled={disabled}>
       {salvando ? 'Salvando…' : ok ? '✓ Salvo' : 'Salvar alterações'}
     </Button>
   )
+}
+
+function detalheErro(erro: unknown): string {
+  const detalhe = String(erro)
+    .replace(/^Error:\s*/, '')
+    .trim()
+  return detalhe || 'Ocorreu um erro inesperado.'
+}
+
+type ExecutarMutacao<Operacao extends string> = (
+  operacao: Operacao,
+  tarefa: () => Promise<unknown>
+) => Promise<boolean>
+
+/** Serializa operações de uma mesma seção e sempre devolve o controle à interface. */
+function useMutacao<Operacao extends string>(): {
+  operacao: Operacao | null
+  ocupado: boolean
+  erro: string | null
+  executar: ExecutarMutacao<Operacao>
+  limparErro: () => void
+} {
+  const [operacao, setOperacao] = useState<Operacao | null>(null)
+  const [erro, setErro] = useState<string | null>(null)
+  const emAndamento = useRef(false)
+
+  const executar: ExecutarMutacao<Operacao> = async (proximaOperacao, tarefa) => {
+    if (emAndamento.current) return false
+    emAndamento.current = true
+    setOperacao(proximaOperacao)
+    setErro(null)
+    try {
+      await tarefa()
+      return true
+    } catch (causa) {
+      setErro(detalheErro(causa))
+      return false
+    } finally {
+      emAndamento.current = false
+      setOperacao(null)
+    }
+  }
+
+  return { operacao, ocupado: operacao !== null, erro, executar, limparErro: () => setErro(null) }
 }
 
 // --------------------------------------------------------------- Empresa
 function SecaoEmpresa(): JSX.Element {
   const { data, error: erroCarga } = useAsync(() => api.empresa.get(), [])
   const [form, setForm] = useState<EmpresaConfig | null>(null)
-  const [salvando, setSalvando] = useState(false)
+  const { operacao, ocupado, erro, executar, limparErro } = useMutacao<'salvar' | 'logo'>()
   const [ok, setOk] = useState(false)
 
   useEffect(() => {
@@ -100,19 +152,22 @@ function SecaoEmpresa(): JSX.Element {
   const set = (patch: Partial<EmpresaConfig>): void => {
     setForm({ ...form, ...patch })
     setOk(false)
+    limparErro()
   }
 
   const salvar = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
-    setSalvando(true)
-    await api.empresa.save(form)
-    setSalvando(false)
-    setOk(true)
+    const salvo = await executar('salvar', async () => {
+      await api.empresa.save(form)
+    })
+    if (salvo) setOk(true)
   }
 
   const trocarLogo = async (): Promise<void> => {
-    const dataUrl = await api.logo.selecionar()
-    if (dataUrl) set({ logoDataUrl: dataUrl })
+    await executar('logo', async () => {
+      const dataUrl = await api.logo.selecionar()
+      if (dataUrl) set({ logoDataUrl: dataUrl })
+    })
   }
 
   return (
@@ -181,8 +236,14 @@ function SecaoEmpresa(): JSX.Element {
                 )}
               </div>
               <div className="flex flex-col gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={trocarLogo}>
-                  Selecionar imagem…
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={trocarLogo}
+                  disabled={ocupado}
+                >
+                  {operacao === 'logo' ? 'Selecionando…' : 'Selecionar imagem…'}
                 </Button>
                 {form.logoDataUrl && (
                   <Button
@@ -190,6 +251,7 @@ function SecaoEmpresa(): JSX.Element {
                     variant="ghost"
                     size="sm"
                     onClick={() => set({ logoDataUrl: null })}
+                    disabled={ocupado}
                   >
                     Remover
                   </Button>
@@ -220,8 +282,14 @@ function SecaoEmpresa(): JSX.Element {
           </Field>
         </div>
 
+        {erro && (
+          <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+            Não foi possível concluir a alteração dos dados da empresa. {erro}
+          </p>
+        )}
+
         <div className="mt-6 flex justify-end">
-          <BotaoSalvar salvando={salvando} ok={ok} />
+          <BotaoSalvar salvando={operacao === 'salvar'} ok={ok} disabled={ocupado} />
         </div>
       </Card>
     </form>
@@ -419,12 +487,15 @@ function SecaoParametros(): JSX.Element {
 function SecaoObservacoes(): JSX.Element {
   const { data, error: erroCarga, reload } = useAsync(() => api.observacoes.list(), [])
   const [novo, setNovo] = useState('')
+  const { ocupado, erro, executar } = useMutacao<'alterar'>()
 
-  const adicionar = async (): Promise<void> => {
+  const adicionar = (): void => {
     if (!novo.trim()) return
-    await api.observacoes.create({ texto: novo.trim(), padrao: true, aplicacao: 'ambos' })
-    setNovo('')
-    reload()
+    void executar('alterar', async () => {
+      await api.observacoes.create({ texto: novo.trim(), padrao: true, aplicacao: 'ambos' })
+      setNovo('')
+      reload()
+    })
   }
 
   return (
@@ -438,20 +509,37 @@ function SecaoObservacoes(): JSX.Element {
           Não foi possível carregar as observações. {erroCarga}
         </p>
       )}
+      {erro && (
+        <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          Não foi possível alterar as observações. {erro}
+        </p>
+      )}
       <div className="mb-4 flex flex-col gap-2 sm:flex-row">
         <Textarea
           value={novo}
           onChange={(e) => setNovo(e.target.value)}
           placeholder="Escreva uma nova observação padrão…"
           className="min-h-[80px] flex-1"
+          disabled={ocupado}
         />
-        <Button type="button" onClick={adicionar} className="shrink-0 self-start">
-          Adicionar
+        <Button
+          type="button"
+          onClick={adicionar}
+          className="shrink-0 self-start"
+          disabled={ocupado || !novo.trim()}
+        >
+          {ocupado ? 'Salvando…' : 'Adicionar'}
         </Button>
       </div>
       <div className="space-y-2">
         {(data ?? []).map((o) => (
-          <ItemObservacao key={o.id} obs={o} onChange={reload} />
+          <ItemObservacao
+            key={o.id}
+            obs={o}
+            onChange={reload}
+            ocupado={ocupado}
+            executar={executar}
+          />
         ))}
         {data && data.length === 0 && <EmptyState title="Nenhuma observação cadastrada" />}
       </div>
@@ -461,18 +549,25 @@ function SecaoObservacoes(): JSX.Element {
 
 function ItemObservacao({
   obs,
-  onChange
+  onChange,
+  ocupado,
+  executar
 }: {
   obs: ObservacaoPadrao
   onChange: () => void
+  ocupado: boolean
+  executar: ExecutarMutacao<'alterar'>
 }): JSX.Element {
   const [texto, setTexto] = useState(obs.texto)
   const [editando, setEditando] = useState(false)
 
-  const salvar = async (): Promise<void> => {
-    await api.observacoes.update(obs.id, { texto })
-    setEditando(false)
-    onChange()
+  const salvar = (): void => {
+    void executar('alterar', async () => {
+      const atualizado = await api.observacoes.update(obs.id, { texto })
+      if (!atualizado) throw new Error('A observação não foi encontrada.')
+      setEditando(false)
+      onChange()
+    })
   }
 
   return (
@@ -484,6 +579,7 @@ function ItemObservacao({
             onChange={(e) => setTexto(e.target.value)}
             className="min-h-[96px]"
             autoFocus
+            disabled={ocupado}
           />
         ) : (
           <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">
@@ -495,19 +591,26 @@ function ItemObservacao({
         <Checkbox
           label="Incluir automaticamente"
           checked={obs.padrao}
-          onChange={async (v) => {
-            await api.observacoes.update(obs.id, { padrao: v })
-            onChange()
+          disabled={ocupado}
+          onChange={(v) => {
+            void executar('alterar', async () => {
+              const atualizado = await api.observacoes.update(obs.id, { padrao: v })
+              if (!atualizado) throw new Error('A observação não foi encontrada.')
+              onChange()
+            })
           }}
         />
         <Select
           value={obs.aplicacao}
           aria-label="Aplicação da observação"
-          onChange={async (e) => {
-            await api.observacoes.update(obs.id, {
-              aplicacao: e.target.value as ObservacaoPadrao['aplicacao']
+          disabled={ocupado}
+          onChange={(e) => {
+            const aplicacao = e.target.value as ObservacaoPadrao['aplicacao']
+            void executar('alterar', async () => {
+              const atualizado = await api.observacoes.update(obs.id, { aplicacao })
+              if (!atualizado) throw new Error('A observação não foi encontrada.')
+              onChange()
             })
-            onChange()
           }}
         >
           {aplicacoes.map((a) => (
@@ -519,7 +622,7 @@ function ItemObservacao({
         <div className="flex flex-wrap gap-2">
           {editando ? (
             <>
-              <Button type="button" size="sm" onClick={salvar} disabled={!texto.trim()}>
+              <Button type="button" size="sm" onClick={salvar} disabled={ocupado || !texto.trim()}>
                 Salvar
               </Button>
               <Button
@@ -530,12 +633,19 @@ function ItemObservacao({
                   setTexto(obs.texto)
                   setEditando(false)
                 }}
+                disabled={ocupado}
               >
                 Cancelar
               </Button>
             </>
           ) : (
-            <Button type="button" size="sm" variant="outline" onClick={() => setEditando(true)}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setEditando(true)}
+              disabled={ocupado}
+            >
               Editar
             </Button>
           )}
@@ -544,9 +654,12 @@ function ItemObservacao({
             size="sm"
             variant="ghost"
             aria-label="Excluir observação"
-            onClick={async () => {
-              await api.observacoes.remove(obs.id)
-              onChange()
+            disabled={ocupado}
+            onClick={() => {
+              void executar('alterar', async () => {
+                await api.observacoes.remove(obs.id)
+                onChange()
+              })
             }}
           >
             <AppIcon icon={Trash2} />
@@ -561,12 +674,15 @@ function ItemObservacao({
 function SecaoPagamentos(): JSX.Element {
   const { data, error: erroCarga, reload } = useAsync(() => api.pagamentos.list(), [])
   const [novo, setNovo] = useState('')
+  const { ocupado, erro, executar } = useMutacao<'alterar'>()
 
-  const adicionar = async (): Promise<void> => {
+  const adicionar = (): void => {
     if (!novo.trim()) return
-    await api.pagamentos.create({ texto: novo.trim(), padrao: false, aplicacao: 'ambos' })
-    setNovo('')
-    reload()
+    void executar('alterar', async () => {
+      await api.pagamentos.create({ texto: novo.trim(), padrao: false, aplicacao: 'ambos' })
+      setNovo('')
+      reload()
+    })
   }
 
   return (
@@ -580,20 +696,37 @@ function SecaoPagamentos(): JSX.Element {
           Não foi possível carregar as formas de pagamento. {erroCarga}
         </p>
       )}
+      {erro && (
+        <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          Não foi possível alterar as formas de pagamento. {erro}
+        </p>
+      )}
       <div className="mb-4 flex flex-col gap-2 sm:flex-row">
         <Textarea
           value={novo}
           onChange={(e) => setNovo(e.target.value)}
           placeholder="Ex.: Via Pix para a chave…"
           className="min-h-[80px] flex-1"
+          disabled={ocupado}
         />
-        <Button type="button" onClick={adicionar} className="shrink-0 self-start">
-          Adicionar
+        <Button
+          type="button"
+          onClick={adicionar}
+          className="shrink-0 self-start"
+          disabled={ocupado || !novo.trim()}
+        >
+          {ocupado ? 'Salvando…' : 'Adicionar'}
         </Button>
       </div>
       <div className="space-y-2">
         {(data ?? []).map((p) => (
-          <ItemPagamento key={p.id} pag={p} onChange={reload} />
+          <ItemPagamento
+            key={p.id}
+            pag={p}
+            onChange={reload}
+            ocupado={ocupado}
+            executar={executar}
+          />
         ))}
         {data && data.length === 0 && <EmptyState title="Nenhuma forma de pagamento cadastrada" />}
       </div>
@@ -603,18 +736,25 @@ function SecaoPagamentos(): JSX.Element {
 
 function ItemPagamento({
   pag,
-  onChange
+  onChange,
+  ocupado,
+  executar
 }: {
   pag: FormaPagamentoPadrao
   onChange: () => void
+  ocupado: boolean
+  executar: ExecutarMutacao<'alterar'>
 }): JSX.Element {
   const [texto, setTexto] = useState(pag.texto)
   const [editando, setEditando] = useState(false)
 
-  const salvar = async (): Promise<void> => {
-    await api.pagamentos.update(pag.id, { texto })
-    setEditando(false)
-    onChange()
+  const salvar = (): void => {
+    void executar('alterar', async () => {
+      const atualizado = await api.pagamentos.update(pag.id, { texto })
+      if (!atualizado) throw new Error('A forma de pagamento não foi encontrada.')
+      setEditando(false)
+      onChange()
+    })
   }
 
   return (
@@ -626,6 +766,7 @@ function ItemPagamento({
             onChange={(e) => setTexto(e.target.value)}
             className="min-h-[96px]"
             autoFocus
+            disabled={ocupado}
           />
         ) : (
           <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">
@@ -637,19 +778,26 @@ function ItemPagamento({
         <Checkbox
           label="Incluir automaticamente"
           checked={pag.padrao}
-          onChange={async (v) => {
-            await api.pagamentos.update(pag.id, { padrao: v })
-            onChange()
+          disabled={ocupado}
+          onChange={(v) => {
+            void executar('alterar', async () => {
+              const atualizado = await api.pagamentos.update(pag.id, { padrao: v })
+              if (!atualizado) throw new Error('A forma de pagamento não foi encontrada.')
+              onChange()
+            })
           }}
         />
         <Select
           value={pag.aplicacao}
           aria-label="Aplicação da forma de pagamento"
-          onChange={async (e) => {
-            await api.pagamentos.update(pag.id, {
-              aplicacao: e.target.value as FormaPagamentoPadrao['aplicacao']
+          disabled={ocupado}
+          onChange={(e) => {
+            const aplicacao = e.target.value as FormaPagamentoPadrao['aplicacao']
+            void executar('alterar', async () => {
+              const atualizado = await api.pagamentos.update(pag.id, { aplicacao })
+              if (!atualizado) throw new Error('A forma de pagamento não foi encontrada.')
+              onChange()
             })
-            onChange()
           }}
         >
           {aplicacoes.map((a) => (
@@ -661,7 +809,7 @@ function ItemPagamento({
         <div className="flex flex-wrap gap-2">
           {editando ? (
             <>
-              <Button type="button" size="sm" onClick={salvar} disabled={!texto.trim()}>
+              <Button type="button" size="sm" onClick={salvar} disabled={ocupado || !texto.trim()}>
                 Salvar
               </Button>
               <Button
@@ -672,12 +820,19 @@ function ItemPagamento({
                   setTexto(pag.texto)
                   setEditando(false)
                 }}
+                disabled={ocupado}
               >
                 Cancelar
               </Button>
             </>
           ) : (
-            <Button type="button" size="sm" variant="outline" onClick={() => setEditando(true)}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setEditando(true)}
+              disabled={ocupado}
+            >
               Editar
             </Button>
           )}
@@ -686,9 +841,12 @@ function ItemPagamento({
             size="sm"
             variant="ghost"
             aria-label="Excluir forma de pagamento"
-            onClick={async () => {
-              await api.pagamentos.remove(pag.id)
-              onChange()
+            disabled={ocupado}
+            onClick={() => {
+              void executar('alterar', async () => {
+                await api.pagamentos.remove(pag.id)
+                onChange()
+              })
             }}
           >
             <AppIcon icon={Trash2} />
@@ -729,8 +887,11 @@ function SecaoIA(): JSX.Element {
     setStatus(null)
   }
 
+  const ocupado = salvando || testando
+
   const salvar = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
+    if (ocupado) return
     const erros = form.modo === 'ollama' ? validarUrlOllamaLocal(form.urlOllama) : []
     if (erros.length) {
       setStatus({ modo: form.modo, disponivel: false, detalhe: mensagemValidacao(erros) })
@@ -744,7 +905,7 @@ function SecaoIA(): JSX.Element {
       setStatus({
         modo: form.modo,
         disponivel: false,
-        detalhe: String(e).replace(/^Error:\s*/, '')
+        detalhe: detalheErro(e)
       })
     } finally {
       setSalvando(false)
@@ -752,12 +913,18 @@ function SecaoIA(): JSX.Element {
   }
 
   const testar = async (): Promise<void> => {
+    if (ocupado) return
+    const erros = form.modo === 'ollama' ? validarUrlOllamaLocal(form.urlOllama) : []
+    if (erros.length) {
+      setStatus({ modo: form.modo, disponivel: false, detalhe: mensagemValidacao(erros) })
+      return
+    }
     setTestando(true)
     try {
       await api.ia.save(form)
       setStatus(await api.ia.status())
     } catch (e) {
-      setStatus({ modo: form.modo, disponivel: false, detalhe: String(e) })
+      setStatus({ modo: form.modo, disponivel: false, detalhe: detalheErro(e) })
     } finally {
       setTestando(false)
     }
@@ -775,6 +942,7 @@ function SecaoIA(): JSX.Element {
             <Select
               value={form.modo}
               onChange={(e) => set({ modo: e.target.value as ConfigIA['modo'] })}
+              disabled={ocupado}
             >
               <option value="embutida">Modelo embutido no aplicativo</option>
               <option value="ollama">Ollama instalado na máquina</option>
@@ -790,12 +958,14 @@ function SecaoIA(): JSX.Element {
                 <Input
                   value={form.urlOllama}
                   onChange={(e) => set({ urlOllama: e.target.value })}
+                  disabled={ocupado}
                 />
               </Field>
               <Field label="Modelo" hint="Ex.: llama3.2:3b, qwen2.5:3b">
                 <Input
                   value={form.modeloOllama}
                   onChange={(e) => set({ modeloOllama: e.target.value })}
+                  disabled={ocupado}
                 />
               </Field>
             </>
@@ -804,6 +974,7 @@ function SecaoIA(): JSX.Element {
 
         {status && (
           <p
+            role={status.disponivel ? 'status' : 'alert'}
             className={
               status.disponivel
                 ? 'mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800'
@@ -815,10 +986,10 @@ function SecaoIA(): JSX.Element {
         )}
 
         <div className="mt-5 flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={testar} disabled={testando}>
+          <Button type="button" variant="outline" onClick={testar} disabled={ocupado}>
             {testando ? 'Testando…' : 'Testar conexão'}
           </Button>
-          <BotaoSalvar salvando={salvando} ok={ok} />
+          <BotaoSalvar salvando={salvando} ok={ok} disabled={ocupado} />
         </div>
       </Card>
     </form>
@@ -858,9 +1029,8 @@ function PainelNumeracao({
 }): JSX.Element {
   const { data, error: erroCarga, reload } = useAsync(carregar, [])
   const [proximo, setProximo] = useState<number | null>(null)
-  const [salvando, setSalvando] = useState(false)
+  const { operacao, ocupado, erro, executar, limparErro } = useMutacao<'salvar'>()
   const [ok, setOk] = useState(false)
-  const [erro, setErro] = useState<string | null>(null)
 
   useEffect(() => {
     if (data) setProximo(data.proximoNumero)
@@ -876,20 +1046,19 @@ function PainelNumeracao({
   const definir = (v: number): void => {
     setProximo(v)
     setOk(false)
-    setErro(null)
+    limparErro()
   }
 
   const salvar = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
-    setSalvando(true)
-    setErro(null)
-    const r = await definirNumero(proximo)
-    setSalvando(false)
-    if (r.ok) {
-      setOk(true)
+    const salvo = await executar('salvar', async () => {
+      const resultado = await definirNumero(proximo)
+      if (!resultado.ok)
+        throw new Error(resultado.erro ?? 'Não foi possível definir o próximo número.')
       reload()
-    } else {
-      setErro(r.erro ?? 'Não foi possível definir o próximo número.')
+    })
+    if (salvo) {
+      setOk(true)
     }
   }
 
@@ -905,7 +1074,7 @@ function PainelNumeracao({
             label="Próximo número"
             hint={`Números já usados são recusados para não haver dois ${documento}s com o mesmo número.`}
           >
-            <NumberField value={proximo} onChange={definir} min={1} step={1} />
+            <NumberField value={proximo} onChange={definir} min={1} step={1} disabled={ocupado} />
           </Field>
           <div className="space-y-2 self-start md:pt-7">
             <p className="text-sm text-slate-500">
@@ -921,6 +1090,7 @@ function PainelNumeracao({
                 variant="outline"
                 size="sm"
                 onClick={() => definir(data.menorLivre)}
+                disabled={ocupado}
               >
                 Usar o menor número livre ({data.menorLivre})
               </Button>
@@ -929,11 +1099,13 @@ function PainelNumeracao({
         </div>
 
         {erro && (
-          <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{erro}</p>
+          <p role="alert" className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            Não foi possível definir o próximo número. {erro}
+          </p>
         )}
 
         <div className="mt-5 flex justify-end">
-          <BotaoSalvar salvando={salvando} ok={ok} />
+          <BotaoSalvar salvando={operacao === 'salvar'} ok={ok} disabled={ocupado} />
         </div>
       </Card>
     </form>

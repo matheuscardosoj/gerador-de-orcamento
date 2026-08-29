@@ -2,6 +2,15 @@
 
 Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
+## 1.3.1 — 2026-08-29
+
+### Corrigido
+
+- Erros de validação final agora aparecem junto aos campos de data, destinatário, título, materiais, serviços e lançamentos.
+- Mensagens de validação são limpas por campo quando o usuário corrige o valor, sem esconder os demais problemas.
+- Salvamentos de empresa, numeração, observações, pagamentos e IA agora tratam falhas do IPC, liberam os controles e impedem operações concorrentes.
+- Configurações de IA validam o endereço local também antes do teste de conexão.
+
 ## 1.3.0 — 2026-08-29
 
 ### Adicionado

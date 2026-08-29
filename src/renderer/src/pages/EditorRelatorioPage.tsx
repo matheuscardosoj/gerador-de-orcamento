@@ -23,7 +23,16 @@ import { AnotacaoInterna, ServicosCard, TextosCard, type Dados } from './EditorO
 import { AnexosCard } from '../components/AnexosCard'
 import { useBloqueioEdicao, useNav } from '../lib/nav'
 import { removerLancamentoRelatorio, removerServicoRelatorio } from '@shared/edicao'
-import { mensagemValidacao, normalizarRelatorio, validarRelatorioFinal } from '@shared/validacao'
+import {
+  mensagemValidacao,
+  normalizarRelatorio,
+  validarRelatorioFinal,
+  type ErroValidacao
+} from '@shared/validacao'
+
+function mensagemDoCampo(erros: ErroValidacao[], campo: string): string | undefined {
+  return erros.find((erro) => erro.campo === campo)?.mensagem
+}
 
 type Base = Pick<
   Dados,
@@ -37,6 +46,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
   const [rel, setRel] = useState<Relatorio | null>(null)
   const [ocupado, setOcupado] = useState<'salvar' | 'pdf' | 'docx' | null>(null)
   const [erro, setErro] = useState<string | null>(null)
+  const [errosValidacao, setErrosValidacao] = useState<ErroValidacao[]>([])
   const [mensagem, setMensagem] = useState<string | null>(null)
   const [snapshotSalvo, setSnapshotSalvo] = useState<string | null>(null)
   const [previa, setPrevia] = useState(false)
@@ -111,7 +121,18 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
   )
   const sujo = rel !== null && snapshotSalvo !== null && JSON.stringify(rel) !== snapshotSalvo
   useBloqueioEdicao(sujo)
+
+  const limparErrosValidacao = (campos: string[]): void => {
+    setErrosValidacao((atuais) =>
+      atuais.filter(
+        (erro) =>
+          !campos.some((campo) => erro.campo === campo || erro.campo.startsWith(`${campo}.`))
+      )
+    )
+  }
+
   const set = (patch: Partial<Relatorio>): void => {
+    limparErrosValidacao(Object.keys(patch))
     setRel((atual) => {
       if (!atual) return atual
       const proximo = { ...atual, ...patch }
@@ -125,6 +146,9 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
       }
     })
   }
+
+  const erroDoCampo = (campo: string): string | undefined => mensagemDoCampo(errosValidacao, campo)
+
   const persistir = async (exigirFinal: boolean): Promise<Relatorio | null> => {
     if (!rel || !totais) return null
     setErro(null)
@@ -133,9 +157,10 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
       if (exigirFinal || payload.status !== 'rascunho') {
         const erros = validarRelatorioFinal(payload)
         if (erros.length) {
-          setErro(`Complete o relatório antes desta ação. ${mensagemValidacao(erros)}`)
+          setErrosValidacao(erros)
           return null
         }
+        setErrosValidacao([])
       }
       const numeroMudou = numeroOriginal !== null && rel.numero !== numeroOriginal
       let gravado: Relatorio | null
@@ -212,10 +237,11 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
     if (!rel || !totais) return
     const erros = validarRelatorioFinal(normalizarRelatorio({ ...rel, totais }))
     if (erros.length) {
-      setErro(`Complete o relatório antes da prévia final. ${mensagemValidacao(erros)}`)
+      setErrosValidacao(erros)
       return
     }
     setErro(null)
+    setErrosValidacao([])
     setPrevia(true)
   }
   if (!dados || !rel || !totais)
@@ -258,7 +284,17 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
       descricao="Serviços prestados, adiantamentos e reembolsos"
       acoes={acoes}
     >
-      {erro && <p className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{erro}</p>}
+      {erro && (
+        <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          {erro}
+        </p>
+      )}
+      {errosValidacao.length > 0 && (
+        <div role="alert" className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+          <p className="font-medium">Revise os campos destacados antes de concluir o relatório.</p>
+          <p className="mt-1">{mensagemValidacao(errosValidacao)}</p>
+        </div>
+      )}
       {mensagem && (
         <p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
           {mensagem}
@@ -280,7 +316,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
               onChange={(numero) => set({ numero })}
             />
           </Field>
-          <Field label="Data">
+          <Field label="Data" error={erroDoCampo('data')}>
             <Input
               type="date"
               value={normalizarDataCivil(rel.data)}
@@ -297,13 +333,12 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
                     normalizarRelatorio({ ...rel, status, totais })
                   )
                   if (erros.length) {
-                    setErro(
-                      `Complete o relatório antes de alterar o status. ${mensagemValidacao(erros)}`
-                    )
+                    setErrosValidacao(erros)
                     return
                   }
                 }
                 setErro(null)
+                setErrosValidacao([])
                 set({ status })
               }}
             >
@@ -342,7 +377,11 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
                 ))}
             </Select>
           </Field>
-          <Field label="Destinatário (sem vírgula)" className="md:col-span-2">
+          <Field
+            label="Destinatário (sem vírgula)"
+            className="md:col-span-2"
+            error={erroDoCampo('destinatario')}
+          >
             <Input
               value={rel.destinatario}
               onChange={(e) =>
@@ -350,7 +389,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
               }
             />
           </Field>
-          <Field label="Título" className="md:col-span-3">
+          <Field label="Título" className="md:col-span-3" error={erroDoCampo('titulo')}>
             <Input value={rel.titulo} onChange={(e) => set({ titulo: e.target.value })} />
           </Field>
           <Field label="Introdução" className="md:col-span-3">
@@ -374,12 +413,17 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
           total={totais.servicos}
           titulo="Serviços prestados"
           rotuloTotal="Valor total dos serviços"
+          errosValidacao={errosValidacao.filter(
+            (erro) => erro.campo === 'itensServico' || erro.campo.startsWith('itensServico.')
+          )}
           onRemover={(id) => set(removerServicoRelatorio(rel, id))}
         />
         <LancamentosCard
           titulo="Valores adiantados"
           descricao="São subtraídos do valor dos serviços."
           itens={rel.adiantamentos}
+          campo="adiantamentos"
+          erroDoCampo={erroDoCampo}
           onChange={(adiantamentos) => set({ adiantamentos })}
           onRemover={(id) => set(removerLancamentoRelatorio(rel, 'adiantamento', id))}
         />
@@ -387,6 +431,8 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
           titulo="Valores a reembolsar"
           descricao="São somados ao valor dos serviços."
           itens={rel.reembolsos}
+          campo="reembolsos"
+          erroDoCampo={erroDoCampo}
           onChange={(reembolsos) => set({ reembolsos })}
           onRemover={(id) => set(removerLancamentoRelatorio(rel, 'reembolso', id))}
         />
@@ -458,12 +504,16 @@ function LancamentosCard({
   titulo,
   descricao,
   itens,
+  campo,
+  erroDoCampo,
   onChange,
   onRemover
 }: {
   titulo: string
   descricao: string
   itens: LancamentoRelatorio[]
+  campo: 'adiantamentos' | 'reembolsos'
+  erroDoCampo: (campo: string) => string | undefined
   onChange: (v: LancamentoRelatorio[]) => void
   onRemover: (id: string) => void
 }): JSX.Element {
@@ -485,27 +535,31 @@ function LancamentosCard({
         <p className="text-sm text-slate-500">Nenhum lançamento.</p>
       ) : (
         <div className="space-y-2">
-          {itens.map((x) => (
+          {itens.map((x, indice) => (
             <div
               key={x.id}
               className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_160px_auto]"
             >
-              <Input
-                value={x.descricao}
-                placeholder="Descrição"
-                aria-label={`Descrição de ${titulo.toLowerCase()}`}
-                onChange={(e) => upd(x.id, { descricao: e.target.value })}
-              />
-              <NumberField
-                value={x.valor}
-                min={0}
-                aria-label={`Valor de ${titulo.toLowerCase()}`}
-                onChange={(valor) => upd(x.id, { valor })}
-              />
+              <Field error={erroDoCampo(`${campo}.${indice}.descricao`)}>
+                <Input
+                  value={x.descricao}
+                  placeholder="Descrição"
+                  aria-label={`Descrição de ${titulo.toLowerCase()} ${indice + 1}`}
+                  onChange={(e) => upd(x.id, { descricao: e.target.value })}
+                />
+              </Field>
+              <Field error={erroDoCampo(`${campo}.${indice}.valor`)}>
+                <NumberField
+                  value={x.valor}
+                  min={0}
+                  aria-label={`Valor de ${titulo.toLowerCase()} ${indice + 1}`}
+                  onChange={(valor) => upd(x.id, { valor })}
+                />
+              </Field>
               <IconButton
                 icon={X}
                 label={`Remover lançamento de ${titulo.toLowerCase()}`}
-                className="text-slate-400 hover:text-red-600"
+                className="self-start text-slate-400 hover:text-red-600"
                 onClick={() => onRemover(x.id)}
               />
             </div>

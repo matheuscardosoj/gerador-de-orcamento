@@ -67,6 +67,9 @@ o app tenta o Ollama automaticamente.
 
 ## Status
 
+**Versão 1.3.1** — erros associados aos campos de documentos, salvamentos resilientes
+nas configurações e bloqueio de operações concorrentes.
+
 **Versão 1.3.0** — proteção contra perda de edições, validação de saídas finais,
 acessibilidade de diálogos e abas, histórico compacto sem consultas N+1, backup
 otimizado, toolchain atualizado e pacote de IA reproduzível.

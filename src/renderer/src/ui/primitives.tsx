@@ -245,18 +245,26 @@ export function Field({
 export function Checkbox({
   checked,
   onChange,
-  label
+  label,
+  disabled = false
 }: {
   checked: boolean
   onChange: (v: boolean) => void
   label?: ReactNode
+  disabled?: boolean
 }): JSX.Element {
   return (
-    <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+    <label
+      className={cn(
+        'inline-flex items-center gap-2 text-sm text-slate-700',
+        disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+      )}
+    >
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
+        disabled={disabled}
         className="h-4 w-4 rounded border-slate-300 text-brand-teal focus:ring-brand-teal/40"
       />
       {label}
