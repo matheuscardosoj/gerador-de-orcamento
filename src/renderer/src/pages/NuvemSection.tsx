@@ -19,6 +19,7 @@ export function NuvemSection(): JSX.Element {
   const [erro, setErro] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [confirmar, setConfirmar] = useState(false)
+  const [conciliar, setConciliar] = useState<string | null>(null)
   useEffect(() => {
     void api.nuvem.config().then(setC)
     void api.nuvem.status().then(setS)
@@ -153,24 +154,31 @@ export function NuvemSection(): JSX.Element {
               <p>{x.detalhe}</p>
               <p>
                 Para preservar a edição local, crie uma cópia no editor antes de adotar a versão
-                remota. Uma cópia de segurança será salva antes da conciliação.
+                remota. Recibos e relatório vinculados serão conciliados juntos. Uma cópia de
+                segurança com todas as edições locais será salva antes da conciliação.
               </p>
-              <Button
-                variant="outline"
-                disabled={ocupado}
-                onClick={() =>
-                  void executar(async () => {
-                    await api.nuvem.aceitarRemoto(x.id)
-                    return api.nuvem.status()
-                  })
-                }
-              >
+              <Button variant="outline" disabled={ocupado} onClick={() => setConciliar(x.id)}>
                 Adotar versão remota e guardar backup local
               </Button>
             </div>
           ))}
         </div>
       )}
+      <ConfirmDialog
+        open={conciliar !== null}
+        title="Adotar dados da nuvem"
+        confirmLabel="Guardar backup e adotar"
+        description="O documento e seus recibos e pagamentos vinculados voltarão aos dados da nuvem. Alterações e documentos ainda não enviados serão preservados no backup local. Essa ação mantém recibos e saldo do relatório consistentes."
+        onCancel={() => setConciliar(null)}
+        onConfirm={() => {
+          const id = conciliar!
+          setConciliar(null)
+          void executar(async () => {
+            await api.nuvem.aceitarRemoto(id)
+            return api.nuvem.status()
+          })
+        }}
+      />
       <ConfirmDialog
         open={confirmar}
         title="Conectar à base da empresa"

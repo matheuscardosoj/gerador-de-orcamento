@@ -1,5 +1,6 @@
 import { registrarImagem } from './imagens'
-import { semRastreamento, nuvemConfigurada } from './versoes'
+import { semRastreamento, nuvemConfigurada, registrarVersao } from './versoes'
+import { recibosRepo } from './recibos'
 import { randomUUID as novoId } from 'crypto'
 import { VERSAO_BANCO } from './db/schema'
 import { app, dialog } from 'electron'
@@ -85,6 +86,19 @@ function validar(caminho: string): void {
         'relatorio_lancamentos',
         'relatorio_textos',
         'relatorio_anexos'
+      )
+    if (versao >= 7)
+      obrigatorias.push(
+        'imagens',
+        'documento_meta',
+        'versoes',
+        'recibos',
+        'recebimentos',
+        'numeros_usados',
+        'reservas',
+        'sincronizacao',
+        'fila_nuvem',
+        'conflitos_nuvem'
       )
     const faltantes = obrigatorias.filter(
       (nome) =>
@@ -891,7 +905,13 @@ export function importarDadosDe(origem: string, modo: Modo): ResultadoImportacao
   if (modo === 'mesclar') {
     const fonte = new Database(origem)
     try {
-      const r = semRastreamento(() => tx(() => mesclar(fonte)))
+      const r = semRastreamento(() =>
+        tx(() => {
+          const resultado = mesclar(fonte)
+          inicializarVersoesImportadas()
+          return resultado
+        })
+      )
       return { modo, backupAntes, ...r, reiniciarNecessario: false }
     } finally {
       fonte.close()
@@ -905,6 +925,7 @@ export function importarDadosDe(origem: string, modo: Modo): ResultadoImportacao
     fecharBanco()
     copyFileSync(temporario, caminhoBanco())
     abrirBanco()
+    inicializarVersoesImportadas()
     validar(caminhoBanco())
     return { modo, backupAntes, ...resumo(), reiniciarNecessario: true }
   } catch (e) {
@@ -915,6 +936,20 @@ export function importarDadosDe(origem: string, modo: Modo): ResultadoImportacao
   } finally {
     if (existsSync(temporario)) rmSync(temporario, { force: true })
   }
+}
+
+function inicializarVersoesImportadas(): void {
+  tx(() => {
+    for (const tipo of ['orcamento', 'relatorio', 'recibo'] as const) {
+      const repo =
+        tipo === 'orcamento' ? orcamentosRepo : tipo === 'relatorio' ? relatoriosRepo : recibosRepo
+      for (const resumo of repo.list()) {
+        const documento = repo.get(resumo.id)
+        if (documento && !documento.versao)
+          registrarVersao(tipo, documento, 'Versão inicial após importação')
+      }
+    }
+  })
 }
 
 export async function importarDados(modo: Modo): Promise<ResultadoImportacaoDados | null> {

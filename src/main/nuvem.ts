@@ -514,17 +514,82 @@ export async function transferirDocumento(
 export function sairNuvem(): void {
   run("DELETE FROM configuracoes WHERE chave='sessaoNuvem'")
 }
-export function aplicarConflito(id: string): void {
+export async function aplicarConflito(id: string): Promise<void> {
+  if (ocupado || conectando) throw new Error('Aguarde a sincronização atual.')
   const l = get('SELECT * FROM conflitos_nuvem WHERE id=?', [id])
   if (!l) throw new Error('Conflito não encontrado.')
-  exportarDadosPara(join(pastaDados(), `antes-conciliacao-${Date.now()}.gdo-backup`))
-  tx(() => {
-    const remoto = JSON.parse(texto(l.remoto)) as Remoto | null
-    if (!remoto) throw new Error('A versão remota não está disponível.')
-    run('DELETE FROM fila_nuvem WHERE entidade=?', [l.entidade])
-    semRastreamento(() => aplicar(remoto))
-    run('DELETE FROM conflitos_nuvem WHERE id=?', [id])
-  })
+  ocupado = true
+  try {
+    // Concilia o conjunto financeiro inteiro: recibos, recebimentos e relatório.
+    // A resposta do conflito pode ser antiga; consulta a revisão atual antes de adotar.
+    const remotos = await baixarAlteracoes(0)
+    const porEntidade = new Map(remotos.map((r) => [r.entidade, r]))
+    if (!porEntidade.has(texto(l.entidade))) throw new Error('A versão remota não está disponível.')
+    const relacionadas = new Set([texto(l.entidade)])
+    const ligar = (reciboId: string, relatorioId: string): boolean => {
+      const recibo = `recibo:${reciboId}`,
+        relatorio = `relatorio:${relatorioId}`
+      if (!relacionadas.has(recibo) && !relacionadas.has(relatorio)) return false
+      const mudou = !relacionadas.has(recibo) || !relacionadas.has(relatorio)
+      relacionadas.add(recibo)
+      relacionadas.add(relatorio)
+      return mudou
+    }
+    let mudou = true
+    while (mudou) {
+      mudou = false
+      for (const row of all('SELECT id,dados FROM recibos')) {
+        const r = JSON.parse(texto(row.dados))
+        if (r.origemTipo === 'relatorio' && r.origemId)
+          mudou = ligar(texto(row.id), r.origemId) || mudou
+      }
+      for (const remoto of remotos) {
+        for (const row of remoto.payload.rows?.recibos ?? []) {
+          const r = JSON.parse(String(row.dados))
+          if (r.origemTipo === 'relatorio' && r.origemId)
+            mudou = ligar(String(row.id), r.origemId) || mudou
+        }
+      }
+    }
+    exportarDadosPara(join(pastaDados(), `antes-conciliacao-${Date.now()}.gdo-backup`))
+    semRastreamento(() =>
+      tx(() => {
+        // Cadastros/ativos sem edições pendentes são dependências dos documentos remotos.
+        for (const remoto of ordenarDependencias(remotos)) {
+          if (
+            remoto.payload.tabela &&
+            !get('SELECT 1 FROM fila_nuvem WHERE entidade=?', [remoto.entidade])
+          )
+            aplicar(remoto)
+        }
+        for (const entidade of relacionadas) {
+          run('DELETE FROM fila_nuvem WHERE entidade=?', [entidade])
+          run('DELETE FROM conflitos_nuvem WHERE entidade=?', [entidade])
+          if (
+            !entidade.startsWith('recibo:') &&
+            !entidade.startsWith('relatorio:') &&
+            !entidade.startsWith('orcamento:')
+          )
+            continue
+          const [tipo, documentoId] = entidade.split(':')
+          run('DELETE FROM versoes WHERE tipo=? AND documento_id=?', [tipo, documentoId])
+          run('DELETE FROM documento_meta WHERE tipo=? AND documento_id=?', [tipo, documentoId])
+          if (tipo === 'recibo') {
+            run('DELETE FROM recebimentos WHERE recibo_id=?', [documentoId])
+            if (!porEntidade.has(entidade)) run('DELETE FROM recibos WHERE id=?', [documentoId])
+          }
+        }
+        for (const remoto of ordenarDependencias(
+          remotos.filter((r) => relacionadas.has(r.entidade))
+        ))
+          aplicar(remoto)
+        if (get('PRAGMA foreign_key_check'))
+          throw new Error('A conciliação produziria referências inválidas e foi cancelada.')
+      })
+    )
+  } finally {
+    ocupado = false
+  }
 }
 export function capturarCadastros(): void {
   if (!config<ConfigNuvem>('nuvem')) return

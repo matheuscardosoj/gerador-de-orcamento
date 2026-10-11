@@ -2,7 +2,6 @@
 // sem nenhuma dependência nativa/node-gyp — ver memória `ambiente-build-windows`).
 import { app } from 'electron'
 import {
-  copyFileSync,
   existsSync,
   mkdirSync,
   openSync,
@@ -13,7 +12,8 @@ import {
 } from 'fs'
 import { join } from 'path'
 import { Database } from 'node-sqlite3-wasm'
-import { aplicarMigracoes, VERSAO_BANCO } from './schema'
+import { aplicarMigracoes } from './schema'
+import { prepararMigracao, verificarBanco } from './pre-migracao'
 
 export type Linha = Record<string, string | number | Uint8Array | null>
 
@@ -85,35 +85,6 @@ export function caminhoBackupPreV2(): string {
   return join(pastaDados(), 'backups', 'banco-pre-v2.db')
 }
 
-function prepararBackupPreV2(caminho: string): string | null {
-  if (!existsSync(caminho)) return null
-  // Não criamos um "pre-v2" ao abrir bancos já atualizados: além de manter o
-  // nome honesto, isso evita copiar o banco em toda inicialização.
-  const sonda = new Database(caminho)
-  let versao = 0
-  try {
-    versao = Number(
-      (sonda.get('PRAGMA user_version') as { user_version?: number } | null)?.user_version ?? 0
-    )
-  } finally {
-    sonda.close()
-  }
-  if (versao >= VERSAO_BANCO) return null
-  const backup = join(pastaDados(), 'backups', `banco-pre-v${VERSAO_BANCO}.db`)
-  if (existsSync(backup)) return backup
-  const pasta = join(pastaDados(), 'backups')
-  mkdirSync(pasta, { recursive: true })
-  copyFileSync(caminho, backup)
-  return backup
-}
-
-function verificarIntegridade(d: Database): void {
-  const linha = d.get('PRAGMA integrity_check') as { integrity_check?: string } | null
-  const resultado = String(linha?.integrity_check ?? '')
-  if (resultado.toLowerCase() !== 'ok')
-    throw new Error(`Falha na integridade do banco: ${resultado || 'sem resposta'}`)
-}
-
 /**
  * Abre (e cria, se necessário) o banco. `bancoNovo` informa se o arquivo ainda
  * não existia — o boot usa isso para decidir se importa o `banco.json` legado.
@@ -123,17 +94,18 @@ export function abrirBanco(): { db: Database; bancoNovo: boolean } {
   adquirirTrava()
   const caminho = caminhoBanco()
   const bancoNovo = !existsSync(caminho)
-  const backup = bancoNovo ? null : prepararBackupPreV2(caminho)
-  conexao = new Database(caminho)
+  let backup: string | null = null
   // O VFS do node-sqlite3-wasm não suporta WAL (o pragma seria ignorado): fica
   // no journal `delete` padrão, que é durável e suficiente para um app local.
   try {
+    backup = bancoNovo ? null : prepararMigracao(caminho)
+    conexao = new Database(caminho)
     conexao.run('PRAGMA foreign_keys = ON')
-    verificarIntegridade(conexao)
+    verificarBanco(conexao)
     aplicarMigracoes(conexao)
-    verificarIntegridade(conexao)
+    verificarBanco(conexao)
   } catch (e) {
-    conexao.close()
+    conexao?.close()
     conexao = null
     liberarTrava()
     const sufixo = backup ? `\nBackup preservado em: ${backup}` : ''

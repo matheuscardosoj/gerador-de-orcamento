@@ -2,7 +2,7 @@
 // REST simulado para exercer interrupções/reenvios sem usar contas ou dados reais.
 import { beforeAll, afterAll, it, expect, vi } from 'vitest'
 import { PGlite } from '@electric-sql/pglite'
-import { mkdtempSync, readFileSync, rmSync } from 'fs'
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import type { Orcamento } from '@shared/types'
@@ -268,7 +268,53 @@ it('preserva as duas edições de cadastro em conflito até conciliação explí
   const status = await nuvem.sincronizarNuvem()
   expect(status.conflitos).toHaveLength(1)
   expect(repos.clientesRepo.get(c.id)?.nome).toBe('Alteração local')
-  nuvem.aplicarConflito(status.conflitos[0].id)
+  await nuvem.aplicarConflito(status.conflitos[0].id)
   expect(repos.clientesRepo.get(c.id)?.nome).toBe('Alteração remota')
   expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+})
+
+it('concilia conflito financeiro sem publicar saldo ou pagamento de uma operação descartada', async () => {
+  await trocar('pc1')
+  await nuvem.sincronizarNuvem()
+  const rel = repos.relatoriosRepo.criarDeOrcamento(proposta.id)!
+  const { recibosRepo } = await import('../recibos')
+  const novo = () =>
+    recibosRepo.create({
+      data: '2026-10-11',
+      destinatario: 'Cliente',
+      descricao: 'Serviço',
+      valor: 100,
+      local: 'Rio Verde',
+      formaPagamento: 'Pix',
+      status: 'pendente',
+      quitacao: 'parcial',
+      observacao: '',
+      origemTipo: 'relatorio',
+      origemId: rel.id
+    })
+  const r = novo()
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  recibosRepo.confirmar(r.id)
+  const naoEnviado = novo()
+  recibosRepo.confirmar(naoEnviado.id)
+  await pg.query(
+    "update gdo_entities set revisao=revisao+1,sequencia=nextval('gdo_changes') where entidade=$1",
+    [`relatorio:${rel.id}`]
+  )
+  const conflito = await nuvem.sincronizarNuvem()
+  expect(conflito.conflitos).toHaveLength(1)
+  expect(repos.relatoriosRepo.get(rel.id)?.totais.saldo).toBe(800)
+  await nuvem.aplicarConflito(conflito.conflitos[0].id)
+  expect(repos.relatoriosRepo.get(rel.id)?.totais.saldo).toBe(1000)
+  expect(recibosRepo.get(r.id)?.status).toBe('pendente')
+  expect(recibosRepo.get(naoEnviado.id)).toBeNull()
+  expect(sql.get('SELECT count(*) AS n FROM recebimentos WHERE relatorio_id=?', [rel.id])?.n).toBe(
+    0
+  )
+  expect(readdirSync(sql.pastaDados()).some((n) => n.startsWith('antes-conciliacao-'))).toBe(true)
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  await trocar('pc2')
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  expect(repos.relatoriosRepo.get(rel.id)?.totais.saldo).toBe(1000)
+  expect(recibosRepo.get(r.id)?.status).toBe('pendente')
 })
