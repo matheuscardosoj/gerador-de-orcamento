@@ -31,6 +31,7 @@ const api: AppApi = {
     exportar: (id, f) => invoke('versoes.exportar', id, f) as never
   },
   nuvem: {
+    copiarInstalacao: () => invoke('nuvem.copiarInstalacao') as never,
     config: () => invoke('nuvem.config') as never,
     status: () => invoke('nuvem.status') as never,
     conectar: (c, s, m) => invoke('nuvem.conectar', c, s, m) as never,

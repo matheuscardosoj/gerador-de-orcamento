@@ -23,10 +23,10 @@ import {
   convertMillimetersToTwip
 } from 'docx'
 import type { IParagraphOptions, IRunOptions, ParagraphChild } from 'docx'
-import { formatMoeda, formatDataExtenso } from '../format'
+import { formatMoeda } from '../format'
 import { valorPorExtenso } from '../extenso'
 import { referenciaDoAnexo } from './template'
-import { destinatarioNoDocumento, LIMITE_ANEXO_MM } from './comum'
+import { destinatarioNoDocumento, LIMITE_ANEXO_MM, localEData } from './comum'
 import type { AnexoOrcamento, AnexoRelatorio, EmpresaConfig, Orcamento, Relatorio } from '../types'
 
 // ------------------------------------------------------------- Constantes
@@ -69,11 +69,6 @@ function imagemDeDataUrl(
   const ext = m[1].toLowerCase()
   const tipo = ext === 'jpeg' || ext === 'jpg' ? 'jpg' : (ext as 'png' | 'gif' | 'bmp')
   return { data: Buffer.from(m[2], 'base64'), tipo }
-}
-
-function extrairCidade(endereco: string): string {
-  const m = endereco.match(/,\s*([^,]+?)\s*-\s*[A-Z]{2}/)
-  return m ? m[1].trim() : 'Rio Verde'
 }
 
 // -------------------------------------------------------------- Cabeçalho
@@ -202,6 +197,7 @@ function servicosTabela(orc: Orcamento): Table {
   const linhas = orc.itensServico.map(
     (i, idx) =>
       new TableRow({
+        cantSplit: true,
         children: [
           celulaTabela(celulaTexto(String(idx + 1), AlignmentType.CENTER), {
             largura: larguras[0]
@@ -378,12 +374,11 @@ export function montarDocumentoDocx(
 ): Document {
   empresa = orc.empresaSnapshot ?? empresa
   const total = orc.itensServico.reduce((s, i) => s + (i.valorTotal || 0), 0)
-  const cidade = extrairCidade(empresa.endereco)
 
   const corpo: (Paragraph | Table)[] = [cabecalho(empresa)]
 
   corpo.push(
-    p(`${cidade}, ${formatDataExtenso(orc.data)}`, {
+    p(localEData(empresa.endereco, orc.data), {
       spacing: { line: ENTRELINHA, before: mm(12), after: 0 }
     })
   )
@@ -551,7 +546,6 @@ export function montarDocumentoRelatorioDocx(
   empresa: EmpresaConfig,
   imagens: Map<string, string> = new Map()
 ): Document {
-  const cidade = extrairCidade(empresa.endereco)
   const base: Orcamento = {
     id: rel.id,
     numero: rel.numero,
@@ -576,7 +570,7 @@ export function montarDocumentoRelatorioDocx(
   empresa = rel.empresaSnapshot ?? empresa
   const corpo: (Paragraph | Table)[] = [cabecalho(empresa)]
   corpo.push(
-    p(`${cidade}, ${formatDataExtenso(rel.data)}`, {
+    p(localEData(empresa.endereco, rel.data), {
       spacing: { line: ENTRELINHA, before: mm(12), after: 0 }
     })
   )

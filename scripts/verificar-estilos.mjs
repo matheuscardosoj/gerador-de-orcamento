@@ -193,6 +193,16 @@ try {
     await page.getByRole('tab', { name: aba, exact: true }).click()
     await page.locator('h2').first().waitFor()
     await conferir(nome)
+    if (aba === 'Nuvem / Sincronização') {
+      await page.getByText('Como configurar minha empresa na nuvem', { exact: true }).click()
+      await page.getByRole('button', { name: 'Copiar configuração do banco', exact: true }).click()
+      await page
+        .getByRole('button', { name: 'Configuração copiada — cole no SQL Editor', exact: true })
+        .waitFor()
+      const sql = await app.evaluate(({ clipboard }) => clipboard.readText())
+      assert.ok(sql.includes('create or replace function public.gdo_batch'))
+      await conferir('guia-supabase')
+    }
   }
   assert.deepEqual(erros, [])
   writeFileSync(join(saida, 'medidas.json'), JSON.stringify({ resultados, erros }, null, 2))

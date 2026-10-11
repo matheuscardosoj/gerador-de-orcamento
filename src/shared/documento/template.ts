@@ -2,9 +2,9 @@ import { linhasCliente } from '../clientes'
 // Gera o HTML do orçamento no layout das propostas reais da VS Prestadora.
 // Usado tanto na prévia (renderer) quanto na geração de PDF/DOCX (main).
 import type { AnexoOrcamento, AnexoRelatorio, EmpresaConfig, Orcamento, Relatorio } from '../types'
-import { formatMoeda, formatDataExtenso } from '../format'
+import { formatMoeda } from '../format'
 import { valorPorExtenso } from '../extenso'
-import { destinatarioNoDocumento, LIMITE_ANEXO_MM } from './comum'
+import { destinatarioNoDocumento, LIMITE_ANEXO_MM, localEData } from './comum'
 
 function esc(s: string): string {
   return String(s ?? '')
@@ -16,11 +16,6 @@ function esc(s: string): string {
 
 function nl2br(s: string): string {
   return esc(s).replace(/\n/g, '<br>')
-}
-
-function extrairCidade(endereco: string): string {
-  const m = endereco.match(/,\s*([^,]+?)\s*-\s*[A-Z]{2}/)
-  return m ? m[1].trim() : 'Rio Verde'
 }
 
 function bloco(titulo: string, itensHtml: string): string {
@@ -139,7 +134,6 @@ const ALTURA_UTIL_MM = 297 - 15 * 2
 export function gerarHtmlOrcamento(orc: Orcamento, empresa: EmpresaConfig): string {
   empresa = orc.empresaSnapshot ?? empresa
   const total = orc.itensServico.reduce((s, i) => s + (i.valorTotal || 0), 0)
-  const cidade = extrairCidade(empresa.endereco)
   const logo = empresa.logoDataUrl
     ? `<img class="logo" src="${empresa.logoDataUrl}" alt="logo">`
     : `<div class="logo logo-vazia">${esc(empresa.nome.slice(0, 2).toUpperCase())}</div>`
@@ -165,7 +159,7 @@ export function gerarHtmlOrcamento(orc: Orcamento, empresa: EmpresaConfig): stri
     </header>
 
     <div class="remetente">
-      <p>${esc(cidade)}, ${formatDataExtenso(orc.data)}</p>
+      <p>${esc(localEData(empresa.endereco, orc.data))}</p>
       ${orc.destinatario ? `<p>${nl2br(destinatarioNoDocumento(orc.destinatario))}</p>` : ''}
       ${linhasCliente(orc)
         .map((l) => `<p>${esc(l)}</p>`)

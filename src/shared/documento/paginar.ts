@@ -163,10 +163,6 @@ export function paginarDocumento(doc: Document): void {
       }
     })
 
-    // No formato tabela, a tabela inteira continua como uma unidade só (não
-    // divide linha a linha) — diferente do Word, que pagina tabelas
-    // automaticamente. Assumido como aceitável: orçamentos costumam ter poucos
-    // itens (catálogo de referência tem 11 serviços).
     /**
      * `offsetHeight` sozinho subestima o espaço real: `.proposta` é um flex
      * column, e margens de irmãos flex NÃO colapsam entre si (diferente do
@@ -196,6 +192,7 @@ export function paginarDocumento(doc: Document): void {
       const miolo = doc.createElement('div')
       miolo.className = tipo
       pagina.appendChild(miolo)
+      paginaOriginal?.parentNode?.insertBefore(pagina, paginaOriginal)
       paginasNovas.push(pagina)
       return miolo
     }
@@ -209,6 +206,42 @@ export function paginarDocumento(doc: Document): void {
       let miolo = criarPagina(tipo)
       let usadoPx = 0
       for (let i = 0; i < unidades.length; i++) {
+        const unidade = unidades[i]
+        if (unidade.tagName === 'TABLE') {
+          const tabela = unidade as HTMLTableElement
+          const linhas = Array.from(tabela.tBodies).flatMap((body) => Array.from(body.rows))
+          let indice = 0
+          while (indice < linhas.length) {
+            const parte = tabela.cloneNode(false) as HTMLTableElement
+            if (tabela.tHead) parte.appendChild(tabela.tHead.cloneNode(true))
+            const corpo = doc.createElement('tbody')
+            parte.appendChild(corpo)
+            miolo.appendChild(parte)
+            const inicio = indice
+            while (indice < linhas.length) {
+              const linha = linhas[indice]
+              corpo.appendChild(linha)
+              if (usadoPx + alturaComMargens(parte) > alturaPaginaPx) {
+                linha.remove()
+                break
+              }
+              indice++
+            }
+            if (indice === inicio) {
+              parte.remove()
+              if (usadoPx === 0)
+                throw new Error(
+                  'Uma linha da tabela excede a altura da página. Divida a descrição em mais de um item antes de exportar.'
+                )
+            } else usadoPx += alturaComMargens(parte)
+            if (indice < linhas.length) {
+              miolo = criarPagina(tipo)
+              usadoPx = 0
+            }
+          }
+          tabela.remove()
+          continue
+        }
         const h = alturas[i]
         // Só abre página nova se já houver algo na atual — uma unidade maior
         // que a página inteira não pode gerar uma página vazia antes dela.

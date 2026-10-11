@@ -256,3 +256,23 @@ it('mantém o mesmo padrão de anexos no relatório, sem reduzir imagens por cat
     '3038475'
   ])
 })
+
+it('usa a cidade preservada do relatório mesmo após alterar o endereço da empresa', async () => {
+  const rel = {
+    ...orc,
+    titulo: 'Relatório de Serviço',
+    adiantamentos: [],
+    reembolsos: [],
+    totais: calcularTotaisRelatorio(orc.itensServico, [], []),
+    empresaSnapshot: { ...empresa, endereco: 'Rua Exemplo, Curitiba - PR' }
+  } as unknown as Relatorio
+  const xml = lerDocumentXml(
+    Buffer.from(
+      await Packer.toBuffer(
+        montarDocumentoRelatorioDocx(rel, { ...empresa, endereco: 'Rua Atual, Recife - PE' })
+      )
+    )
+  )
+  expect(xml).toContain('Curitiba, 4 de maio de 2026')
+  expect(xml).not.toContain('Recife')
+})

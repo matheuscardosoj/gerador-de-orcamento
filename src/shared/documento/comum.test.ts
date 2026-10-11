@@ -3,10 +3,17 @@ import {
   destinatarioComTratamento,
   destinatarioNoDocumento,
   nomeBaseDocumento,
-  normalizarDestinatario
+  normalizarDestinatario,
+  localEData
 } from './comum'
 
 describe('apresentação comum de documentos', () => {
+  it('mostra somente a data quando a cidade não foi informada', () => {
+    expect(localEData('', '2026-10-11')).toBe('11 de outubro de 2026')
+    expect(localEData('Rua Exemplo, 10, Curitiba - PR', '2026-10-11')).toBe(
+      'Curitiba, 11 de outubro de 2026'
+    )
+  })
   it('guarda destinatário sem vírgula e apresenta exatamente uma', () => {
     expect(normalizarDestinatario(' Joãozin,  ')).toBe('Joãozin')
     expect(destinatarioNoDocumento('Joãozin,,')).toBe('Joãozin,')

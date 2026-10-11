@@ -14,6 +14,7 @@ import {
 } from '../ui/primitives'
 import { useNav } from '../lib/nav'
 import { paginarDocumento } from '@shared/documento/paginar'
+import { compararDocumentos } from '@shared/comparacao-documentos'
 
 export function DadosClienteDocumento({
   documento,
@@ -92,6 +93,7 @@ export function LinhaTempo({
   const [aberto, setAberto] = useState(false)
   const [versoes, setVersoes] = useState<VersaoDocumento[]>([])
   const [selecionada, setSelecionada] = useState<VersaoDocumento | null>(null)
+  const [comparadaId, setComparadaId] = useState('')
   const [erro, setErro] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [html, setHtml] = useState('')
@@ -131,29 +133,9 @@ export function LinhaTempo({
       .then(setHtml)
       .catch((e) => setErro(String(e)))
   }, [selecionada])
-  const anterior = versoes.find((v) => v.id === selecionada?.anteriorId)
-  const resumo = (v: VersaoDocumento): string => {
-    const d = v.documento
-    return [
-      d.destinatario,
-      'titulo' in d ? d.titulo : d.descricao,
-      d.data,
-      d.status,
-      'valorTotal' in d
-        ? `Total: ${d.valorTotal}`
-        : 'valor' in d
-          ? `Valor: ${d.valor}`
-          : `Saldo: ${d.totais.saldo}`,
-      'itensServico' in d
-        ? d.itensServico
-            .map((i) => `${i.descricao}: ${i.quantidade} ${i.unidade} / ${i.valorTotal}`)
-            .join('\n')
-        : '',
-      'anexos' in d ? `Anexos: ${d.anexos.map((a) => a.titulo).join(', ')}` : ''
-    ]
-      .filter(Boolean)
-      .join('\n')
-  }
+  const anterior = versoes.find((v) => v.id === (comparadaId || selecionada?.anteriorId))
+  const diferencas =
+    anterior && selecionada ? compararDocumentos(anterior.documento, selecionada.documento) : []
   return (
     <>
       <Button variant="outline" onClick={() => setAberto(true)}>
@@ -176,7 +158,10 @@ export function LinhaTempo({
             <Select
               aria-label="Escolher versão"
               value={selecionada?.id ?? ''}
-              onChange={(e) => setSelecionada(versoes.find((v) => v.id === e.target.value) ?? null)}
+              onChange={(e) => {
+                setSelecionada(versoes.find((v) => v.id === e.target.value) ?? null)
+                setComparadaId('')
+              }}
             >
               {versoes.map((v) => (
                 <option key={v.id} value={v.id}>
@@ -247,22 +232,59 @@ export function LinhaTempo({
                   </Button>
                 ))}
               </div>
-              {anterior && (
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div>
-                    <h4 className="mb-2 text-sm font-semibold text-slate-700">Versão anterior</h4>
-                    <p className="rounded-lg border border-slate-200 bg-slate-50 p-4 whitespace-pre-wrap text-sm leading-6 text-slate-600">
-                      {resumo(anterior)}
-                    </p>
-                  </div>
-                  <div>
-                    <h4 className="mb-2 text-sm font-semibold text-slate-700">
-                      Versão selecionada
-                    </h4>
-                    <p className="rounded-lg border border-slate-200 bg-slate-50 p-4 whitespace-pre-wrap text-sm leading-6 text-slate-600">
-                      {resumo(selecionada)}
-                    </p>
-                  </div>
+              {versoes.length > 1 && (
+                <div className="space-y-3">
+                  <Field label="Comparar com">
+                    <Select
+                      value={anterior?.id ?? ''}
+                      onChange={(e) => setComparadaId(e.target.value)}
+                    >
+                      <option value="">Escolha outra versão</option>
+                      {versoes
+                        .filter((v) => v.id !== selecionada.id)
+                        .map((v) => (
+                          <option key={v.id} value={v.id}>
+                            v{v.numero} · {new Date(v.criadoEm).toLocaleString('pt-BR')}
+                          </option>
+                        ))}
+                    </Select>
+                  </Field>
+                  {anterior &&
+                    (diferencas.length ? (
+                      <div className="max-h-72 overflow-auto rounded-lg border border-slate-200">
+                        <table className="w-full table-fixed text-sm">
+                          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                            <tr>
+                              <th className="w-[40%] px-4 py-3">Campo alterado</th>
+                              <th className="w-[30%] px-4 py-3">v{anterior.numero}</th>
+                              <th className="w-[30%] px-4 py-3">v{selecionada.numero}</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {diferencas.map((d) => (
+                              <tr key={d.campo}>
+                                <th
+                                  scope="row"
+                                  className="break-words px-4 py-3 text-left font-medium text-slate-700"
+                                >
+                                  {d.campo}
+                                </th>
+                                <td className="break-words px-4 py-3 whitespace-pre-wrap text-slate-600">
+                                  {d.anterior}
+                                </td>
+                                <td className="break-words px-4 py-3 whitespace-pre-wrap text-slate-600">
+                                  {d.atual}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-slate-500">
+                        Não há diferenças de conteúdo entre estas versões.
+                      </p>
+                    ))}
                 </div>
               )}
               <iframe
@@ -270,7 +292,7 @@ export function LinhaTempo({
                 srcDoc={html}
                 onLoad={(e) => {
                   const d = e.currentTarget.contentDocument
-                  if (d) paginarDocumento(d)
+                  if (d) void d.fonts.ready.then(() => paginarDocumento(d))
                 }}
                 className="h-[430px] w-full rounded-lg border border-slate-200 bg-white"
               />

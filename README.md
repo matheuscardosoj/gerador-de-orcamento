@@ -36,13 +36,16 @@ aplicar acréscimo sobre o custo e gerar orçamentos no layout da VS Prestadora,
 Persistência local em **SQLite** (`userData/data/banco.db`), via `node-sqlite3-wasm` —
 SQLite compilado em WebAssembly, sem nenhuma dependência nativa. Um `banco.json` de
 versões anteriores é importado automaticamente na primeira execução e arquivado como
-`banco.json.migrado-<timestamp>`. As fotos dos anexos ficam como BLOB no próprio banco.
+`banco.json.migrado-<timestamp>`. Fotos e logos ficam no próprio banco em texto Base64
+deduplicado, sem Storage. Novas fotos são comprimidas para até 1.600 pixels, 250 KiB
+por foto e 20 KiB por miniatura antes do Base64. Imagens antigas preservam seus bytes.
+Antes da migração, o aplicativo calcula o espaço necessário e verifica um backup.
 
 O **DOCX** é montado diretamente em OOXML (biblioteca `docx`, em `src/shared/documento/docx.ts`),
 espelhando as mesmas medidas do HTML que gera o PDF — por isso os dois saem iguais.
 
 O **PDF e a prévia** compartilham um único motor de paginação
-(`src/shared/documento/paginar.ts`): ele distribui o conteúdo em folhas A4
+(`src/shared/documento/paginar.ts`): ele distribui propostas/relatórios em A4 e recibos em A5 horizontal
 autocontidas antes de imprimir ou exibir, em vez de depender da fragmentação de
 página do Chromium. A função é autocontida de propósito — o processo main a injeta
 por `.toString()` na janela oculta do PDF, e o renderer a importa e chama sobre o
@@ -67,6 +70,11 @@ o app tenta o Ollama automaticamente.
 
 ## Status
 
+**Candidato 1.4.0-rc.1** — dados compartilhados, clientes com campos opcionais,
+recibos/cobranças, recebimentos, versões imutáveis e imagens deduplicadas.
+Versão final e merge dependem de aprovação. A conexão real Supabase será validada
+depois da criação do projeto da empresa.
+
 **Versão 1.3.1** — erros associados aos campos de documentos, salvamentos resilientes
 nas configurações e bloqueio de operações concorrentes.
 
@@ -86,3 +94,66 @@ com os encargos incidindo sobre o salário registrado na carteira.
 **Versão 1.0.0** — primeira versão completa: cálculo de custo, histórico com busca,
 anexos com fotos, anotação por IA local, exportação PDF/DOCX e instalador
 autossuficiente.
+
+## Migração e nuvem
+
+[Tutorial para migrar a instalação antiga para o Supabase](supabase/CONFIGURACAO.md).
+O script SQL e o tutorial são incluídos no pacote. A configuração também pode ser
+copiada em **Configurações → Nuvem / Sincronização**.
+
+Atualize com o mesmo usuário do Windows para preservar a base existente. Confira os
+dados migrados e publique-os em um projeto remoto vazio. Nos outros computadores,
+baixe a base da empresa. Clientes, catálogo, configurações comerciais, documentos,
+recebimentos, imagens e versões são compartilhados por um projeto/usuário por empresa.
+IA e preferências do computador permanecem locais. Sessão protegida pelo Windows;
+o instalador não contém credenciais administrativas.
+
+A fila SQLite sobrevive a reinícios. Operações têm identificadores únicos e revisões
+de origem; conflitos preservam alterações e exigem conciliação com backup. Relatório
+e recibos/pagamentos relacionados são conciliados juntos. O computador responsável
+edita e emite definitivamente, com números reservados em blocos de 20 por tipo e
+reabastecidos quando restam cinco. Números usados não são reaproveitados.
+
+Backups incluem imagens, recibos, pagamentos e versões, retirando identidade, sessão
+e reservas offline. Restauração/mesclagem são locais e não publicam nem substituem a
+nuvem. Documentos de outro computador podem ser consultados ou copiados para criar
+documentos novos.
+
+## Documentos
+
+Somente nome/razão social é obrigatório no cliente. PF/PJ, CPF/CNPJ (inclusive
+alfanumérico), telefone, e-mail, endereço, nome fantasia e contato são opcionais,
+com validação quando preenchidos. Cada documento escolhe quais dados exibir e
+congela os cadastros por versão; atualização posterior exige ação explícita.
+
+A linha do tempo compara conteúdo, cálculos, apresentação, cadastros e fotos;
+permite consultar/exportar versões, criar novos documentos e retomar versões antigas
+criando uma nova revisão. Retomar o texto de um relatório preserva os pagamentos.
+
+Recibos usam a mesma janela de prévia e o mesmo sistema visual das propostas.
+**Cobrança de Serviço** antes do pagamento; **Recibo de Pagamento** após confirmação.
+Papel A5 horizontal, logo, valor por extenso, quitação parcial/total e 18 mm de espaço
+para assinatura. PDF, prévia e Word compartilham a paginação e as linhas do recibo.
+Cancelamento preserva o original e estorna somente o lançamento criado pelo recibo;
+adiantamentos existentes não são descontados duas vezes.
+
+Custos avulsos podem ser repassados sem acréscimo de lucro, com imposto aplicado ao
+subtotal segundo o modo escolhido. Aplicar acréscimo continua marcado por padrão.
+
+PDF/DOCX usam o mesmo nome-base: `Tipo - Número - Cliente - AAAA-MM-DD - vVersão.ext`.
+Número com seis dígitos, versão com três, data do documento e acentos preservados.
+Cliente abreviado primeiro; CPF/CNPJ não entra no nome. Arquivos existentes recebem
+sugestão de cópia; substituição exige confirmação.
+
+## Validação
+
+`npm run check` executa análise estática, formatação, tipos, testes e compilação.
+Sincronização é testada com dois perfis SQLite e funções PostgreSQL/PGlite reais,
+com transporte REST simulado para interrupções, reenvios, conflitos e transferências.
+Essa validação não substitui a conexão ao projeto Supabase da empresa.
+
+Scripts `verificar-app.mjs`, `verificar-estilos.mjs`, `verificar-recibos.mjs`,
+`verificar-exportacoes.mjs` e `verificar-migracao.mjs` usam perfis separados em
+`output/`. A migração trabalha com uma cópia do banco instalado, sem alterar o original.
+Os scripts de aplicativo/exportação também aceitam o executável candidato para
+validar o pacote, sem atualizar a instalação de uso.

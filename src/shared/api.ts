@@ -95,6 +95,7 @@ export interface AppApi {
     exportar(id: string, formato: 'pdf' | 'docx'): Promise<DocumentoResultado>
   }
   nuvem: {
+    copiarInstalacao(): Promise<void>
     config(): Promise<import('./types').ConfigNuvem>
     status(): Promise<import('./types').StatusNuvem>
     conectar(

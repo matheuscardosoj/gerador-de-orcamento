@@ -84,7 +84,7 @@ async function pedido(path: string, body?: unknown, login = false): Promise<unkn
     method: body === undefined ? 'GET' : 'POST',
     headers: {
       apikey: c.chavePublica,
-      Authorization: `Bearer ${token}`,
+      ...(!login ? { Authorization: `Bearer ${token}` } : {}),
       'Content-Type': 'application/json'
     },
     body: body === undefined ? undefined : JSON.stringify(body),

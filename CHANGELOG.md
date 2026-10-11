@@ -2,6 +2,37 @@
 
 Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
+## 1.4.0-rc.1 — 2026-10-11
+
+Candidato para teste; versão final e merge aguardam autorização.
+
+### Adicionado
+
+- Sincronização Supabase por empresa, sessão protegida, permissões por usuário e fila SQLite persistente com operações idempotentes e revisões de origem.
+- Reservas de números por tipo/computador e transferência da responsabilidade pela edição/emissão.
+- Clientes PF/PJ com dados opcionais e CPF/CNPJ numérico ou alfanumérico; somente nome obrigatório.
+- Recibos/cobranças com recebimentos transacionais, quitação parcial/total e cancelamento/estorno.
+- Linha do tempo imutável, comparação completa de campos, exportação histórica, retomada e novos documentos a partir de versões antigas.
+- Imagens Base64 deduplicadas, compressão em bytes e alertas de consumo.
+- Tutorial para migrar a base local da versão antiga e configuração SQL incluída no pacote.
+
+### Alterado e corrigido
+
+- Dados da empresa/cliente e apresentação preservados por versão.
+- Recibo A5 horizontal com logo, valor sem recuo desnecessário, espaço de assinatura e mesma paginação/linhas no PDF e Word.
+- Prévia dos três tipos com o mesmo componente e estilo; demais elementos seguem os componentes existentes.
+- Custos avulsos com opção de repasse sem acréscimo de lucro, mantendo aplicação do imposto.
+- Nomes de PDF/DOCX com tipo, número, cliente, data e versão; confirmação de substituição.
+- Tabelas extensas distribuídas entre páginas, repetindo cabeçalho; linhas do Word preservadas inteiras.
+- Cidade congelada da empresa usada no DOCX; sem cidade informada, somente a data.
+- Backup verificado e estimativa de espaço antes de migrar. Restauração/mesclagem incluem recibos, pagamentos, versões e imagens, sem sessões e autorizações offline.
+- Conciliação financeira restaura juntos relatório e recibos/pagamentos, guardando alterações locais em backup.
+
+### Validação
+
+- Testes automatizados e conferência visual em perfis separados, incluindo migração de uma cópia do banco antigo instalado.
+- Conexão real Supabase depende da criação do projeto e será conferida após a revisão do candidato.
+
 ## 1.3.1 — 2026-08-29
 
 ### Corrigido

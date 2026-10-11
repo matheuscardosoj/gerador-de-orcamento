@@ -1,3 +1,11 @@
+import { formatDataExtenso } from '../format'
+
+/** Usa a cidade informada; empresa sem endereço não recebe uma cidade inventada. */
+export function localEData(endereco: string, data: string): string {
+  const cidade = endereco.match(/(?:^|,)\s*([^,]+?)\s*-\s*[A-Z]{2}\b/)?.[1]?.trim()
+  return [cidade, formatDataExtenso(data)].filter(Boolean).join(', ')
+}
+
 /** O destinatário é persistido sem pontuação de apresentação. */
 export function normalizarDestinatario(valor: string): string {
   return String(valor ?? '')
@@ -45,6 +53,7 @@ export function nomeSeguroArquivo(valor: string): string {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 80)
+    .replace(/[.\s]+$/g, '')
 }
 
 export function nomeBaseDocumento(

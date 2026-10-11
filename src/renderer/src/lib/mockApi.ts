@@ -198,6 +198,9 @@ export function criarMockApi(): AppApi {
       exportar: async () => ({ caminho: null })
     },
     nuvem: {
+      copiarInstalacao: async () => {
+        throw new Error('Disponível no aplicativo desktop.')
+      },
       config: async () => ({ url: '', chavePublica: '', email: '' }),
       status: async () => ({
         configurada: false,

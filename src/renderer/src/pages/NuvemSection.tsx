@@ -20,6 +20,7 @@ export function NuvemSection(): JSX.Element {
   const [ocupado, setOcupado] = useState(false)
   const [confirmar, setConfirmar] = useState(false)
   const [conciliar, setConciliar] = useState<string | null>(null)
+  const [instalacaoCopiada, setInstalacaoCopiada] = useState(false)
   useEffect(() => {
     void api.nuvem.config().then(setC)
     void api.nuvem.status().then(setS)
@@ -48,10 +49,74 @@ export function NuvemSection(): JSX.Element {
         empresa configura seu próprio projeto. Plano gratuito: 500 MB de banco; pouca atividade pode
         pausar o projeto.
       </p>
-      <p className="mb-4 text-sm">
-        Configure as tabelas com o arquivo de instalação Supabase fornecido com o aplicativo e crie
-        sua conta no painel de autenticação. Depois preencha os dados abaixo.
-      </p>
+      <details className="mb-4 rounded-lg border border-slate-200 p-4 text-sm text-slate-600">
+        <summary className="cursor-pointer font-medium text-slate-700">
+          Como configurar minha empresa na nuvem
+        </summary>
+        <ol className="mt-3 list-decimal space-y-3 pl-5">
+          <li>
+            Se você já usa uma versão antiga, primeiro exporte um backup em Dados e backup, feche o
+            aplicativo e instale a atualização com o mesmo usuário do Windows. Abra a versão
+            atualizada e confira seus clientes, documentos e fotos: a migração local é automática e
+            cria um backup verificado. Exporte uma nova cópia antes de publicar.
+          </li>
+          <li>
+            Entre no{' '}
+            <a
+              className="text-teal-700 underline"
+              href="https://supabase.com/dashboard"
+              target="_blank"
+              rel="noreferrer"
+            >
+              painel do Supabase
+            </a>
+            , crie uma organização no plano Free e um projeto exclusivo para sua empresa. Escolha a
+            região mais próxima e guarde a senha do banco.
+          </li>
+          <li>
+            Abra o SQL Editor do projeto, crie uma consulta, cole a configuração copiada pelo botão
+            abaixo e execute com Run. Não é necessário criar um Storage.
+          </li>
+          <li>
+            Em Authentication → Users, adicione o usuário da empresa com e-mail e senha e confirme o
+            e-mail. Essa é a conta usada em todos os computadores; a senha do banco é diferente.
+          </li>
+          <li>
+            Copie a URL do projeto e a chave pública publishable no painel de conexão / API Keys.
+            Preencha esses dados e o login abaixo.
+          </li>
+          <li>
+            No computador que possui seus dados já migrados, escolha “Publicar os dados locais em
+            uma nuvem vazia”. Nos demais, escolha “Baixar a base da empresa”. Clique em Conectar e
+            aguarde a sincronização.
+          </li>
+          <li>
+            Faça a primeira sincronização online. Ela reserva números para emitir offline. Para
+            transferir a edição definitiva de um documento, use “Versões e transferência” com os
+            computadores sincronizados.
+          </li>
+        </ol>
+        <Button
+          className="mt-4"
+          variant="outline"
+          disabled={ocupado}
+          onClick={() => {
+            setErro('')
+            void api.nuvem
+              .copiarInstalacao()
+              .then(() => setInstalacaoCopiada(true))
+              .catch((e) => setErro(String(e)))
+          }}
+        >
+          {instalacaoCopiada
+            ? 'Configuração copiada — cole no SQL Editor'
+            : 'Copiar configuração do banco'}
+        </Button>
+        <p className="mt-3 text-xs text-slate-500">
+          A configuração fornecida não contém senhas. As permissões restringem os dados ao usuário
+          autenticado da empresa.
+        </p>
+      </details>
       {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
       {s?.erro && <Mensagem className="mb-4">{s.erro}</Mensagem>}
       <div className="grid gap-4 md:grid-cols-2">

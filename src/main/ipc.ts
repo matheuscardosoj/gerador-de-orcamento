@@ -1,4 +1,5 @@
 import { recibosRepo } from './recibos'
+import { copiarInstalacaoNuvem } from './nuvem-configuracao'
 import {
   listarVersoes,
   enfileirar,
@@ -96,6 +97,7 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
   'nuvem.status': () => statusNuvem(),
   'nuvem.conectar': (c, s, m) => conectarNuvem(c as never, s as string, m as never),
   'nuvem.sincronizar': () => sincronizarNuvem(),
+  'nuvem.copiarInstalacao': () => copiarInstalacaoNuvem(),
   'nuvem.dispositivos': () => dispositivosNuvem(),
   'nuvem.transferir': (t, id, d) => transferirDocumento(t as never, id as string, d as string),
   'nuvem.sair': () => sairNuvem(),
