@@ -116,7 +116,13 @@ function Conteudo(): JSX.Element {
     case 'editorRelatorio':
       return <EditorRelatorioPage relatorioId={rota.relatorioId} />
     case 'recibos':
-      return <RecibosPage key={rota.reciboId} reciboId={rota.reciboId} />
+      return (
+        <RecibosPage
+          key={rota.reciboId ?? rota.origem?.id ?? 'lista'}
+          reciboId={rota.reciboId}
+          origemDocumento={rota.origem}
+        />
+      )
     case 'cadastros':
       return <CadastrosPage />
     case 'configuracoes':

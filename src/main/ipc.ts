@@ -1,4 +1,5 @@
 import { recibosRepo } from './recibos'
+import { lerPreferencias, salvarPreferencias, reordenarCadastro } from './preferencias'
 import { copiarInstalacaoNuvem } from './nuvem-configuracao'
 import {
   listarVersoes,
@@ -37,7 +38,7 @@ import {
   configIARepo
 } from './repositories'
 import { gerarPdf, gerarDocx, gerarRelatorioPdf, gerarRelatorioDocx } from './documents'
-import { statusIA, sugerirObservacao } from './ia'
+import { statusIA, sugerirObservacao, revisarTexto, cancelarRevisao } from './ia'
 import { exportarDados, importarDados } from './dados'
 
 let alteracoesPendentes = false
@@ -76,6 +77,9 @@ async function selecionarLogo(): Promise<string | null> {
 // Mapa canal -> função. Registrado em loop via ipcMain.handle.
 // A geração de documentos (documentos.*) é registrada na Fase 5.
 const handlers: Record<string, (...args: unknown[]) => unknown> = {
+  'preferencias.historico': (tipo) => lerPreferencias(String(tipo)),
+  'preferencias.salvarHistorico': (tipo, dados) => salvarPreferencias(String(tipo), dados),
+  'cadastros.reordenar': (tipo, ids) => reordenarCadastro(String(tipo), ids as string[]),
   'versoes.html': (id) => htmlVersao(id as string),
   'versoes.nomear': (id, d) =>
     tx(() => {
@@ -160,6 +164,8 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
   'anexosRelatorio.imagem': (id) => anexosRelatorioRepo.imagem(id as string),
 
   'ia.get': () => configIARepo.get(),
+  'ia.revisarTexto': (entrada) => revisarTexto(entrada as never),
+  'ia.cancelarRevisao': (id) => cancelarRevisao(String(id)),
   'ia.save': (patch) => configIARepo.save(patch as never),
   'ia.status': () => statusIA(),
   'ia.sugerirObservacao': (orc) => sugerirObservacao(orc as never),

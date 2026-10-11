@@ -17,6 +17,9 @@ const app = await electron.launch({
 const resultados = []
 const erros = []
 try {
+  await app.evaluate(({ dialog }) => {
+    dialog.showMessageBoxSync = () => 1
+  })
   const page = await app.firstWindow()
   page.on('pageerror', (e) => erros.push(e.message))
   let estiloPrevia
@@ -173,6 +176,7 @@ try {
   await page.getByRole('button', { name: 'Novo recibo', exact: true }).click()
   await conferir('editor-recibo')
   await page.getByRole('button', { name: 'Cadastros', exact: true }).click()
+  await page.getByRole('button', { name: 'Descartar alterações', exact: true }).click()
   await conferir('lista-clientes')
   await page.getByRole('button', { name: '+ Novo cliente', exact: true }).first().click()
   await conferir('cadastro-cliente')

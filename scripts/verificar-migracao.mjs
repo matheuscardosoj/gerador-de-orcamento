@@ -77,9 +77,9 @@ try {
     assert.equal(createHash('sha256').update(Buffer.from(row.base64, 'base64')).digest('hex'), foto)
   }
   atualizado.close()
-  if (versaoOrigem < 7) {
+  if (versaoOrigem < 8) {
     const pasta = join(perfil, 'data', 'backups')
-    const backup = readdirSync(pasta).find((n) => n.startsWith('banco-pre-v7') && n.endsWith('.db'))
+    const backup = readdirSync(pasta).find((n) => n.startsWith('banco-pre-v8') && n.endsWith('.db'))
     assert.equal(hash(join(pasta, backup)), originalHash)
     assert.ok(JSON.parse(readFileSync(join(pasta, `${backup}.json`), 'utf8')).bytesNecessarios > 0)
   }

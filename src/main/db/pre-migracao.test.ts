@@ -66,8 +66,8 @@ it('recusa migração sem espaço antes de gravar e não reutiliza backup incomp
   expect(() => prepararMigracao(caminho)).toThrow('livres')
   expect(readFileSync(caminho)).toEqual(original)
   disco.livre = Number.MAX_SAFE_INTEGER
-  writeFileSync(join(raiz, 'backups', 'banco-pre-v7.db'), 'backup antigo corrompido')
+  writeFileSync(join(raiz, 'backups', 'banco-pre-v8.db'), 'backup antigo corrompido')
   const backup = prepararMigracao(caminho)!
-  expect(backup).not.toBe(join(raiz, 'backups', 'banco-pre-v7.db'))
+  expect(backup).not.toBe(join(raiz, 'backups', 'banco-pre-v8.db'))
   expect(readFileSync(backup)).toEqual(original)
 })

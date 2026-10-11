@@ -15,7 +15,7 @@ export type Rota =
   | { nome: 'editor'; orcamentoId?: string }
   | { nome: 'historicoRelatorios' }
   | { nome: 'editorRelatorio'; relatorioId?: string }
-  | { nome: 'recibos'; reciboId?: string }
+  | { nome: 'recibos'; reciboId?: string; origem?: { tipo: 'orcamento' | 'relatorio'; id: string } }
   | { nome: 'cadastros' }
   | { nome: 'configuracoes' }
 
@@ -23,30 +23,35 @@ interface NavContexto {
   rota: Rota
   navegar: (rota: Rota) => void
   registrarBloqueio: (bloqueio: (() => boolean) | null) => void
+  executarComConfirmacao: (acao: () => void) => void
 }
 
 const Ctx = createContext<NavContexto | null>(null)
 
 export function NavProvider({ children }: { children: ReactNode }): JSX.Element {
   const [rota, setRota] = useState<Rota>({ nome: 'historico' })
-  const [pendente, setPendente] = useState<Rota | null>(null)
+  const [pendente, setPendente] = useState<{ executar: () => void } | null>(null)
   const bloqueio = useRef<(() => boolean) | null>(null)
   const registrarBloqueio = useCallback((proximo: (() => boolean) | null) => {
     bloqueio.current = proximo
   }, [])
-  const navegar = useCallback((proxima: Rota) => {
-    if (bloqueio.current?.()) setPendente(proxima)
-    else setRota(proxima)
+  const executarComConfirmacao = useCallback((acao: () => void) => {
+    if (bloqueio.current?.()) setPendente({ executar: acao })
+    else acao()
   }, [])
+  const navegar = useCallback(
+    (proxima: Rota) => executarComConfirmacao(() => setRota(proxima)),
+    [executarComConfirmacao]
+  )
   const descartar = (): void => {
     const destino = pendente
     setPendente(null)
     bloqueio.current = null
     void api.aplicativo.alteracoesPendentes(false)
-    if (destino) setRota(destino)
+    destino?.executar()
   }
   return (
-    <Ctx.Provider value={{ rota, navegar, registrarBloqueio }}>
+    <Ctx.Provider value={{ rota, navegar, registrarBloqueio, executarComConfirmacao }}>
       {children}
       <ConfirmDialog
         open={pendente !== null}

@@ -1,3 +1,5 @@
+import { RevisaoIA } from './RevisaoIA'
+import { ListaOrdenavel } from '../ui/ordenavel'
 import { useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import {
@@ -131,6 +133,7 @@ export function ServicoCalculoModal({
                   onChange={(ev) => setDescricao(ev.target.value)}
                   placeholder="Ex.: Construção de 400m de cerca…"
                 />
+                <RevisaoIA texto={descricao} campo="descricaoServico" onAplicar={setDescricao} />
               </Field>
               <div className="grid grid-cols-3 gap-3">
                 <Field label="Unidade">
@@ -303,96 +306,98 @@ function MaoDeObraBloco({ e, set }: BlocoProps): JSX.Element {
         {e.maoDeObra.length === 0 && (
           <p className="text-xs text-slate-400">Nenhum grupo de mão de obra.</p>
         )}
-        {e.maoDeObra.map((g) => (
-          <div key={g.id} className="rounded-lg border border-slate-200 p-3">
-            <div className="mb-2 flex items-end gap-2">
-              <Field label="Descrição" className="flex-1">
-                <Input
-                  placeholder="Ex.: Diária a R$ 170 — equipe de cerca"
-                  value={g.descricao ?? ''}
-                  onChange={(ev) => upd(g.id, { descricao: ev.target.value })}
+        <ListaOrdenavel itens={e.maoDeObra} onChange={(maoDeObra) => set({ maoDeObra })}>
+          {e.maoDeObra.map((g) => (
+            <div key={g.id} className="rounded-lg border border-slate-200 p-3">
+              <div className="mb-2 flex items-end gap-2">
+                <Field label="Descrição" className="flex-1">
+                  <Input
+                    placeholder="Ex.: Diária a R$ 170 — equipe de cerca"
+                    value={g.descricao ?? ''}
+                    onChange={(ev) => upd(g.id, { descricao: ev.target.value })}
+                  />
+                </Field>
+                <IconButton
+                  icon={X}
+                  label="Remover grupo de mão de obra"
+                  onClick={() => rem(g.id)}
+                  className="text-slate-400"
                 />
-              </Field>
-              <IconButton
-                icon={X}
-                label="Remover grupo de mão de obra"
-                onClick={() => rem(g.id)}
-                className="text-slate-400"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-              <Field label="Funcionários">
-                <NumberField
-                  value={g.qtdFuncionarios}
-                  onChange={(v) => upd(g.id, { qtdFuncionarios: v })}
-                  min={0}
-                />
-              </Field>
-              <Field label="Forma de pagamento">
-                <Select
-                  value={g.base}
-                  onChange={(ev) => upd(g.id, { base: ev.target.value as typeof g.base })}
-                >
-                  <option value="diaria">Por diária</option>
-                  <option value="valor_cheio">Valor fechado</option>
-                  <option value="mensal">Valor mensal</option>
-                </Select>
-              </Field>
-              <Field
-                label={
-                  g.base === 'diaria'
-                    ? 'Valor da diária'
-                    : g.base === 'mensal'
-                      ? 'Valor mensal pago'
-                      : 'Valor por func.'
-                }
-              >
-                <NumberField value={g.valor} onChange={(v) => upd(g.id, { valor: v })} min={0} />
-              </Field>
-            </div>
-            <div className="mt-2 border-t border-slate-100 pt-2">
-              <Checkbox
-                label="CLT (carteira assinada)"
-                checked={!!g.clt}
-                onChange={(v) =>
-                  upd(g.id, {
-                    clt: v,
-                    salarioCarteira:
-                      v && g.salarioCarteira === undefined && g.base === 'mensal'
-                        ? g.valor
-                        : g.salarioCarteira
-                  })
-                }
-              />
-              {g.clt && (
-                <div className="mt-2 space-y-2">
-                  <Field
-                    label="Salário registrado na carteira (mensal)"
-                    hint="Base dos encargos e da rescisão — pode diferir do valor pago"
+              </div>
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+                <Field label="Funcionários">
+                  <NumberField
+                    value={g.qtdFuncionarios}
+                    onChange={(v) => upd(g.id, { qtdFuncionarios: v })}
+                    min={0}
+                  />
+                </Field>
+                <Field label="Forma de pagamento">
+                  <Select
+                    value={g.base}
+                    onChange={(ev) => upd(g.id, { base: ev.target.value as typeof g.base })}
                   >
-                    <NumberField
-                      value={g.salarioCarteira ?? 0}
-                      onChange={(v) => upd(g.id, { salarioCarteira: v })}
-                      min={0}
-                    />
-                  </Field>
-                  <div className="flex flex-wrap gap-4">
-                    <Checkbox
-                      label="Houve contratação"
-                      checked={!!g.houveContratacao}
-                      onChange={(v) => upd(g.id, { houveContratacao: v })}
-                    />
-                    <Checkbox
-                      label="Incluir provisão rescisória estimada"
-                      checked={!!g.demitidoAoFim}
-                      onChange={(v) => upd(g.id, { demitidoAoFim: v })}
-                    />
+                    <option value="diaria">Por diária</option>
+                    <option value="valor_cheio">Valor fechado</option>
+                    <option value="mensal">Valor mensal</option>
+                  </Select>
+                </Field>
+                <Field
+                  label={
+                    g.base === 'diaria'
+                      ? 'Valor da diária'
+                      : g.base === 'mensal'
+                        ? 'Valor mensal pago'
+                        : 'Valor por func.'
+                  }
+                >
+                  <NumberField value={g.valor} onChange={(v) => upd(g.id, { valor: v })} min={0} />
+                </Field>
+              </div>
+              <div className="mt-2 border-t border-slate-100 pt-2">
+                <Checkbox
+                  label="CLT (carteira assinada)"
+                  checked={!!g.clt}
+                  onChange={(v) =>
+                    upd(g.id, {
+                      clt: v,
+                      salarioCarteira:
+                        v && g.salarioCarteira === undefined && g.base === 'mensal'
+                          ? g.valor
+                          : g.salarioCarteira
+                    })
+                  }
+                />
+                {g.clt && (
+                  <div className="mt-2 space-y-2">
+                    <Field
+                      label="Salário registrado na carteira (mensal)"
+                      hint="Base dos encargos e da rescisão — pode diferir do valor pago"
+                    >
+                      <NumberField
+                        value={g.salarioCarteira ?? 0}
+                        onChange={(v) => upd(g.id, { salarioCarteira: v })}
+                        min={0}
+                      />
+                    </Field>
+                    <div className="flex flex-wrap gap-4">
+                      <Checkbox
+                        label="Houve contratação"
+                        checked={!!g.houveContratacao}
+                        onChange={(v) => upd(g.id, { houveContratacao: v })}
+                      />
+                      <Checkbox
+                        label="Incluir provisão rescisória estimada"
+                        checked={!!g.demitidoAoFim}
+                        onChange={(v) => upd(g.id, { demitidoAoFim: v })}
+                      />
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </ListaOrdenavel>
       </div>
     </Bloco>
   )
@@ -459,35 +464,37 @@ function AlimentacaoBloco({
         {e.alimentacoes.length === 0 && (
           <p className="text-xs text-slate-400">Ex.: café da manhã, almoço, janta.</p>
         )}
-        {e.alimentacoes.map((a) => (
-          <div key={a.id} className="rounded-lg border border-slate-200 p-3">
-            <LinhaDescricao
-              valor={a.descricao ?? ''}
-              placeholder="Ex.: Almoço na obra"
-              onChange={(v) => upd(a.id, { descricao: v })}
-              onRemove={() => rem(a.id)}
-            />
-            <div className="grid grid-cols-3 gap-3">
-              <Field label="Pessoas">
-                <NumberField
-                  value={a.qtdPessoas}
-                  onChange={(v) => upd(a.id, { qtdPessoas: v })}
-                  min={0}
-                />
-              </Field>
-              <Field label="Valor por refeição">
-                <NumberField
-                  value={a.valorRefeicao}
-                  onChange={(v) => upd(a.id, { valorRefeicao: v })}
-                  min={0}
-                />
-              </Field>
-              <Field label="Aplicação">
-                <ModoSelect value={a.modo} onChange={(m) => upd(a.id, { modo: m })} />
-              </Field>
+        <ListaOrdenavel itens={e.alimentacoes} onChange={(alimentacoes) => set({ alimentacoes })}>
+          {e.alimentacoes.map((a) => (
+            <div key={a.id} className="rounded-lg border border-slate-200 p-3">
+              <LinhaDescricao
+                valor={a.descricao ?? ''}
+                placeholder="Ex.: Almoço na obra"
+                onChange={(v) => upd(a.id, { descricao: v })}
+                onRemove={() => rem(a.id)}
+              />
+              <div className="grid grid-cols-3 gap-3">
+                <Field label="Pessoas">
+                  <NumberField
+                    value={a.qtdPessoas}
+                    onChange={(v) => upd(a.id, { qtdPessoas: v })}
+                    min={0}
+                  />
+                </Field>
+                <Field label="Valor por refeição">
+                  <NumberField
+                    value={a.valorRefeicao}
+                    onChange={(v) => upd(a.id, { valorRefeicao: v })}
+                    min={0}
+                  />
+                </Field>
+                <Field label="Aplicação">
+                  <ModoSelect value={a.modo} onChange={(m) => upd(a.id, { modo: m })} />
+                </Field>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </ListaOrdenavel>
       </div>
     </Bloco>
   )
@@ -520,32 +527,34 @@ function FerramentasBloco({ e, set }: BlocoProps): JSX.Element {
             Ex.: gasolina de motoserra, manutenção de roçadeira.
           </p>
         )}
-        {e.ferramentas.map((f) => (
-          <div key={f.id} className="grid grid-cols-2 gap-2 md:grid-cols-[2fr_1fr_1fr_auto]">
-            <Input
-              placeholder="Descrição"
-              value={f.descricao}
-              onChange={(ev) => upd(f.id, { descricao: ev.target.value })}
-            />
-            <Select
-              value={f.tipo}
-              onChange={(ev) => upd(f.id, { tipo: ev.target.value as typeof f.tipo })}
-            >
-              <option value="insumo">Insumo</option>
-              <option value="manutencao">Manutenção</option>
-            </Select>
-            <NumberField value={f.valor} onChange={(v) => upd(f.id, { valor: v })} min={0} />
-            <div className="flex items-center gap-1">
-              <ModoSelect value={f.modo} onChange={(m) => upd(f.id, { modo: m })} />
-              <IconButton
-                icon={X}
-                label="Remover ferramenta"
-                onClick={() => rem(f.id)}
-                className="text-slate-400"
+        <ListaOrdenavel itens={e.ferramentas} onChange={(ferramentas) => set({ ferramentas })}>
+          {e.ferramentas.map((f) => (
+            <div key={f.id} className="grid grid-cols-2 gap-2 md:grid-cols-[2fr_1fr_1fr_auto]">
+              <Input
+                placeholder="Descrição"
+                value={f.descricao}
+                onChange={(ev) => upd(f.id, { descricao: ev.target.value })}
               />
+              <Select
+                value={f.tipo}
+                onChange={(ev) => upd(f.id, { tipo: ev.target.value as typeof f.tipo })}
+              >
+                <option value="insumo">Insumo</option>
+                <option value="manutencao">Manutenção</option>
+              </Select>
+              <NumberField value={f.valor} onChange={(v) => upd(f.id, { valor: v })} min={0} />
+              <div className="flex items-center gap-1">
+                <ModoSelect value={f.modo} onChange={(m) => upd(f.id, { modo: m })} />
+                <IconButton
+                  icon={X}
+                  label="Remover ferramenta"
+                  onClick={() => rem(f.id)}
+                  className="text-slate-400"
+                />
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </ListaOrdenavel>
       </div>
     </Bloco>
   )
@@ -587,49 +596,51 @@ function CombustivelBloco({
         {e.combustiveis.length === 0 && (
           <p className="text-xs text-slate-400">Um item por veículo usado no serviço.</p>
         )}
-        {e.combustiveis.map((c) => {
-          const dist = c.modo === 'diario' ? c.distanciaKm * (e.dias || 0) : c.distanciaKm
-          const litros = c.consumoKmL > 0 ? dist / c.consumoKmL : 0
-          return (
-            <div key={c.id} className="rounded-lg border border-slate-200 p-3">
-              <LinhaDescricao
-                valor={c.descricao ?? ''}
-                placeholder="Ex.: Caminhonete da equipe"
-                onChange={(v) => upd(c.id, { descricao: v })}
-                onRemove={() => rem(c.id)}
-              />
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <Field label={c.modo === 'diario' ? 'Km por dia' : 'Km total'}>
-                  <NumberField
-                    value={c.distanciaKm}
-                    onChange={(v) => upd(c.id, { distanciaKm: v })}
-                    min={0}
-                  />
-                </Field>
-                <Field label="Consumo (km/l)">
-                  <NumberField
-                    value={c.consumoKmL}
-                    onChange={(v) => upd(c.id, { consumoKmL: v })}
-                    min={0}
-                  />
-                </Field>
-                <Field label="Preço do litro">
-                  <NumberField
-                    value={c.precoLitro}
-                    onChange={(v) => upd(c.id, { precoLitro: v })}
-                    min={0}
-                  />
-                </Field>
-                <Field label="Aplicação">
-                  <ModoSelect value={c.modo} onChange={(m) => upd(c.id, { modo: m })} />
-                </Field>
+        <ListaOrdenavel itens={e.combustiveis} onChange={(combustiveis) => set({ combustiveis })}>
+          {e.combustiveis.map((c) => {
+            const dist = c.modo === 'diario' ? c.distanciaKm * (e.dias || 0) : c.distanciaKm
+            const litros = c.consumoKmL > 0 ? dist / c.consumoKmL : 0
+            return (
+              <div key={c.id} className="rounded-lg border border-slate-200 p-3">
+                <LinhaDescricao
+                  valor={c.descricao ?? ''}
+                  placeholder="Ex.: Caminhonete da equipe"
+                  onChange={(v) => upd(c.id, { descricao: v })}
+                  onRemove={() => rem(c.id)}
+                />
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  <Field label={c.modo === 'diario' ? 'Km por dia' : 'Km total'}>
+                    <NumberField
+                      value={c.distanciaKm}
+                      onChange={(v) => upd(c.id, { distanciaKm: v })}
+                      min={0}
+                    />
+                  </Field>
+                  <Field label="Consumo (km/l)">
+                    <NumberField
+                      value={c.consumoKmL}
+                      onChange={(v) => upd(c.id, { consumoKmL: v })}
+                      min={0}
+                    />
+                  </Field>
+                  <Field label="Preço do litro">
+                    <NumberField
+                      value={c.precoLitro}
+                      onChange={(v) => upd(c.id, { precoLitro: v })}
+                      min={0}
+                    />
+                  </Field>
+                  <Field label="Aplicação">
+                    <ModoSelect value={c.modo} onChange={(m) => upd(c.id, { modo: m })} />
+                  </Field>
+                </div>
+                <p className="mt-2 text-xs text-slate-400">
+                  {dist} km ÷ {c.consumoKmL || 0} km/l = {litros.toFixed(1)} litros
+                </p>
               </div>
-              <p className="mt-2 text-xs text-slate-400">
-                {dist} km ÷ {c.consumoKmL || 0} km/l = {litros.toFixed(1)} litros
-              </p>
-            </div>
-          )
-        })}
+            )
+          })}
+        </ListaOrdenavel>
       </div>
     </Bloco>
   )
@@ -669,70 +680,72 @@ function EstadiaBloco({ e, set }: BlocoProps): JSX.Element {
         {e.estadias.length === 0 && (
           <p className="text-xs text-slate-400">Ex.: hotel por pessoa, casa alugada por mês.</p>
         )}
-        {e.estadias.map((s) => (
-          <div key={s.id} className="rounded-lg border border-slate-200 p-3">
-            <LinhaDescricao
-              valor={s.descricao ?? ''}
-              placeholder="Ex.: Casa alugada em Itaberaí"
-              onChange={(v) => upd(s.id, { descricao: v })}
-              onRemove={() => rem(s.id)}
-            />
-            <div
-              className={cn(
-                'grid gap-3',
-                s.tipo === 'aluguel' ? 'grid-cols-3' : 'grid-cols-2 md:grid-cols-4'
-              )}
-            >
-              <Field label="Tipo">
-                <Select
-                  value={s.tipo}
-                  onChange={(ev) => upd(s.id, { tipo: ev.target.value as typeof s.tipo })}
-                >
-                  <option value="por_pessoa">Por pessoa</option>
-                  <option value="aluguel">Aluguel de imóvel</option>
-                </Select>
-              </Field>
-              {s.tipo === 'aluguel' ? (
-                <>
-                  <Field label="Valor mensal">
-                    <NumberField
-                      value={s.valorMensal ?? 0}
-                      onChange={(v) => upd(s.id, { valorMensal: v })}
-                      min={0}
-                    />
-                  </Field>
-                  <Field label="Meses" hint="Aceita fração (ex.: 1,5)">
-                    <NumberField
-                      value={s.qtdMeses ?? 0}
-                      onChange={(v) => upd(s.id, { qtdMeses: v })}
-                      min={0}
-                    />
-                  </Field>
-                </>
-              ) : (
-                <>
-                  <Field label="Pessoas">
-                    <NumberField
-                      value={s.qtdPessoas}
-                      onChange={(v) => upd(s.id, { qtdPessoas: v })}
-                      min={0}
-                    />
-                  </Field>
-                  <Field label="Valor por pessoa">
-                    <NumberField
-                      value={s.valorPorPessoa}
-                      onChange={(v) => upd(s.id, { valorPorPessoa: v })}
-                      min={0}
-                    />
-                  </Field>
-                  <Field label="Aplicação">
-                    <ModoSelect value={s.modo} onChange={(m) => upd(s.id, { modo: m })} />
-                  </Field>
-                </>
-              )}
+        <ListaOrdenavel itens={e.estadias} onChange={(estadias) => set({ estadias })}>
+          {e.estadias.map((s) => (
+            <div key={s.id} className="rounded-lg border border-slate-200 p-3">
+              <LinhaDescricao
+                valor={s.descricao ?? ''}
+                placeholder="Ex.: Casa alugada em Itaberaí"
+                onChange={(v) => upd(s.id, { descricao: v })}
+                onRemove={() => rem(s.id)}
+              />
+              <div
+                className={cn(
+                  'grid gap-3',
+                  s.tipo === 'aluguel' ? 'grid-cols-3' : 'grid-cols-2 md:grid-cols-4'
+                )}
+              >
+                <Field label="Tipo">
+                  <Select
+                    value={s.tipo}
+                    onChange={(ev) => upd(s.id, { tipo: ev.target.value as typeof s.tipo })}
+                  >
+                    <option value="por_pessoa">Por pessoa</option>
+                    <option value="aluguel">Aluguel de imóvel</option>
+                  </Select>
+                </Field>
+                {s.tipo === 'aluguel' ? (
+                  <>
+                    <Field label="Valor mensal">
+                      <NumberField
+                        value={s.valorMensal ?? 0}
+                        onChange={(v) => upd(s.id, { valorMensal: v })}
+                        min={0}
+                      />
+                    </Field>
+                    <Field label="Meses" hint="Aceita fração (ex.: 1,5)">
+                      <NumberField
+                        value={s.qtdMeses ?? 0}
+                        onChange={(v) => upd(s.id, { qtdMeses: v })}
+                        min={0}
+                      />
+                    </Field>
+                  </>
+                ) : (
+                  <>
+                    <Field label="Pessoas">
+                      <NumberField
+                        value={s.qtdPessoas}
+                        onChange={(v) => upd(s.id, { qtdPessoas: v })}
+                        min={0}
+                      />
+                    </Field>
+                    <Field label="Valor por pessoa">
+                      <NumberField
+                        value={s.valorPorPessoa}
+                        onChange={(v) => upd(s.id, { valorPorPessoa: v })}
+                        min={0}
+                      />
+                    </Field>
+                    <Field label="Aplicação">
+                      <ModoSelect value={s.modo} onChange={(m) => upd(s.id, { modo: m })} />
+                    </Field>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </ListaOrdenavel>
       </div>
     </Bloco>
   )
@@ -761,34 +774,36 @@ function AvulsosBloco({ e, set }: BlocoProps): JSX.Element {
             imposto da nota.
           </p>
         )}
-        {e.avulsos.map((a) => (
-          <div key={a.id} className="grid grid-cols-[2fr_1fr_auto] gap-2">
-            <Input
-              placeholder="Descrição"
-              value={a.descricao}
-              onChange={(ev) => upd(a.id, { descricao: ev.target.value })}
-            />
-            <div>
-              <NumberField value={a.valor} onChange={(v) => upd(a.id, { valor: v })} min={0} />
-              <div className="mt-2">
-                <Checkbox
-                  checked={a.aplicarAcrescimo !== false}
-                  onChange={(aplicarAcrescimo) => upd(a.id, { aplicarAcrescimo })}
-                  label="Aplicar acréscimo de lucro"
+        <ListaOrdenavel itens={e.avulsos} onChange={(avulsos) => set({ avulsos })}>
+          {e.avulsos.map((a) => (
+            <div key={a.id} className="grid grid-cols-[2fr_1fr_auto] gap-2">
+              <Input
+                placeholder="Descrição"
+                value={a.descricao}
+                onChange={(ev) => upd(a.id, { descricao: ev.target.value })}
+              />
+              <div>
+                <NumberField value={a.valor} onChange={(v) => upd(a.id, { valor: v })} min={0} />
+                <div className="mt-2">
+                  <Checkbox
+                    checked={a.aplicarAcrescimo !== false}
+                    onChange={(aplicarAcrescimo) => upd(a.id, { aplicarAcrescimo })}
+                    label="Aplicar acréscimo de lucro"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                <ModoSelect value={a.modo} onChange={(m) => upd(a.id, { modo: m })} />
+                <IconButton
+                  icon={X}
+                  label="Remover outro custo"
+                  onClick={() => rem(a.id)}
+                  className={cn('text-slate-400')}
                 />
               </div>
             </div>
-            <div className="flex items-center gap-1">
-              <ModoSelect value={a.modo} onChange={(m) => upd(a.id, { modo: m })} />
-              <IconButton
-                icon={X}
-                label="Remover outro custo"
-                onClick={() => rem(a.id)}
-                className={cn('text-slate-400')}
-              />
-            </div>
-          </div>
-        ))}
+          ))}
+        </ListaOrdenavel>
       </div>
     </Bloco>
   )

@@ -1,5 +1,6 @@
+import { ListaOrdenavel } from '../ui/ordenavel'
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { arquivosParaAnexos } from '../lib/imagens'
 import {
   Button,
@@ -73,13 +74,6 @@ export function AnexosCard<T extends AnexoEditavel>({
   const atualizar = (id: string, patch: Partial<T>): void =>
     onChange(anexos.map((a) => (a.id === id ? { ...a, ...patch } : a)))
   const remover = (id: string): void => onChange(anexos.filter((a) => a.id !== id))
-  const mover = (indice: number, delta: number): void => {
-    const destino = indice + delta
-    if (destino < 0 || destino >= anexos.length) return
-    const copia = [...anexos]
-    ;[copia[indice], copia[destino]] = [copia[destino], copia[indice]]
-    onChange(copia)
-  }
   return (
     <Card className="p-6">
       <SectionTitle
@@ -131,72 +125,60 @@ export function AnexosCard<T extends AnexoEditavel>({
       </div>
       {anexos.length > 0 && (
         <div className="mt-4 space-y-3">
-          {anexos.map((a, idx) => (
-            <div key={a.id} className="flex gap-4 rounded-lg border border-slate-200 p-3">
-              <button
-                type="button"
-                onClick={() => setAmpliado(a)}
-                title="Ver em tamanho maior"
-                className="h-24 w-24 shrink-0 overflow-hidden rounded-md border border-slate-200 bg-slate-100"
-              >
-                {a.miniaturaDataUrl && (
-                  <img
-                    src={a.miniaturaDataUrl}
-                    alt={a.titulo}
-                    className="h-full w-full object-cover"
+          <ListaOrdenavel itens={anexos} onChange={onChange}>
+            {anexos.map((a, idx) => (
+              <div key={a.id} className="flex gap-4 rounded-lg border border-slate-200 p-3">
+                <button
+                  type="button"
+                  onClick={() => setAmpliado(a)}
+                  title="Ver em tamanho maior"
+                  className="h-24 w-24 shrink-0 overflow-hidden rounded-md border border-slate-200 bg-slate-100"
+                >
+                  {a.miniaturaDataUrl && (
+                    <img
+                      src={a.miniaturaDataUrl}
+                      alt={a.titulo}
+                      className="h-full w-full object-cover"
+                    />
+                  )}
+                </button>
+                <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-2">
+                  <Input
+                    value={a.titulo}
+                    onChange={(e) => atualizar(a.id, { titulo: e.target.value } as Partial<T>)}
+                    placeholder="Título da foto"
                   />
-                )}
-              </button>
-              <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-2">
-                <Input
-                  value={a.titulo}
-                  onChange={(e) => atualizar(a.id, { titulo: e.target.value } as Partial<T>)}
-                  placeholder="Título da foto"
-                />
-                {atualizarVinculo && (
-                  <Select
-                    value={valorVinculo?.(a) ?? ''}
-                    onChange={(e) => atualizar(a.id, atualizarVinculo(a, e.target.value))}
-                  >
-                    <option value="">— sem vínculo —</option>
-                    {opcoesVinculo.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.texto}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-                <Textarea
-                  value={a.descricao}
-                  onChange={(e) => atualizar(a.id, { descricao: e.target.value } as Partial<T>)}
-                  placeholder="Breve observação (opcional)"
-                  className="min-h-[52px] md:col-span-2"
-                />
+                  {atualizarVinculo && (
+                    <Select
+                      value={valorVinculo?.(a) ?? ''}
+                      onChange={(e) => atualizar(a.id, atualizarVinculo(a, e.target.value))}
+                    >
+                      <option value="">— sem vínculo —</option>
+                      {opcoesVinculo.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.texto}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                  <Textarea
+                    value={a.descricao}
+                    onChange={(e) => atualizar(a.id, { descricao: e.target.value } as Partial<T>)}
+                    placeholder="Breve observação (opcional)"
+                    className="min-h-[52px] md:col-span-2"
+                  />
+                </div>
+                <div className="flex shrink-0 flex-col items-center gap-1">
+                  <IconButton
+                    icon={X}
+                    label={`Remover foto ${a.titulo || idx + 1}`}
+                    className="text-slate-400 hover:text-red-600"
+                    onClick={() => remover(a.id)}
+                  />
+                </div>
               </div>
-              <div className="flex shrink-0 flex-col items-center gap-1">
-                <IconButton
-                  icon={ArrowUp}
-                  label="Mover foto para cima"
-                  className="text-slate-400"
-                  onClick={() => mover(idx, -1)}
-                  disabled={!idx}
-                />
-                <IconButton
-                  icon={ArrowDown}
-                  label="Mover foto para baixo"
-                  className="text-slate-400"
-                  onClick={() => mover(idx, 1)}
-                  disabled={idx === anexos.length - 1}
-                />
-                <IconButton
-                  icon={X}
-                  label={`Remover foto ${a.titulo || idx + 1}`}
-                  className="text-slate-400 hover:text-red-600"
-                  onClick={() => remover(a.id)}
-                />
-              </div>
-            </div>
-          ))}
+            ))}
+          </ListaOrdenavel>
         </div>
       )}
       {ampliado && (

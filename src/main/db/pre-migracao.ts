@@ -43,7 +43,7 @@ export function prepararMigracao(caminho: string): string | null {
         imagem: Uint8Array | null
         miniatura: Uint8Array | null
       }>) {
-        if (!linha.imagem) continue
+        if (!linha.imagem || typeof linha.imagem === 'string') continue
         const bytes = Buffer.from(linha.imagem)
         const hash = createHash('sha256').update(bytes).digest('hex')
         imagensOriginaisBytes += bytes.length + (linha.miniatura?.length ?? 0)

@@ -197,7 +197,11 @@ export function Field({
   const gerado = useId()
   const hintId = hint ? `${gerado}-hint` : undefined
   const errorId = error ? `${gerado}-error` : undefined
-  const unico = Children.count(children) === 1 && isValidElement(children) ? children : null
+  const elementos = Children.toArray(children)
+  const controles = elementos.filter(
+    (el) => isValidElement(el) && [Input, Textarea, Select, NumberField].includes(el.type as never)
+  )
+  const unico = controles.length === 1 && isValidElement(controles[0]) ? controles[0] : null
   const rotulavel = unico && [Input, Textarea, Select, NumberField].includes(unico.type as never)
   const idControle = rotulavel ? String((unico.props as { id?: string }).id ?? gerado) : undefined
   const descricoes = [
@@ -210,11 +214,15 @@ export function Field({
     .filter(Boolean)
     .join(' ')
   const conteudo = rotulavel
-    ? cloneElement(unico, {
-        id: idControle,
-        'aria-describedby': descricoes || undefined,
-        'aria-invalid': error ? true : undefined
-      } as never)
+    ? elementos.map((el) =>
+        el === unico
+          ? cloneElement(unico, {
+              id: idControle,
+              'aria-describedby': descricoes || undefined,
+              'aria-invalid': error ? true : undefined
+            } as never)
+          : el
+      )
     : children
   return (
     <div className={cn('block min-w-0 space-y-1', className)}>
@@ -378,6 +386,9 @@ export function EmptyState({
 }
 
 // ------------------------------------------------------------------- Modal
+const pilhaModais: symbol[] = []
+let ariaRaizAntes: string | null = null
+let raizEraInerte = false
 export function Modal({
   open,
   onClose,
@@ -398,8 +409,22 @@ export function Modal({
   const tituloId = useId()
   const caixaRef = useRef<HTMLDivElement>(null)
   const focoAnterior = useRef<HTMLElement | null>(null)
+  const modalId = useRef(Symbol('modal'))
+  const fecharAtual = useRef(onClose)
+  const ocupadoAtual = useRef(busy)
+  useEffect(() => {
+    fecharAtual.current = onClose
+    ocupadoAtual.current = busy
+  }, [onClose, busy])
   useEffect(() => {
     if (!open) return
+    const id = modalId.current
+    const raiz = document.getElementById('root')
+    if (!pilhaModais.length) {
+      ariaRaizAntes = raiz?.getAttribute('aria-hidden') ?? null
+      raizEraInerte = raiz?.hasAttribute('inert') ?? false
+    }
+    pilhaModais.push(id)
     focoAnterior.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null
     const timer = window.setTimeout(
@@ -411,12 +436,16 @@ export function Modal({
           ?.focus(),
       0
     )
-    const raiz = document.getElementById('root')
-    const ariaAnterior = raiz?.getAttribute('aria-hidden')
     raiz?.setAttribute('inert', '')
     raiz?.setAttribute('aria-hidden', 'true')
     const teclado = (evento: KeyboardEvent): void => {
-      if (evento.key === 'Escape' && !busy) onClose()
+      if (pilhaModais.at(-1) !== id) return
+      if (
+        evento.key === 'Escape' &&
+        !ocupadoAtual.current &&
+        !document.querySelector('[data-arrastando="true"]')
+      )
+        fecharAtual.current()
       if (evento.key !== 'Tab' || !caixaRef.current) return
       const focaveis = [
         ...caixaRef.current.querySelectorAll<HTMLElement>(
@@ -438,12 +467,17 @@ export function Modal({
     return () => {
       window.clearTimeout(timer)
       document.removeEventListener('keydown', teclado)
-      raiz?.removeAttribute('inert')
-      if (ariaAnterior === null || ariaAnterior === undefined) raiz?.removeAttribute('aria-hidden')
-      else raiz?.setAttribute('aria-hidden', ariaAnterior)
-      focoAnterior.current?.focus()
+      const eraTopo = pilhaModais.at(-1) === id
+      const indice = pilhaModais.indexOf(id)
+      if (indice >= 0) pilhaModais.splice(indice, 1)
+      if (!pilhaModais.length) {
+        if (!raizEraInerte) raiz?.removeAttribute('inert')
+        if (ariaRaizAntes === null) raiz?.removeAttribute('aria-hidden')
+        else raiz?.setAttribute('aria-hidden', ariaRaizAntes)
+      }
+      if (eraTopo && focoAnterior.current?.isConnected) focoAnterior.current.focus()
     }
-  }, [busy, open, onClose])
+  }, [open])
   if (!open) return null
   const width =
     size === 'md'

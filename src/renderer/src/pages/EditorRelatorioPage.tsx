@@ -1,3 +1,5 @@
+import { RevisaoIA } from '../components/RevisaoIA'
+import { ListaOrdenavel } from '../ui/ordenavel'
 import { DadosClienteDocumento, LinhaTempo } from '../components/DocumentoExtras'
 import { useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
@@ -401,6 +403,11 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
               value={rel.introducao ?? ''}
               onChange={(e) => set({ introducao: e.target.value })}
             />
+            <RevisaoIA
+              texto={rel.introducao ?? ''}
+              campo="introducao"
+              onAplicar={(introducao) => set({ introducao })}
+            />
           </Field>
           <AnotacaoInterna
             documento={rel}
@@ -557,35 +564,37 @@ function LancamentosCard({
         <p className="text-sm text-slate-500">Nenhum lançamento.</p>
       ) : (
         <div className="space-y-2">
-          {itens.map((x, indice) => (
-            <div
-              key={x.id}
-              className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_160px_auto]"
-            >
-              <Field error={erroDoCampo(`${campo}.${indice}.descricao`)}>
-                <Input
-                  value={x.descricao}
-                  placeholder="Descrição"
-                  aria-label={`Descrição de ${titulo.toLowerCase()} ${indice + 1}`}
-                  onChange={(e) => upd(x.id, { descricao: e.target.value })}
+          <ListaOrdenavel itens={itens} onChange={onChange}>
+            {itens.map((x, indice) => (
+              <div
+                key={x.id}
+                className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_160px_auto]"
+              >
+                <Field error={erroDoCampo(`${campo}.${indice}.descricao`)}>
+                  <Input
+                    value={x.descricao}
+                    placeholder="Descrição"
+                    aria-label={`Descrição de ${titulo.toLowerCase()} ${indice + 1}`}
+                    onChange={(e) => upd(x.id, { descricao: e.target.value })}
+                  />
+                </Field>
+                <Field error={erroDoCampo(`${campo}.${indice}.valor`)}>
+                  <NumberField
+                    value={x.valor}
+                    min={0}
+                    aria-label={`Valor de ${titulo.toLowerCase()} ${indice + 1}`}
+                    onChange={(valor) => upd(x.id, { valor })}
+                  />
+                </Field>
+                <IconButton
+                  icon={X}
+                  label={`Remover lançamento de ${titulo.toLowerCase()}`}
+                  className="self-start text-slate-400 hover:text-red-600"
+                  onClick={() => onRemover(x.id)}
                 />
-              </Field>
-              <Field error={erroDoCampo(`${campo}.${indice}.valor`)}>
-                <NumberField
-                  value={x.valor}
-                  min={0}
-                  aria-label={`Valor de ${titulo.toLowerCase()} ${indice + 1}`}
-                  onChange={(valor) => upd(x.id, { valor })}
-                />
-              </Field>
-              <IconButton
-                icon={X}
-                label={`Remover lançamento de ${titulo.toLowerCase()}`}
-                className="self-start text-slate-400 hover:text-red-600"
-                onClick={() => onRemover(x.id)}
-              />
-            </div>
-          ))}
+              </div>
+            ))}
+          </ListaOrdenavel>
         </div>
       )}
     </Card>

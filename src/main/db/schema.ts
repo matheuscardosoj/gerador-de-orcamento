@@ -3,6 +3,7 @@
 // schema, ACRESCENTE uma nova função ao fim do array (nunca edite as anteriores).
 import type { Database } from 'node-sqlite3-wasm'
 import { createHash } from 'crypto'
+import { normalizarTipoCliente } from '@shared/clientes'
 
 // Singletons (empresa, parâmetros, configuração de IA, contador de numeração)
 // vivem em `configuracoes` como JSON: são lidos e gravados sempre inteiros e
@@ -272,8 +273,23 @@ const v7 = (d: Database): void => {
     }
   }
 }
-export const VERSAO_BANCO = 7
-const MIGRACOES: Array<(d: Database) => void> = [v1, v2, v3, v4, v5, v6, v7]
+const v8 = (d: Database): void => {
+  d.exec('ALTER TABLE servicos ADD COLUMN ordem INTEGER NOT NULL DEFAULT 0')
+  const servicos = d.all('SELECT id FROM servicos ORDER BY nome COLLATE NOCASE,id') as Array<{
+    id: string
+  }>
+  servicos.forEach((s, ordem) => d.run('UPDATE servicos SET ordem=? WHERE id=?', [ordem, s.id]))
+  for (const c of d.all('SELECT id,dados_json FROM clientes') as Array<{
+    id: string
+    dados_json: string
+  }>) {
+    const dados = JSON.parse(c.dados_json || '{}')
+    dados.tipoPessoa = normalizarTipoCliente(dados)
+    d.run('UPDATE clientes SET dados_json=? WHERE id=?', [JSON.stringify(dados), c.id])
+  }
+}
+export const VERSAO_BANCO = 8
+const MIGRACOES: Array<(d: Database) => void> = [v1, v2, v3, v4, v5, v6, v7, v8]
 
 export function aplicarMigracoes(d: Database, ate = MIGRACOES.length): void {
   const linha = d.get('PRAGMA user_version') as { user_version?: number } | null

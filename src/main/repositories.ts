@@ -4,7 +4,7 @@ import { envolverDocumento, nuvemConfigurada } from './versoes'
 // persistência era JSON — o IPC, o preload e o renderer não conhecem o banco.
 import { randomUUID } from 'crypto'
 import { registrarImagem, imagemDataUrl } from './imagens'
-import { validarCliente } from '@shared/clientes'
+import { validarCliente, normalizarTipoCliente } from '@shared/clientes'
 import {
   all,
   get,
@@ -168,6 +168,7 @@ export const clientesRepo = {
   create: (dto: Omit<Cliente, 'id' | 'criadoEm'> & { id?: string; criadoEm?: string }): Cliente => {
     const cliente: Cliente = {
       ...dto,
+      tipoPessoa: normalizarTipoCliente(dto),
       id: dto.id ?? randomUUID(),
       criadoEm: dto.criadoEm ?? nowIso(),
       nome: dto.nome,
@@ -196,7 +197,12 @@ export const clientesRepo = {
   update: (id: string, patch: Partial<Cliente>): Cliente | null => {
     const atual = clientesRepo.get(id)
     if (!atual) return null
-    const novo = { ...atual, ...patch, id }
+    const novo = {
+      ...atual,
+      ...patch,
+      id,
+      tipoPessoa: normalizarTipoCliente({ ...atual, ...patch })
+    }
     validarCliente(novo)
     run(
       `UPDATE clientes SET nome = ?, tratamento = ?, contato = ?, observacao = ?, ativo = ? WHERE id = ?`,
@@ -238,7 +244,7 @@ const paraServico = (l: Linha): ServicoCatalogo => ({
 
 export const servicosRepo = {
   list: (): ServicoCatalogo[] =>
-    all('SELECT * FROM servicos ORDER BY nome COLLATE NOCASE').map(paraServico),
+    all('SELECT * FROM servicos ORDER BY ordem,nome COLLATE NOCASE,id').map(paraServico),
   get: (id: string): ServicoCatalogo | null => {
     const l = get('SELECT * FROM servicos WHERE id = ?', [id])
     return l ? paraServico(l) : null
@@ -249,6 +255,10 @@ export const servicosRepo = {
       `INSERT INTO servicos (id, nome, descricao_padrao, unidade, preco_referencia)
        VALUES (?, ?, ?, ?, ?)`,
       [s.id, s.nome, s.descricaoPadrao, s.unidade, s.precoReferencia]
+    )
+    run(
+      'UPDATE servicos SET ordem=(SELECT COALESCE(MAX(ordem),-1)+1 FROM servicos WHERE id<>?) WHERE id=?',
+      [s.id, s.id]
     )
     return s
   },
@@ -440,6 +450,7 @@ function paraOrcamento(l: Linha, filhos: boolean, comMiniaturas = filhos): Orcam
 }
 
 function listarResumosOrcamento(): ResumoOrcamento[] {
+  const versoes = versoesResumo('orcamento')
   const servicosPorOrcamento = new Map<string, string[]>()
   for (const linha of all('SELECT orcamento_id, descricao FROM itens_servico ORDER BY ordem')) {
     const id = texto(linha.orcamento_id)
@@ -456,6 +467,7 @@ function listarResumosOrcamento(): ResumoOrcamento[] {
     const id = texto(linha.id)
     return {
       id,
+      versao: versoes.get(id),
       numero: numero(linha.numero),
       data: normalizarDataCivil(texto(linha.data)),
       destinatario: normalizarDestinatario(texto(linha.destinatario_resumo)),
@@ -951,6 +963,14 @@ function paraRelatorio(l: Linha, filhos: boolean, comMiniaturas = filhos): Relat
 }
 
 function listarResumosRelatorio(): ResumoRelatorio[] {
+  const versoes = versoesResumo('relatorio')
+  const servicos = new Map<string, string[]>()
+  for (const r of all(
+    'SELECT relatorio_id,descricao FROM relatorio_itens_servico ORDER BY ordem'
+  )) {
+    const id = texto(r.relatorio_id)
+    servicos.set(id, [...(servicos.get(id) ?? []), texto(r.descricao)])
+  }
   return all(
     `SELECT r.*, r.destinatario AS destinatario_resumo
        FROM relatorios r
@@ -961,6 +981,8 @@ function listarResumosRelatorio(): ResumoRelatorio[] {
     const saldo = numero(linha.saldo)
     return {
       id: texto(linha.id),
+      versao: versoes.get(texto(linha.id)),
+      servicosBusca: servicos.get(texto(linha.id)) ?? [],
       numero: numero(linha.numero),
       data: normalizarDataCivil(texto(linha.data)),
       destinatario: normalizarDestinatario(texto(linha.destinatario_resumo)),
@@ -987,6 +1009,14 @@ function listarResumosRelatorio(): ResumoRelatorio[] {
   })
 }
 
+function versoesResumo(tipo: string): Map<string, number> {
+  return new Map(
+    all(
+      'SELECT documento_id,MAX(numero) AS versao FROM versoes WHERE tipo=? GROUP BY documento_id',
+      [tipo]
+    ).map((r) => [texto(r.documento_id), numero(r.versao)])
+  )
+}
 function gravarAnexosRelatorio(relatorioId: string, anexos: AnexoRelatorio[]): void {
   const existentes = new Set(
     all('SELECT id FROM relatorio_anexos WHERE relatorio_id = ?', [relatorioId]).map((l) =>

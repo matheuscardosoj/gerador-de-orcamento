@@ -1,6 +1,7 @@
 // Mock em memória da AppApi, usado apenas quando a aplicação roda FORA do Electron
 // (ex.: preview no navegador durante o desenvolvimento). No app real, window.api existe.
 import type { AppApi, ResultadoNumeracao } from '@shared/api'
+import { normalizarPreferencias } from '@shared/historico-preferencias'
 import type {
   BancoDados,
   Cliente,
@@ -174,6 +175,29 @@ export function criarMockApi(): AppApi {
   }
 
   return {
+    preferencias: {
+      historico: async (tipo) => {
+        return normalizarPreferencias(
+          tipo,
+          JSON.parse(localStorage.getItem(`historico:${tipo}`) || 'null')
+        )
+      },
+      salvarHistorico: async (tipo, dados) => {
+        localStorage.setItem(`historico:${tipo}`, JSON.stringify(dados))
+      }
+    },
+    reordenarCadastro: async (tipo, ids) => {
+      const lista =
+        tipo === 'servicos'
+          ? db.servicos
+          : tipo === 'observacoes'
+            ? db.observacoesPadrao
+            : db.pagamentosPadrao
+      const ordenada = ids.map((id) => lista.find((i) => i.id === id)!).filter(Boolean)
+      if (tipo === 'servicos') db.servicos = ordenada as ServicoCatalogo[]
+      else if (tipo === 'observacoes') db.observacoesPadrao = ordenada as ObservacaoPadrao[]
+      else db.pagamentosPadrao = ordenada as FormaPagamentoPadrao[]
+    },
     recibos: {
       list: async () => [],
       get: async () => null,
@@ -429,6 +453,10 @@ export function criarMockApi(): AppApi {
     },
     anexosRelatorio: { imagem: async () => null },
     ia: {
+      revisarTexto: async () => {
+        throw new Error('Use o aplicativo desktop para a revisão local.')
+      },
+      cancelarRevisao: async () => {},
       get: async () => clone(db.configIA),
       save: async (patch) => {
         db.configIA = { ...db.configIA, ...patch }

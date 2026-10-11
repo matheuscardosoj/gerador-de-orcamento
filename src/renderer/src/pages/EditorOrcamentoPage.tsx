@@ -1,3 +1,5 @@
+import { RevisaoIA } from '../components/RevisaoIA'
+import { ListaOrdenavel } from '../ui/ordenavel'
 import { DadosClienteDocumento, LinhaTempo } from '../components/DocumentoExtras'
 import { useEffect, useMemo, useState } from 'react'
 import { Pencil, X } from 'lucide-react'
@@ -525,6 +527,11 @@ function DadosGeraisCard({
             value={orc.introducao ?? ''}
             onChange={(e) => set({ introducao: e.target.value })}
           />
+          <RevisaoIA
+            texto={orc.introducao ?? ''}
+            campo="introducao"
+            onAplicar={(introducao) => set({ introducao })}
+          />
         </Field>
         <AnotacaoInterna documento={orc} set={set} tipoDocumento="orcamento" />
       </div>
@@ -546,47 +553,34 @@ export function AnotacaoInterna({
   set: (p: { observacaoInterna?: string }) => void
   tipoDocumento: 'orcamento' | 'relatorio'
 }): JSX.Element {
-  const [gerando, setGerando] = useState(false)
-  const [aviso, setAviso] = useState<string | null>(null)
-
-  const sugerir = async (): Promise<void> => {
-    setGerando(true)
-    setAviso(null)
-    try {
-      const texto =
-        tipoDocumento === 'relatorio'
-          ? await api.ia.sugerirObservacao({ tipo: 'relatorio', documento: documento as Relatorio })
-          : await api.ia.sugerirObservacao({ tipo: 'orcamento', documento: documento as Orcamento })
-      if (texto) set({ observacaoInterna: texto })
-      else setAviso('A IA não retornou nenhum texto.')
-    } catch (e) {
-      setAviso(String(e).replace(/^Error:\s*/, ''))
-    } finally {
-      setGerando(false)
-    }
-  }
-
+  const entrada =
+    tipoDocumento === 'orcamento'
+      ? { tipo: 'orcamento' as const, documento: documento as Orcamento }
+      : { tipo: 'relatorio' as const, documento: documento as Relatorio }
   return (
     <Field
       label="Anotação interna"
-      hint={`Aparece só na listagem de ${tipoDocumento === 'relatorio' ? 'relatórios' : 'orçamentos'} e na busca — não sai no documento.`}
+      hint="Aparece no histórico e na busca; não sai no documento."
       className="md:col-span-3"
     >
-      {aviso && (
-        <Mensagem tom="aviso" className="mb-4">
-          {aviso}
-        </Mensagem>
-      )}
-      <div className="flex items-start gap-2">
-        <Textarea
-          value={documento.observacaoInterna ?? ''}
-          onChange={(e) => set({ observacaoInterna: e.target.value })}
-          placeholder="Ex.: Cercamento da fazenda do Sr. João, 1.200 m, aguardando retorno."
-          className="min-h-[64px]"
+      <Textarea
+        value={documento.observacaoInterna ?? ''}
+        onChange={(e) => set({ observacaoInterna: e.target.value })}
+        placeholder="Ex.: Cercamento da fazenda, aguardando retorno."
+        className="min-h-[64px]"
+      />
+      <div className="flex flex-wrap gap-2">
+        <RevisaoIA
+          texto={documento.observacaoInterna ?? ''}
+          campo="anotacao"
+          onAplicar={(observacaoInterna) => set({ observacaoInterna })}
         />
-        <Button variant="outline" className="mt-0.5 shrink-0" onClick={sugerir} disabled={gerando}>
-          {gerando ? 'Gerando…' : 'Sugerir com IA'}
-        </Button>
+        <RevisaoIA
+          texto={documento.observacaoInterna ?? ''}
+          campo="anotacao"
+          anotacao={entrada}
+          onAplicar={(observacaoInterna) => set({ observacaoInterna })}
+        />
       </div>
     </Field>
   )
@@ -706,52 +700,57 @@ export function ServicosCard({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {orc.itensServico.map((i, indice) => {
-              const errosItem = errosDoGrupo(errosValidacao, `itensServico.${indice}`)
-              return (
-                <tr key={i.id} className={errosItem.length ? 'bg-amber-50/70' : undefined}>
-                  <td className="min-w-0 px-3 py-2 align-middle">
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="min-w-0 break-words text-slate-700">{i.descricao}</span>
-                        {i.calculo && <Badge color="green">calculado</Badge>}
+            <ListaOrdenavel
+              itens={orc.itensServico}
+              onChange={(itensServico) => set({ itensServico })}
+            >
+              {orc.itensServico.map((i, indice) => {
+                const errosItem = errosDoGrupo(errosValidacao, `itensServico.${indice}`)
+                return (
+                  <tr key={i.id} className={errosItem.length ? 'bg-amber-50/70' : undefined}>
+                    <td className="min-w-0 px-3 py-2 align-middle">
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="min-w-0 break-words text-slate-700">{i.descricao}</span>
+                          {i.calculo && <Badge color="green">calculado</Badge>}
+                        </div>
+                        {errosItem.length > 0 && (
+                          <p className="text-xs text-amber-800">
+                            {errosItem.map((erro) => erro.mensagem).join(' ')} Edite o serviço para
+                            corrigir.
+                          </p>
+                        )}
                       </div>
-                      {errosItem.length > 0 && (
-                        <p className="text-xs text-amber-800">
-                          {errosItem.map((erro) => erro.mensagem).join(' ')} Edite o serviço para
-                          corrigir.
-                        </p>
-                      )}
-                    </div>
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right text-slate-600">
-                    {i.quantidade}
-                  </td>
-                  <td className="min-w-0 break-words px-3 py-2 text-slate-600">{i.unidade}</td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right text-slate-600">
-                    {formatMoeda(i.valorUnitario)}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right font-medium text-slate-800">
-                    {formatMoeda(i.valorTotal)}
-                  </td>
-                  <td className="px-3 py-2 text-right align-middle">
-                    <div className="flex items-center justify-end gap-1 whitespace-nowrap">
-                      <IconButton
-                        icon={Pencil}
-                        label={`Editar serviço ${i.descricao}`}
-                        onClick={() => editarItem(i)}
-                      />
-                      <IconButton
-                        icon={X}
-                        label={`Remover serviço ${i.descricao}`}
-                        className="text-slate-400 hover:text-red-600"
-                        onClick={() => remover(i.id)}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right text-slate-600">
+                      {i.quantidade}
+                    </td>
+                    <td className="min-w-0 break-words px-3 py-2 text-slate-600">{i.unidade}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right text-slate-600">
+                      {formatMoeda(i.valorUnitario)}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right font-medium text-slate-800">
+                      {formatMoeda(i.valorTotal)}
+                    </td>
+                    <td className="px-3 py-2 text-right align-middle">
+                      <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+                        <IconButton
+                          icon={Pencil}
+                          label={`Editar serviço ${i.descricao}`}
+                          onClick={() => editarItem(i)}
+                        />
+                        <IconButton
+                          icon={X}
+                          label={`Remover serviço ${i.descricao}`}
+                          className="text-slate-400 hover:text-red-600"
+                          onClick={() => remover(i.id)}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </ListaOrdenavel>
           </tbody>
           <tfoot>
             <tr className="border-t border-slate-200 bg-slate-50">
@@ -865,6 +864,7 @@ function ServicoManualModal({
       <div className="space-y-4">
         <Field label="Descrição do serviço">
           <Textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} autoFocus />
+          <RevisaoIA texto={descricao} campo="descricaoServico" onAplicar={setDescricao} />
         </Field>
         <div className="grid grid-cols-3 gap-3">
           <Field label="Quantidade">
@@ -923,43 +923,45 @@ function MateriaisCard({
         </p>
       ) : (
         <div className="space-y-2">
-          {orc.materiais.map((m, indice) => (
-            <div
-              key={m.id}
-              className="grid grid-cols-1 gap-2 sm:grid-cols-[80px_100px_minmax(0,1fr)_auto]"
-            >
-              <Field error={erroDoCampo(`materiais.${indice}.quantidade`)}>
-                <NumberField
-                  value={m.quantidade}
-                  onChange={(v) => upd(m.id, { quantidade: v })}
-                  min={0}
-                  aria-label={`Quantidade do material ${indice + 1}`}
+          <ListaOrdenavel itens={orc.materiais} onChange={(materiais) => set({ materiais })}>
+            {orc.materiais.map((m, indice) => (
+              <div
+                key={m.id}
+                className="grid grid-cols-1 gap-2 sm:grid-cols-[80px_100px_minmax(0,1fr)_auto]"
+              >
+                <Field error={erroDoCampo(`materiais.${indice}.quantidade`)}>
+                  <NumberField
+                    value={m.quantidade}
+                    onChange={(v) => upd(m.id, { quantidade: v })}
+                    min={0}
+                    aria-label={`Quantidade do material ${indice + 1}`}
+                  />
+                </Field>
+                <Field error={erroDoCampo(`materiais.${indice}.unidade`)}>
+                  <Input
+                    value={m.unidade}
+                    onChange={(e) => upd(m.id, { unidade: e.target.value })}
+                    placeholder="un"
+                    aria-label={`Unidade do material ${indice + 1}`}
+                  />
+                </Field>
+                <Field error={erroDoCampo(`materiais.${indice}.especificacao`)}>
+                  <Input
+                    value={m.especificacao}
+                    onChange={(e) => upd(m.id, { especificacao: e.target.value })}
+                    placeholder="Especificação do material"
+                    aria-label={`Especificação do material ${indice + 1}`}
+                  />
+                </Field>
+                <IconButton
+                  icon={X}
+                  label={`Remover material ${m.especificacao || 'sem descrição'}`}
+                  className="self-start text-slate-400"
+                  onClick={() => rem(m.id)}
                 />
-              </Field>
-              <Field error={erroDoCampo(`materiais.${indice}.unidade`)}>
-                <Input
-                  value={m.unidade}
-                  onChange={(e) => upd(m.id, { unidade: e.target.value })}
-                  placeholder="un"
-                  aria-label={`Unidade do material ${indice + 1}`}
-                />
-              </Field>
-              <Field error={erroDoCampo(`materiais.${indice}.especificacao`)}>
-                <Input
-                  value={m.especificacao}
-                  onChange={(e) => upd(m.id, { especificacao: e.target.value })}
-                  placeholder="Especificação do material"
-                  aria-label={`Especificação do material ${indice + 1}`}
-                />
-              </Field>
-              <IconButton
-                icon={X}
-                label={`Remover material ${m.especificacao || 'sem descrição'}`}
-                className="self-start text-slate-400"
-                onClick={() => rem(m.id)}
-              />
-            </div>
-          ))}
+              </div>
+            ))}
+          </ListaOrdenavel>
         </div>
       )}
     </Card>
@@ -1001,21 +1003,30 @@ export function TextosCard({
         }
       />
       <div className="space-y-2">
-        {itens.map((i) => (
-          <div key={i.id} className="flex items-start gap-2">
-            <Textarea
-              value={i.texto}
-              onChange={(e) => upd(i.id, e.target.value)}
-              className="min-h-[52px]"
-            />
-            <IconButton
-              icon={X}
-              label="Remover observação ou texto"
-              className="mt-1 shrink-0 text-slate-400"
-              onClick={() => rem(i.id)}
-            />
-          </div>
-        ))}
+        <ListaOrdenavel itens={itens} onChange={onChange}>
+          {itens.map((i) => (
+            <div key={i.id} className="flex items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <Textarea
+                  value={i.texto}
+                  onChange={(e) => upd(i.id, e.target.value)}
+                  className="min-h-[52px]"
+                />
+                <RevisaoIA
+                  texto={i.texto}
+                  campo={titulo.toLowerCase().includes('pagamento') ? 'pagamento' : 'observacao'}
+                  onAplicar={(texto) => upd(i.id, texto)}
+                />
+              </div>
+              <IconButton
+                icon={X}
+                label="Remover observação ou texto"
+                className="mt-1 shrink-0 text-slate-400"
+                onClick={() => rem(i.id)}
+              />
+            </div>
+          ))}
+        </ListaOrdenavel>
       </div>
       {disponiveis.length > 0 && (
         <div className="mt-3 border-t border-slate-100 pt-3">

@@ -1,4 +1,9 @@
 import type { Cliente, DocumentoMetadados } from './types'
+export function normalizarTipoCliente(c: Pick<Cliente, 'tipoPessoa' | 'documento'>): 'pf' | 'pj' {
+  if (c.tipoPessoa === 'pf' || c.tipoPessoa === 'pj') return c.tipoPessoa
+  if (c.documento && documentoValido(c.documento, 'pj')) return 'pj'
+  return 'pf'
+}
 export function documentoNormalizado(valor: string): string {
   return valor.toUpperCase().replace(/[^A-Z0-9]/g, '')
 }

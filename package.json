@@ -1,6 +1,6 @@
 {
   "name": "gerador-de-orcamento",
-  "version": "1.4.0-rc.1",
+  "version": "1.4.0-rc.2",
   "description": "Gerador de Orçamentos - VS Prestadora de Serviços",
   "main": "./out/main/index.js",
   "author": "VS Prestadora de Serviços",
@@ -26,6 +26,9 @@
     "dist": "electron-vite build && electron-builder"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "docx": "^9.7.1",
     "lucide-react": "^1.35.0",
     "node-sqlite3-wasm": "^0.8.59"

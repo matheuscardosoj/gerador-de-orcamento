@@ -1,3 +1,4 @@
+import { ListaOrdenavel } from '../ui/ordenavel'
 import { validarCliente } from '@shared/clientes'
 import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
@@ -44,6 +45,7 @@ export function CadastrosPage(): JSX.Element {
 
 // --------------------------------------------------------------- Clientes
 const clienteVazio = (): Omit<Cliente, 'id' | 'criadoEm'> => ({
+  tipoPessoa: 'pf',
   nome: '',
   tratamento: 'A',
   contato: '',
@@ -185,10 +187,9 @@ function ClienteModal({
         </Field>
         <Field label="Tipo de cliente">
           <Select
-            value={form.tipoPessoa ?? ''}
-            onChange={(e) => set({ tipoPessoa: (e.target.value || null) as 'pf' | 'pj' | null })}
+            value={form.tipoPessoa ?? 'pf'}
+            onChange={(e) => set({ tipoPessoa: e.target.value as 'pf' | 'pj' })}
           >
-            <option value="">Não informado (opcional)</option>
             <option value="pf">Pessoa física</option>
             <option value="pj">Pessoa jurídica</option>
           </Select>
@@ -319,9 +320,24 @@ function SecaoServicos(): JSX.Element {
   const { data, error: erroCarga, reload } = useAsync(() => api.servicos.list(), [])
   const [edit, setEdit] = useState<ServicoCatalogo | 'novo' | null>(null)
   const [excluir, setExcluir] = useState<ServicoCatalogo | null>(null)
+  const [reordenando, setReordenando] = useState(false)
+  const [erroOrdem, setErroOrdem] = useState('')
+  const reordenar = async (ids: string[]): Promise<void> => {
+    setReordenando(true)
+    setErroOrdem('')
+    try {
+      await api.reordenarCadastro('servicos', ids)
+      reload()
+    } catch (e) {
+      setErroOrdem(String(e))
+    } finally {
+      setReordenando(false)
+    }
+  }
 
   return (
     <Card className="p-6">
+      {erroOrdem && <Mensagem className="mb-4">{erroOrdem}</Mensagem>}
       <div className="mb-4 flex justify-end">
         <Button onClick={() => setEdit('novo')}>+ Novo serviço</Button>
       </div>
@@ -329,30 +345,38 @@ function SecaoServicos(): JSX.Element {
         <Mensagem className="mb-4">Não foi possível carregar os serviços. {erroCarga}</Mensagem>
       )}
       <div className="divide-y divide-slate-100">
-        {(data ?? []).map((s) => (
-          <div key={s.id} className="flex items-start justify-between gap-4 py-3">
-            <div className="min-w-0">
-              <p className="font-medium text-slate-800">
-                {s.nome} <Badge>{s.unidade}</Badge>
-              </p>
-              <p className="truncate text-sm text-slate-500">{s.descricaoPadrao}</p>
+        <ListaOrdenavel
+          itens={data ?? []}
+          disabled={reordenando}
+          onChange={(itens) => void reordenar(itens.map((i) => i.id))}
+        >
+          {(data ?? []).map((s) => (
+            <div key={s.id} className="flex items-start justify-between gap-4 py-3">
+              <div className="min-w-0">
+                <p className="font-medium text-slate-800">
+                  {s.nome} <Badge>{s.unidade}</Badge>
+                </p>
+                <p className="truncate text-sm text-slate-500">{s.descricaoPadrao}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-3">
+                <span className="text-sm font-medium text-slate-600">
+                  {s.precoReferencia != null
+                    ? `${formatMoeda(s.precoReferencia)}/${s.unidade}`
+                    : '—'}
+                </span>
+                <Button size="sm" variant="ghost" onClick={() => setEdit(s)}>
+                  Editar
+                </Button>
+                <IconButton
+                  icon={Trash2}
+                  label={`Excluir serviço ${s.nome}`}
+                  size="sm"
+                  onClick={() => setExcluir(s)}
+                />
+              </div>
             </div>
-            <div className="flex shrink-0 items-center gap-3">
-              <span className="text-sm font-medium text-slate-600">
-                {s.precoReferencia != null ? `${formatMoeda(s.precoReferencia)}/${s.unidade}` : '—'}
-              </span>
-              <Button size="sm" variant="ghost" onClick={() => setEdit(s)}>
-                Editar
-              </Button>
-              <IconButton
-                icon={Trash2}
-                label={`Excluir serviço ${s.nome}`}
-                size="sm"
-                onClick={() => setExcluir(s)}
-              />
-            </div>
-          </div>
-        ))}
+          ))}
+        </ListaOrdenavel>
         {data && data.length === 0 && <EmptyState title="Nenhum serviço no catálogo" />}
       </div>
       {edit && (

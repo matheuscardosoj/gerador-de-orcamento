@@ -71,6 +71,16 @@ export interface ResultadoImportacaoDados {
 }
 
 export interface AppApi {
+  preferencias: {
+    historico(
+      tipo: import('./types').TipoDocumento
+    ): Promise<import('./historico-preferencias').PreferenciasHistorico>
+    salvarHistorico(
+      tipo: import('./types').TipoDocumento,
+      dados: import('./historico-preferencias').PreferenciasHistorico
+    ): Promise<void>
+  }
+  reordenarCadastro(tipo: 'servicos' | 'observacoes' | 'pagamentos', ids: string[]): Promise<void>
   recibos: {
     list(): Promise<import('./types').Recibo[]>
     get(id: string): Promise<import('./types').Recibo | null>
@@ -166,6 +176,8 @@ export interface AppApi {
     imagem(id: string): Promise<string | null>
   }
   ia: {
+    revisarTexto(entrada: import('./revisao-ia').RevisaoTextoEntrada): Promise<string>
+    cancelarRevisao(id: string): Promise<void>
     get(): Promise<ConfigIA>
     save(patch: Partial<ConfigIA>): Promise<ConfigIA>
     status(): Promise<StatusIA>

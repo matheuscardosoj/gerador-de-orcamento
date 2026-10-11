@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 import { all, get, run, texto, tx } from './db/sqlite'
-import { envolverDocumento, exigirResponsavel, lerMeta } from './versoes'
+import { envolverDocumento, exigirResponsavel } from './versoes'
 import { numeroNuvem } from './numeros'
 import { relatoriosRepo } from './repositories'
 import { round2, normalizarDataCivil } from '@shared/format'
@@ -38,11 +38,18 @@ function gravar(r: Recibo): Recibo {
   return r
 }
 export const recibosRepo = {
-  list: (): Recibo[] =>
-    all('SELECT id,dados FROM recibos ORDER BY numero DESC').map((l) => ({
+  list: (): Recibo[] => {
+    const metas = new Map(
+      all("SELECT documento_id,dados FROM documento_meta WHERE tipo='recibo'").map((l) => [
+        texto(l.documento_id),
+        JSON.parse(texto(l.dados))
+      ])
+    )
+    return all('SELECT id,dados FROM recibos ORDER BY numero DESC').map((l) => ({
       ...JSON.parse(texto(l.dados)),
-      ...lerMeta('recibo', texto(l.id))
-    })),
+      ...metas.get(texto(l.id))
+    }))
+  },
   get: (id: string): Recibo | null => {
     const l = get('SELECT dados FROM recibos WHERE id=?', [id])
     return l ? JSON.parse(texto(l.dados)) : null

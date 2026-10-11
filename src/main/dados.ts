@@ -619,7 +619,15 @@ function mesclar(fonte: Database): Resumo {
     contar(r, 'clientes', 'importados')
   }
 
-  for (const registro of linhas(fonte, 'SELECT * FROM servicos')) {
+  const versaoFonte = Number(
+    (fonte.get('PRAGMA user_version') as { user_version: number }).user_version
+  )
+  for (const registro of linhas(
+    fonte,
+    versaoFonte >= 8
+      ? 'SELECT * FROM servicos ORDER BY ordem,nome COLLATE NOCASE,id'
+      : 'SELECT * FROM servicos ORDER BY nome COLLATE NOCASE,id'
+  )) {
     const x = linha(registro)
     const origemId = String(x.id)
     const equivalente = servicosExistentes.get(chaveServico(x.nome, x.unidade))
@@ -646,7 +654,7 @@ function mesclar(fonte: Database): Resumo {
     mapa: Map<string, string>,
     existentes: Map<string, ObservacaoPadrao | FormaPagamentoPadrao>
   ): void => {
-    for (const registro of linhas(fonte, `SELECT * FROM ${tabela}`)) {
+    for (const registro of linhas(fonte, `SELECT * FROM ${tabela} ORDER BY ordem,rowid`)) {
       const x = linha(registro)
       const origemId = String(x.id)
       const aplicacao = String(x.aplicacao ?? 'orcamento')

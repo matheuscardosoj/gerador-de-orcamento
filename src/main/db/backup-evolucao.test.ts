@@ -92,6 +92,15 @@ it('inclui pagamentos, versões e imagens, retirando sessão, identidade e reser
   recibos.recibosRepo.confirmar(recibo.id)
   numeroVersoes = Number(sql.get('SELECT count(*) AS n FROM versoes')?.n)
   computador = versoes.computadorId()
+  sql.run('INSERT INTO configuracoes VALUES (?,?)', [
+    'historico:orcamento',
+    JSON.stringify({
+      busca: 'Busca local',
+      colunas: ['data', 'versao'],
+      campo: 'data',
+      direcao: 'asc'
+    })
+  ])
   sql.run("INSERT INTO configuracoes VALUES ('sessaoNuvem','\"credencial de teste\"')")
   sql.run("INSERT INTO reservas VALUES ('orcamento',999,0)")
   dados.exportarDadosPara(backup)
@@ -117,13 +126,27 @@ it('restaura em outro computador preservando o saldo e bloqueando autorização 
   expect(recibos.recibosRepo.get(reciboId)?.status).toBe('recebido')
   expect(sql.get('SELECT count(*) AS n FROM versoes')?.n).toBe(numeroVersoes)
   expect(sql.get('SELECT count(*) AS n FROM imagens')?.n).toBe(1)
+  expect(
+    JSON.parse(
+      String(sql.get("SELECT valor FROM configuracoes WHERE chave='historico:orcamento'")?.valor)
+    ).busca
+  ).toBe('Busca local')
   expect(() => recibos.recibosRepo.cancelar(reciboId)).toThrow('outro computador')
 })
 
 it('mescla em um perfil independente sem duplicar pagamentos ao repetir a importação', async () => {
   await perfil('mesclagem')
   repos.semear()
+  sql.run('INSERT INTO configuracoes VALUES (?,?)', [
+    'historico:orcamento',
+    JSON.stringify({ busca: 'Preferência deste computador' })
+  ])
   dados.importarDadosDe(backup, 'mesclar')
+  expect(
+    JSON.parse(
+      String(sql.get("SELECT valor FROM configuracoes WHERE chave='historico:orcamento'")?.valor)
+    ).busca
+  ).toBe('Preferência deste computador')
   const rel = repos.relatoriosRepo.list()[0]
   const recibo = recibos.recibosRepo.list()[0]
   expect(repos.relatoriosRepo.get(rel.id)?.totais.saldo).toBe(800)

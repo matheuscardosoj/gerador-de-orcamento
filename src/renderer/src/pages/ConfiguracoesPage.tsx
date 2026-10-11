@@ -1,3 +1,4 @@
+import { ListaOrdenavel } from '../ui/ordenavel'
 import { NuvemSection } from './NuvemSection'
 import { useEffect, useRef, useState } from 'react'
 import { Trash2 } from 'lucide-react'
@@ -559,15 +560,29 @@ function SecaoObservacoes(): JSX.Element {
         </Button>
       </div>
       <div className="space-y-2">
-        {(data ?? []).map((o) => (
-          <ItemObservacao
-            key={o.id}
-            obs={o}
-            onChange={reload}
-            ocupado={ocupado}
-            executar={executar}
-          />
-        ))}
+        <ListaOrdenavel
+          itens={data ?? []}
+          disabled={ocupado}
+          onChange={(itens) =>
+            void executar('alterar', async () => {
+              await api.reordenarCadastro(
+                'observacoes',
+                itens.map((i) => i.id)
+              )
+              reload()
+            })
+          }
+        >
+          {(data ?? []).map((o) => (
+            <ItemObservacao
+              key={o.id}
+              obs={o}
+              onChange={reload}
+              ocupado={ocupado}
+              executar={executar}
+            />
+          ))}
+        </ListaOrdenavel>
         {data && data.length === 0 && <EmptyState title="Nenhuma observação cadastrada" />}
       </div>
     </Card>
@@ -746,15 +761,29 @@ function SecaoPagamentos(): JSX.Element {
         </Button>
       </div>
       <div className="space-y-2">
-        {(data ?? []).map((p) => (
-          <ItemPagamento
-            key={p.id}
-            pag={p}
-            onChange={reload}
-            ocupado={ocupado}
-            executar={executar}
-          />
-        ))}
+        <ListaOrdenavel
+          itens={data ?? []}
+          disabled={ocupado}
+          onChange={(itens) =>
+            void executar('alterar', async () => {
+              await api.reordenarCadastro(
+                'pagamentos',
+                itens.map((i) => i.id)
+              )
+              reload()
+            })
+          }
+        >
+          {(data ?? []).map((p) => (
+            <ItemPagamento
+              key={p.id}
+              pag={p}
+              onChange={reload}
+              ocupado={ocupado}
+              executar={executar}
+            />
+          ))}
+        </ListaOrdenavel>
         {data && data.length === 0 && <EmptyState title="Nenhuma forma de pagamento cadastrada" />}
       </div>
     </Card>
@@ -961,8 +990,8 @@ function SecaoIA(): JSX.Element {
     <form onSubmit={salvar} className="space-y-5">
       <Card className="p-6">
         <SectionTitle
-          title="Sugestão de anotação por IA"
-          description="Usada só quando você clica em “Sugerir com IA” no editor. Nada é enviado para a internet."
+          title="Revisão de textos com IA local"
+          description="Revise os textos dos documentos ou gere uma anotação interna. Você confere a sugestão antes de aplicar. Nada é enviado para a internet."
         />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field label="Origem do modelo">
