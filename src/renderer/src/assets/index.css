@@ -2,12 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Mantém espaço confortável em telas estreitas, mas não cria uma barra
-   horizontal artificial em janelas amplas que já comportam as colunas. */
+/* A largura mínima depende das colunas e do espaço real do cartão,
+   independentemente do tamanho da janela ou da escala do monitor. */
 .data-table {
   width: 100%;
-  max-width: 100%;
-  min-width: 0;
+  min-width: var(--data-table-min-width, 1000px);
 }
 
 .data-table :is(th, td) {
@@ -16,26 +15,6 @@
 
 .data-table-viewport {
   overflow-x: auto;
-}
-
-/* Em janelas compactas a tabela conserva a largura mínima e pode ser
-   percorrida horizontalmente. Em janelas amplas ela ocupa exatamente o
-   cartão, sem uma barra artificial. O corte usa a janela (e não a escala
-   física do monitor), que é estável no Electron em diferentes DPIs. */
-@media (max-width: 1100px) {
-  .data-table-viewport {
-    overflow-x: auto;
-  }
-
-  .data-table {
-    min-width: var(--data-table-min-width, 1000px);
-  }
-}
-
-@media (min-width: 1101px) {
-  .data-table-viewport {
-    overflow-x: hidden;
-  }
 }
 
 :root {

@@ -6,6 +6,7 @@ Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
 - Atalhos de recibo/cobrança nos históricos de propostas e relatórios, sem salvar ou registrar pagamentos ao abrir.
 - Históricos compartilhando busca por múltiplos termos, filtros, colunas selecionáveis/reordenáveis e preferências persistentes por computador.
+- Históricos aproveitam a largura disponível, com rolagem horizontal quando necessária, número/ações fixos e textos limitados a duas linhas. Todas as colunas verificadas entre 1.024 e 2.560 pixels.
 - Reordenação por mouse e teclado nas listas de documentos, custos, catálogo e padrões, preservando vínculos e valores.
 - Revisão e sugestões da IA local com comparação/aprovação, preservação de números, cancelamento durante geração/inicialização, tempo limite e proteção de edição concorrente.
 - Clientes com apenas PF/PJ, PF como padrão e somente nome obrigatório.

@@ -9,6 +9,7 @@ export function HistoricoRelatoriosPage(): JSX.Element {
   const { data, loading, error, reload } = useAsync(() => api.relatorios.list(), [])
   return (
     <PageShell
+      largura="full"
       titulo="Relatórios"
       descricao="Histórico de serviços prestados"
       acoes={<Button onClick={() => navegar({ nome: 'editorRelatorio' })}>+ Novo relatório</Button>}

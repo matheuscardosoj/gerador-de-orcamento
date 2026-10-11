@@ -230,6 +230,14 @@ export function HistoricoDocumentos({
   const total = Math.max(1, Math.ceil(filtrados.length / 12)),
     atual = Math.min(pagina, total),
     inicio = (atual - 1) * 12
+  const larguraColuna = (campo: string): number =>
+    ['destinatario', 'servicos', 'descricao', 'anotacao', 'origem'].includes(campo)
+      ? 240
+      : campo === 'versao'
+        ? 90
+        : 145
+  const larguraAcoes = tipo === 'orcamento' ? 220 : tipo === 'relatorio' ? 145 : 70
+  const larguraTabela = 96 + larguraAcoes + pref.colunas.reduce((n, k) => n + larguraColuna(k), 0)
   const ordenar = (campo: string): void =>
     mudar({
       campo,
@@ -312,7 +320,7 @@ export function HistoricoDocumentos({
           Limpar filtros
         </Button>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid max-w-6xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Field label="Data inicial">
           <Input
             disabled={!carregadas}
@@ -390,24 +398,13 @@ export function HistoricoDocumentos({
         />
       ) : (
         <>
-          <DataTableFrame minWidth={`${Math.max(800, 200 + pref.colunas.length * 140)}px`}>
+          <DataTableFrame minWidth={`${larguraTabela}px`}>
             <colgroup>
               <col className="w-24" />
               {pref.colunas.map((k) => (
-                <col
-                  key={k}
-                  style={{
-                    width: ['destinatario', 'servicos', 'descricao', 'anotacao', 'origem'].includes(
-                      k
-                    )
-                      ? 240
-                      : 145
-                  }}
-                />
+                <col key={k} style={{ width: larguraColuna(k) }} />
               ))}
-              <col
-                style={{ width: tipo === 'orcamento' ? 220 : tipo === 'relatorio' ? 145 : 70 }}
-              />
+              <col style={{ width: larguraAcoes }} />
             </colgroup>
             <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
@@ -425,19 +422,21 @@ export function HistoricoDocumentos({
                     }
                     active={pref.campo === k}
                     direction={pref.direcao}
+                    wrap
+                    className={k === 'numero' ? 'sticky left-0 z-[2] bg-slate-50' : undefined}
                     onSort={() => ordenar(k)}
                     align={['valor', 'servicosValor'].includes(k) ? 'right' : 'left'}
                   />
                 ))}
-                <th className="px-4 py-3">
+                <th className="sticky right-0 z-[2] bg-slate-50 px-4 py-3 shadow-[-1px_0_0_0_#e2e8f0]">
                   <span className="sr-only">Ações</span>
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtrados.slice(inicio, inicio + 12).map((r) => (
-                <tr key={r.id} className="h-[62px] hover:bg-slate-50">
-                  <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-800">
+                <tr key={r.id} className="group h-[62px] hover:bg-slate-50">
+                  <td className="sticky left-0 z-[1] whitespace-nowrap bg-white px-4 py-3 font-medium text-slate-800 shadow-[1px_0_0_0_#e2e8f0] group-hover:bg-slate-50">
                     {r.numero > 0 ? String(r.numero).padStart(6, '0') : 'Rascunho'}
                   </td>
                   {pref.colunas.map((k) => (
@@ -448,7 +447,7 @@ export function HistoricoDocumentos({
                       {k === 'status' ? (
                         <Badge color={estados[r.status]?.cor ?? 'slate'}>{textoCampo(r, k)}</Badge>
                       ) : (
-                        <span className="block line-clamp-2 break-words" title={textoCampo(r, k)}>
+                        <span className="line-clamp-2 break-words" title={textoCampo(r, k)}>
                           {textoCampo(r, k) || '—'}
                         </span>
                       )}
@@ -473,7 +472,7 @@ export function HistoricoDocumentos({
                         )}
                     </td>
                   ))}
-                  <td className="px-4 py-3">
+                  <td className="sticky right-0 z-[1] bg-white px-4 py-3 shadow-[-1px_0_0_0_#e2e8f0] group-hover:bg-slate-50">
                     <TableActions>
                       <IconButton
                         icon={FolderOpen}

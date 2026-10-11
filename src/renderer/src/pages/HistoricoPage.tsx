@@ -9,6 +9,7 @@ export function HistoricoPage(): JSX.Element {
   const { data, loading, error, reload } = useAsync(() => api.orcamentos.list(), [])
   return (
     <PageShell
+      largura="full"
       titulo="Orçamentos"
       descricao="Histórico de propostas"
       acoes={<Button onClick={() => navegar({ nome: 'editor' })}>+ Novo orçamento</Button>}

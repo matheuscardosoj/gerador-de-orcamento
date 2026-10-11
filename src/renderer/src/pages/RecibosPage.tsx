@@ -165,6 +165,7 @@ export function RecibosPage({
   }
   return (
     <PageShell
+      largura={r ? 'xl' : 'full'}
       titulo={
         r
           ? `${r.status === 'recebido' ? 'Recibo' : r.status === 'cancelado' ? 'Documento cancelado' : 'Cobrança'} ${r.numero > 0 ? String(r.numero).padStart(6, '0') : '— rascunho'}`

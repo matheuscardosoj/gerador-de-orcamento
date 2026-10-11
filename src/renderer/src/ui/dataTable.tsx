@@ -52,7 +52,8 @@ export function SortableHeader({
   direction,
   onSort,
   className,
-  align = 'left'
+  align = 'left',
+  wrap = false
 }: {
   label: string
   active: boolean
@@ -60,6 +61,7 @@ export function SortableHeader({
   onSort: () => void
   className?: string
   align?: 'left' | 'right'
+  wrap?: boolean
 }): JSX.Element {
   return (
     <th
@@ -71,7 +73,8 @@ export function SortableHeader({
         type="button"
         onClick={onSort}
         className={cn(
-          'inline-flex w-full items-center gap-1 whitespace-nowrap rounded-sm font-semibold hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal/40',
+          'inline-flex w-full items-center gap-1 rounded-sm font-semibold hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal/40',
+          wrap ? 'whitespace-normal leading-tight' : 'whitespace-nowrap',
           align === 'right' ? 'justify-end text-right' : 'justify-start text-left'
         )}
       >
