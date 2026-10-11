@@ -108,6 +108,7 @@ export interface CustoEstadia {
 
 /** Custo avulso/personalizado (dá a maleabilidade). */
 export interface CustoAvulso {
+  aplicarAcrescimo?: boolean
   id: string
   descricao: string
   valor: number
@@ -162,6 +163,8 @@ export interface LinhaBreakdown {
 
 /** Resultado do cálculo. */
 export interface ResultadoCalculo {
+  custoComAcrescimo?: number
+  custoRepassado?: number
   breakdown: LinhaBreakdown[]
   custoTotal: number
   margemLucroPercent: number

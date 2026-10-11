@@ -116,18 +116,21 @@ it('migra datas ISO de um banco SQLite v5 para a data civil', () => {
   const caminho = join(raiz, 'datas-v5.db')
   const banco = new Database(caminho)
   try {
+    aplicarMigracoes(banco, 5)
     banco.exec(`
-      CREATE TABLE orcamentos (data TEXT NOT NULL);
-      CREATE TABLE relatorios (data TEXT NOT NULL);
-      INSERT INTO orcamentos (data) VALUES ('2026-05-04T12:00:00.000Z');
-      INSERT INTO relatorios (data) VALUES ('2026-05-05T00:00:00.000Z');
+      DROP TABLE orcamentos;
+      DROP TABLE relatorios;
+      CREATE TABLE orcamentos (id TEXT,numero INTEGER,data TEXT NOT NULL);
+      CREATE TABLE relatorios (id TEXT,numero INTEGER,data TEXT NOT NULL);
+      INSERT INTO orcamentos (numero,data) VALUES (1,'2026-05-04T12:00:00.000Z');
+      INSERT INTO relatorios (numero,data) VALUES (1,'2026-05-05T00:00:00.000Z');
       PRAGMA user_version = 5;
     `)
     aplicarMigracoes(banco)
 
     expect(banco.get('SELECT data FROM orcamentos')?.data).toBe('2026-05-04')
     expect(banco.get('SELECT data FROM relatorios')?.data).toBe('2026-05-05')
-    expect(banco.get('PRAGMA user_version')?.user_version).toBe(6)
+    expect(banco.get('PRAGMA user_version')?.user_version).toBe(7)
   } finally {
     banco.close()
   }
@@ -151,14 +154,14 @@ it('gera relatório independente da proposta, com totais financeiros próprios',
   expect(repos.orcamentosRepo.get(proposta.id)!.valorTotal).toBe(800)
 })
 
-it('mantém a numeração dos relatórios independente e devolve o último número excluído', () => {
+it('mantém a numeração dos relatórios independente e não reutiliza números excluídos', () => {
   const proposta = repos.orcamentosRepo.list().find((o) => o.numero === 1)!
   const primeiro = repos.relatoriosRepo.criarDeOrcamento(proposta.id)!
   const segundo = repos.relatoriosRepo.criarDeOrcamento(proposta.id)!
   expect([primeiro.numero, segundo.numero]).toEqual([2, 3])
 
   repos.relatoriosRepo.remove(segundo.id)
-  expect(repos.relatoriosRepo.proximoNumero()).toBe(3)
+  expect(repos.relatoriosRepo.proximoNumero()).toBe(4)
   expect(repos.relatoriosRepo.definirProximoNumero(1).ok).toBe(false)
   expect(repos.relatoriosRepo.definirProximoNumero(9).ok).toBe(true)
   expect(repos.relatoriosRepo.proximoNumero()).toBe(9)
@@ -215,18 +218,18 @@ it('permite rascunho incompleto e bloqueia status final sem campos essenciais', 
   repos.orcamentosRepo.remove(rascunho.id)
 })
 
-it('recua o contador ao excluir o orçamento de maior número', () => {
+it('preserva números utilizados após exclusões', () => {
   const a = novoOrcamento('A Sítio das Palmeiras,') // nº 3
   const b = novoOrcamento('A Chácara do Zé,') // nº 4
-  expect([a.numero, b.numero]).toEqual([3, 4])
+  expect([a.numero, b.numero]).toEqual([5, 6])
 
   // Excluir o do meio não mexe no contador: o 4 continua entregue.
   repos.orcamentosRepo.remove(a.id)
-  expect(repos.orcamentosRepo.proximoNumero()).toBe(5)
+  expect(repos.orcamentosRepo.proximoNumero()).toBe(7)
 
   // Excluir o último entregue devolve exatamente esse número para reaproveitamento.
   repos.orcamentosRepo.remove(b.id)
-  expect(repos.orcamentosRepo.proximoNumero()).toBe(4)
+  expect(repos.orcamentosRepo.proximoNumero()).toBe(7)
 })
 
 it('deixa escolher o próximo número e recusa os já usados', () => {
@@ -236,7 +239,7 @@ it('deixa escolher o próximo número e recusa os já usados', () => {
   const ocupado = repos.orcamentosRepo.definirProximoNumero(2)
   expect(ocupado.ok).toBe(false)
   expect(ocupado.erro).toContain('já é do orçamento')
-  expect(ocupado.proximoLivre).toBe(3)
+  expect(ocupado.proximoLivre).toBe(7)
 
   expect(repos.orcamentosRepo.definirProximoNumero(0).ok).toBe(false)
   expect(repos.orcamentosRepo.definirProximoNumero(1.5).ok).toBe(false)
@@ -247,9 +250,9 @@ it('deixa escolher o próximo número e recusa os já usados', () => {
   expect(criado.numero).toBe(7)
 
   // Um ajuste manual não é desfeito ao excluir um orçamento que não é o último.
-  repos.orcamentosRepo.definirProximoNumero(3)
+  expect(repos.orcamentosRepo.definirProximoNumero(3).ok).toBe(false)
   repos.orcamentosRepo.remove(criado.id)
-  expect(repos.orcamentosRepo.proximoNumero()).toBe(3)
+  expect(repos.orcamentosRepo.proximoNumero()).toBe(8)
 })
 
 it('altera o número de um orçamento e bloqueia duplicidade', () => {
@@ -259,7 +262,7 @@ it('altera o número de um orçamento e bloqueia duplicidade', () => {
   expect(conflito.ok).toBe(false)
   expect(conflito.erro).toContain('O número 1 já é do orçamento')
   // Sugere 3: o 2 está em uso — pelo próprio orçamento que se quer renumerar.
-  expect(conflito.proximoLivre).toBe(3)
+  expect(conflito.proximoLivre).toBe(8)
   // Nada mudou.
   expect(repos.orcamentosRepo.get(alvo.id)?.numero).toBe(2)
 
@@ -273,14 +276,14 @@ it('altera o número de um orçamento e bloqueia duplicidade', () => {
 
   const info = repos.orcamentosRepo.numeracao()
   expect(info.maiorEmUso).toBe(20)
-  expect(info.menorLivre).toBe(2)
+  expect(info.menorLivre).toBe(8)
   expect(info.totalDocumentos).toBe(2)
 
-  repos.orcamentosRepo.alterarNumero(alvo.id, 2)
-  repos.orcamentosRepo.definirProximoNumero(3)
+  // O número anterior também fica preservado no registro de uso.
+  expect(repos.orcamentosRepo.alterarNumero(alvo.id, 2).ok).toBe(false)
 })
 
-it('grava a foto como BLOB e devolve só a miniatura na leitura', () => {
+it('grava a foto como texto deduplicado e devolve só a miniatura na leitura', () => {
   const resumo = repos.orcamentosRepo.list().find((o) => o.numero === 1)!
   const alvo = repos.orcamentosRepo.get(resumo.id)!
   const atualizado = repos.orcamentosRepo.update(alvo.id, {
@@ -333,7 +336,7 @@ it('duplica o orçamento copiando as fotos e religando-as aos novos itens', () =
   const copia = repos.orcamentosRepo.duplicate(original.id)!
 
   expect(copia.id).not.toBe(original.id)
-  expect(copia.numero).toBe(3)
+  expect(copia.numero).toBeGreaterThan(20)
   expect(copia.status).toBe('rascunho')
   expect(copia.itensServico[0].id).not.toBe(original.itensServico[0].id)
   expect(copia.anexos).toHaveLength(1)

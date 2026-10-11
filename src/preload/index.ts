@@ -15,6 +15,31 @@ function crud<T, C>(dominio: string): CrudApi<T, C> {
 }
 
 const api: AppApi = {
+  recibos: {
+    list: () => invoke('recibos.list') as never,
+    get: (id) => invoke('recibos.get', id) as never,
+    create: (dto) => invoke('recibos.create', dto) as never,
+    update: (id, p) => invoke('recibos.update', id, p) as never,
+    confirmar: (id) => invoke('recibos.confirmar', id) as never,
+    cancelar: (id) => invoke('recibos.cancelar', id) as never
+  },
+  versoes: {
+    html: (id) => invoke('versoes.html', id) as never,
+    nomear: (id, d) => invoke('versoes.nomear', id, d) as never,
+    list: (t, id) => invoke('versoes.list', t, id) as never,
+    restaurar: (id, c) => invoke('versoes.restaurar', id, c) as never,
+    exportar: (id, f) => invoke('versoes.exportar', id, f) as never
+  },
+  nuvem: {
+    config: () => invoke('nuvem.config') as never,
+    status: () => invoke('nuvem.status') as never,
+    conectar: (c, s, m) => invoke('nuvem.conectar', c, s, m) as never,
+    sincronizar: () => invoke('nuvem.sincronizar') as never,
+    dispositivos: () => invoke('nuvem.dispositivos') as never,
+    transferir: (t, id, d) => invoke('nuvem.transferir', t, id, d) as never,
+    sair: () => invoke('nuvem.sair') as never,
+    aceitarRemoto: (id) => invoke('nuvem.aceitarRemoto', id) as never
+  },
   aplicativo: {
     versao: () => invoke('aplicativo.versao') as never,
     alteracoesPendentes: (ativo) => invoke('aplicativo.alteracoesPendentes', ativo) as never
@@ -71,6 +96,8 @@ const api: AppApi = {
     selecionar: () => invoke('logo.selecionar') as never
   },
   documentos: {
+    gerarReciboPdf: (id) => invoke('documentos.gerarReciboPdf', id) as never,
+    gerarReciboDocx: (id) => invoke('documentos.gerarReciboDocx', id) as never,
     gerarPdf: (id) => invoke('documentos.gerarPdf', id) as never,
     gerarDocx: (id) => invoke('documentos.gerarDocx', id) as never,
     gerarRelatorioPdf: (id) => invoke('documentos.gerarRelatorioPdf', id) as never,

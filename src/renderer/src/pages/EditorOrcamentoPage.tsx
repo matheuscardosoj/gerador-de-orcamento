@@ -1,3 +1,4 @@
+import { DadosClienteDocumento, LinhaTempo } from '../components/DocumentoExtras'
 import { useEffect, useMemo, useState } from 'react'
 import { Pencil, X } from 'lucide-react'
 import { api } from '../lib/api'
@@ -107,6 +108,7 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
             numero,
             data: dataCivilHoje(),
             clienteId: null,
+            camposCliente: empresa.camposClientePadrao ?? ['documento'],
             destinatario: '',
             formato: 'carta',
             titulo: 'Proposta de Serviço',
@@ -378,11 +380,31 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
           buscarImagem={(id) => api.anexos.imagem(id)}
         />
       </div>
+      <div className="my-4 space-y-3">
+        <DadosClienteDocumento documento={orc} clientes={dados.clientes} onChange={set} />
+        {orc.id && (
+          <LinhaTempo
+            tipo="orcamento"
+            id={orc.id}
+            onRestaurado={() =>
+              void api.orcamentos.get(orc.id).then((d) => {
+                if (d) {
+                  setOrc(d)
+                  setSnapshotSalvo(JSON.stringify(d))
+                }
+              })
+            }
+          />
+        )}
+      </div>
       {previaAberta && (
         <PreviaModal
           orc={{ ...orc, valorTotal: total }}
-          empresa={dados.empresa}
-          tratamento={dados.clientes.find((c) => c.id === orc.clienteId)?.tratamento}
+          empresa={orc.empresaSnapshot ?? dados.empresa}
+          tratamento={
+            orc.clienteSnapshot?.tratamento ??
+            dados.clientes.find((c) => c.id === orc.clienteId)?.tratamento
+          }
           onClose={() => setPreviaAberta(false)}
         />
       )}
@@ -456,6 +478,7 @@ function DadosGeraisCard({
               const c = clientes.find((x) => x.id === e.target.value)
               set({
                 clienteId: c?.id ?? null,
+                clienteSnapshot: c ?? null,
                 destinatario: c ? c.nome : orc.destinatario
               })
             }}
@@ -479,7 +502,11 @@ function DadosGeraisCard({
           <Input
             value={orc.destinatario}
             onChange={(e) =>
-              set({ destinatario: normalizarDestinatario(e.target.value), clienteId: null })
+              set({
+                destinatario: normalizarDestinatario(e.target.value),
+                clienteId: null,
+                clienteSnapshot: null
+              })
             }
             placeholder="Ex.: TMG"
           />

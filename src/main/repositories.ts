@@ -1,6 +1,10 @@
+import { numeroNuvem } from './numeros'
+import { envolverDocumento, nuvemConfigurada } from './versoes'
 // Repositórios sobre SQLite. As assinaturas públicas são as mesmas de quando a
 // persistência era JSON — o IPC, o preload e o renderer não conhecem o banco.
 import { randomUUID } from 'crypto'
+import { registrarImagem, imagemDataUrl } from './imagens'
+import { validarCliente } from '@shared/clientes'
 import {
   all,
   get,
@@ -98,10 +102,14 @@ export function bancoVazio(): boolean {
 
 // ---------------------------------------------------------------- Empresa
 export const empresaRepo = {
-  get: (): EmpresaConfig => lerConfig('empresa', bancoInicial().empresa),
+  get: (): EmpresaConfig => {
+    const e = lerConfig('empresa', bancoInicial().empresa)
+    return e.logoHash ? { ...e, logoDataUrl: imagemDataUrl(e.logoHash) ?? null } : e
+  },
   save: (patch: Partial<EmpresaConfig>): EmpresaConfig => {
     const atual = { ...empresaRepo.get(), ...patch }
-    gravarConfig('empresa', atual)
+    const hash = atual.logoDataUrl ? registrarImagem(atual.logoDataUrl, null, 0, 0, true) : null
+    gravarConfig('empresa', { ...atual, logoHash: hash ?? undefined, logoDataUrl: null })
     return atual
   }
 }
@@ -140,6 +148,7 @@ export const configIARepo = {
 
 // ---------------------------------------------------------------- Clientes
 const paraCliente = (l: Linha): Cliente => ({
+  ...JSON.parse(texto(l.dados_json) || '{}'),
   id: texto(l.id),
   nome: texto(l.nome),
   tratamento: texto(l.tratamento),
@@ -158,6 +167,7 @@ export const clientesRepo = {
   },
   create: (dto: Omit<Cliente, 'id' | 'criadoEm'> & { id?: string; criadoEm?: string }): Cliente => {
     const cliente: Cliente = {
+      ...dto,
       id: dto.id ?? randomUUID(),
       criadoEm: dto.criadoEm ?? nowIso(),
       nome: dto.nome,
@@ -166,6 +176,7 @@ export const clientesRepo = {
       observacao: dto.observacao,
       ativo: dto.ativo ?? true
     }
+    validarCliente(cliente)
     run(
       `INSERT INTO clientes (id, nome, tratamento, contato, observacao, ativo, criado_em)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -179,12 +190,14 @@ export const clientesRepo = {
         cliente.criadoEm
       ]
     )
+    run('UPDATE clientes SET dados_json = ? WHERE id = ?', [JSON.stringify(cliente), cliente.id])
     return cliente
   },
   update: (id: string, patch: Partial<Cliente>): Cliente | null => {
     const atual = clientesRepo.get(id)
     if (!atual) return null
     const novo = { ...atual, ...patch, id }
+    validarCliente(novo)
     run(
       `UPDATE clientes SET nome = ?, tratamento = ?, contato = ?, observacao = ?, ativo = ? WHERE id = ?`,
       [
@@ -196,6 +209,7 @@ export const clientesRepo = {
         id
       ]
     )
+    run('UPDATE clientes SET dados_json = ? WHERE id = ?', [JSON.stringify(novo), id])
     return novo
   },
   remove: (id: string): void => {
@@ -349,16 +363,9 @@ const paraTexto = (l: Linha): ItemTexto => ({
 /** Converte o BLOB do banco em data URL (usada pela miniatura e pelo modo ampliado). */
 function blobParaDataUrl(blob: unknown, mime: string): string | undefined {
   if (!blob) return undefined
+  if (typeof blob === 'string') return imagemDataUrl(blob, mime === 'miniatura')
   const buf = Buffer.from(blob as Uint8Array)
   return `data:${mime};base64,${buf.toString('base64')}`
-}
-
-/** Extrai os bytes de uma data URL (`data:image/jpeg;base64,...`). */
-function dataUrlParaBuffer(dataUrl: string | null | undefined): Buffer | null {
-  if (!dataUrl) return null
-  const virgula = dataUrl.indexOf(',')
-  if (virgula < 0) return null
-  return Buffer.from(dataUrl.slice(virgula + 1), 'base64')
 }
 
 function paraAnexo(l: Linha): AnexoOrcamento {
@@ -371,7 +378,8 @@ function paraAnexo(l: Linha): AnexoOrcamento {
     mime,
     largura: numero(l.largura),
     altura: numero(l.altura),
-    miniaturaDataUrl: blobParaDataUrl(l.miniatura, mime)
+    imagemHash: texto(l.imagem),
+    miniaturaDataUrl: blobParaDataUrl(l.imagem, 'miniatura')
   }
 }
 
@@ -385,13 +393,12 @@ function paraAnexo(l: Linha): AnexoOrcamento {
 function paraOrcamento(l: Linha, filhos: boolean, comMiniaturas = filhos): Orcamento {
   const id = texto(l.id)
   const clienteId = textoOuNulo(l.cliente_id)
-  const cliente = clienteId ? clientesRepo.get(clienteId) : null
   return {
     id,
     numero: numero(l.numero),
     data: normalizarDataCivil(texto(l.data)),
     clienteId,
-    destinatario: cliente ? cliente.nome : normalizarDestinatario(texto(l.destinatario)),
+    destinatario: normalizarDestinatario(texto(l.destinatario)),
     formato: texto(l.formato) as FormatoOrcamento,
     titulo: texto(l.titulo),
     introducao: textoOuNulo(l.introducao) ?? '',
@@ -417,7 +424,7 @@ function paraOrcamento(l: Linha, filhos: boolean, comMiniaturas = filhos): Orcam
       : [],
     anexos: filhos
       ? all(
-          `SELECT id, item_servico_id, ordem, titulo, descricao, mime, largura, altura
+          `SELECT id, item_servico_id, ordem, titulo, descricao, mime, largura, altura, imagem
                   ${comMiniaturas ? ', miniatura' : ''}
            FROM anexos WHERE orcamento_id = ? ORDER BY ordem`,
           [id]
@@ -441,7 +448,7 @@ function listarResumosOrcamento(): ResumoOrcamento[] {
     servicosPorOrcamento.set(id, descricoes)
   }
   return all(
-    `SELECT o.*, COALESCE(c.nome, o.destinatario) AS destinatario_resumo
+    `SELECT o.*, o.destinatario AS destinatario_resumo
        FROM orcamentos o
        LEFT JOIN clientes c ON c.id = o.cliente_id
       ORDER BY o.criado_em DESC`
@@ -523,8 +530,10 @@ function gravarAnexos(orcamentoId: string, anexos: AnexoOrcamento[]): void {
   anexos.forEach((a, ordem) => {
     const id = a.id || randomUUID()
     mantidos.add(id)
-    const imagem = dataUrlParaBuffer(a.imagemDataUrl)
-    const miniatura = dataUrlParaBuffer(a.miniaturaDataUrl)
+    const imagem =
+      registrarImagem(a.imagemDataUrl, a.miniaturaDataUrl, a.largura, a.altura) ??
+      (a.imagemHash || null)
+    const miniatura = null
 
     if (existentes.has(id)) {
       run(
@@ -594,7 +603,12 @@ function donoDoNumero(numero: number, ignorarId?: string): Linha | null {
 /** Primeiro número livre a partir de `de` (inclusive). */
 function numeroLivreAPartirDe(de: number): number {
   let n = Math.max(1, de)
-  while (n <= NUMERO_MAXIMO && donoDoNumero(n)) n++
+  while (
+    n <= NUMERO_MAXIMO &&
+    (donoDoNumero(n) ||
+      get("SELECT 1 FROM numeros_usados WHERE tipo='orcamento' AND numero=?", [n]))
+  )
+    n++
   return n
 }
 
@@ -607,6 +621,11 @@ function validarNumero(numero: number, ignorarId?: string): ResultadoNumeracao |
   if (!Number.isInteger(numero) || numero < 1 || numero > NUMERO_MAXIMO) {
     return { ok: false, erro: `O número deve ser um inteiro entre 1 e ${NUMERO_MAXIMO}.` }
   }
+  if (
+    !donoDoNumero(numero) &&
+    get("SELECT 1 FROM numeros_usados WHERE tipo='orcamento' AND numero=?", [numero])
+  )
+    return { ok: false, erro: 'Este número já foi utilizado e não pode ser reutilizado.' }
   const dono = donoDoNumero(numero, ignorarId)
   if (dono) {
     const destinatario = texto(dono.destinatario).replace(/,$/, '').trim()
@@ -631,7 +650,7 @@ export const orcamentosRepo = {
   },
 
   /** Prévia do próximo número (não consome o contador). */
-  proximoNumero: (): number => proximoNumeroLivre(),
+  proximoNumero: (): number => numeroNuvem('orcamento', proximoNumeroLivre),
 
   numeracao: (): InfoNumeracao => {
     const agregado = get(
@@ -646,6 +665,11 @@ export const orcamentosRepo = {
   },
 
   definirProximoNumero: (n: number): ResultadoNumeracao => {
+    if (nuvemConfigurada())
+      return {
+        ok: false,
+        erro: 'Na nuvem, a numeração usa faixas exclusivas reservadas para cada computador.'
+      }
     const invalido = validarNumero(n)
     if (invalido) return invalido
     gravarConfig('seqOrcamento', n - 1)
@@ -657,6 +681,8 @@ export const orcamentosRepo = {
       const atual = orcamentosRepo.get(id)
       if (!atual) return { ok: false, erro: 'Orçamento não encontrado.' }
       if (atual.numero === n) return { ok: true, orcamento: atual }
+      if (nuvemConfigurada())
+        return { ok: false, erro: 'Não é possível renumerar documentos vinculados à nuvem.' }
       const invalido = validarNumero(n, id)
       if (invalido) return invalido
       run('UPDATE orcamentos SET numero = ?, atualizado_em = ? WHERE id = ?', [n, nowIso(), id])
@@ -679,7 +705,13 @@ export const orcamentosRepo = {
       const pedido = original?.numero ?? dto.numero
       // Um número pedido que esteja ocupado cai no próximo livre em vez de
       // estourar o UNIQUE — a validação amigável acontece antes, na interface.
-      const numero = pedido && !donoDoNumero(pedido) ? pedido : proximoNumeroLivre()
+      const numero = original
+        ? (pedido ?? proximoNumeroLivre())
+        : numeroNuvem(
+            'orcamento',
+            () => (pedido && !validarNumero(pedido) ? pedido : proximoNumeroLivre()),
+            true
+          )
       gravarConfig('seqOrcamento', Math.max(numero, seqAtual()))
       const orc = normalizarOrcamento<Orcamento>({
         ...dto,
@@ -753,21 +785,17 @@ export const orcamentosRepo = {
     tx(() => {
       const alvo = get('SELECT numero FROM orcamentos WHERE id = ?', [id])
       if (!alvo) return
-      const excluido = numero(alvo.numero)
       run('DELETE FROM orcamentos WHERE id = ?', [id])
       // Excluiu justamente o último número entregue? O contador recua uma
       // posição para que exatamente esse número volte, sem preencher lacunas
       // internas mais antigas.
-      if (excluido === seqAtual()) {
-        gravarConfig('seqOrcamento', Math.max(0, excluido - 1))
-      }
     }),
 
   duplicate: (id: string): Orcamento | null =>
     tx(() => {
       const original = orcamentosRepo.get(id)
       if (!original) return null
-      const numero = proximoNumeroLivre()
+      const numero = numeroNuvem('orcamento', proximoNumeroLivre, true)
       gravarConfig('seqOrcamento', Math.max(numero, seqAtual()))
       const novoId = randomUUID()
       run(
@@ -841,14 +869,14 @@ function paraAnexoRelatorio(l: Linha): AnexoRelatorio {
     mime: texto(l.mime) || 'image/jpeg',
     largura: numero(l.largura),
     altura: numero(l.altura),
-    miniaturaDataUrl: blobParaDataUrl(l.miniatura, texto(l.mime) || 'image/jpeg')
+    imagemHash: texto(l.imagem),
+    miniaturaDataUrl: blobParaDataUrl(l.imagem, 'miniatura')
   }
 }
 
 function paraRelatorio(l: Linha, filhos: boolean, comMiniaturas = filhos): Relatorio {
   const id = texto(l.id)
   const clienteId = textoOuNulo(l.cliente_id)
-  const cliente = clienteId ? clientesRepo.get(clienteId) : null
   const itensServico = filhos
     ? all('SELECT * FROM relatorio_itens_servico WHERE relatorio_id = ? ORDER BY ordem', [id]).map(
         paraItemServico
@@ -873,7 +901,7 @@ function paraRelatorio(l: Linha, filhos: boolean, comMiniaturas = filhos): Relat
     numero: numero(l.numero),
     data: normalizarDataCivil(texto(l.data)),
     clienteId,
-    destinatario: cliente ? cliente.nome : normalizarDestinatario(texto(l.destinatario)),
+    destinatario: normalizarDestinatario(texto(l.destinatario)),
     formato: texto(l.formato) as FormatoOrcamento,
     titulo: texto(l.titulo) || 'Relatório de Serviço',
     introducao: textoOuNulo(l.introducao) ?? '',
@@ -894,7 +922,7 @@ function paraRelatorio(l: Linha, filhos: boolean, comMiniaturas = filhos): Relat
       : [],
     anexos: filhos
       ? all(
-          `SELECT id, referencia_tipo, referencia_id, ordem, titulo, descricao, mime, largura, altura
+          `SELECT id, referencia_tipo, referencia_id, ordem, titulo, descricao, mime, largura, altura, imagem
                   ${comMiniaturas ? ', miniatura' : ''}
            FROM relatorio_anexos WHERE relatorio_id = ? ORDER BY ordem`,
           [id]
@@ -924,7 +952,7 @@ function paraRelatorio(l: Linha, filhos: boolean, comMiniaturas = filhos): Relat
 
 function listarResumosRelatorio(): ResumoRelatorio[] {
   return all(
-    `SELECT r.*, COALESCE(c.nome, r.destinatario) AS destinatario_resumo
+    `SELECT r.*, r.destinatario AS destinatario_resumo
        FROM relatorios r
        LEFT JOIN clientes c ON c.id = r.cliente_id
       ORDER BY r.criado_em DESC`
@@ -969,8 +997,10 @@ function gravarAnexosRelatorio(relatorioId: string, anexos: AnexoRelatorio[]): v
   anexos.forEach((a, ordem) => {
     const id = a.id || randomUUID()
     mantidos.add(id)
-    const imagem = dataUrlParaBuffer(a.imagemDataUrl)
-    const miniatura = dataUrlParaBuffer(a.miniaturaDataUrl)
+    const imagem =
+      registrarImagem(a.imagemDataUrl, a.miniaturaDataUrl, a.largura, a.altura) ??
+      (a.imagemHash || null)
+    const miniatura = null
     if (existentes.has(id)) {
       run(
         `UPDATE relatorio_anexos SET referencia_tipo = ?, referencia_id = ?, ordem = ?, titulo = ?, descricao = ? WHERE id = ?`,
@@ -1069,7 +1099,12 @@ function donoDoNumeroRelatorio(n: number, ignorarId?: string): Linha | null {
 
 function numeroRelatorioLivreAPartirDe(de: number): number {
   let n = Math.max(1, de)
-  while (n <= NUMERO_MAXIMO && donoDoNumeroRelatorio(n)) n++
+  while (
+    n <= NUMERO_MAXIMO &&
+    (donoDoNumeroRelatorio(n) ||
+      get("SELECT 1 FROM numeros_usados WHERE tipo='relatorio' AND numero=?", [n]))
+  )
+    n++
   return n
 }
 
@@ -1081,6 +1116,11 @@ function validarNumeroRelatorio(n: number, ignorarId?: string): ResultadoNumerac
   if (!Number.isInteger(n) || n < 1 || n > NUMERO_MAXIMO) {
     return { ok: false, erro: `O número deve ser um inteiro entre 1 e ${NUMERO_MAXIMO}.` }
   }
+  if (
+    !donoDoNumeroRelatorio(n) &&
+    get("SELECT 1 FROM numeros_usados WHERE tipo='relatorio' AND numero=?", [n])
+  )
+    return { ok: false, erro: 'Este número já foi utilizado e não pode ser reutilizado.' }
   const dono = donoDoNumeroRelatorio(n, ignorarId)
   if (!dono) return null
   return {
@@ -1098,7 +1138,7 @@ export const relatoriosRepo = {
     return l ? paraRelatorio(l, true) : null
   },
 
-  proximoNumero: (): number => proximoNumeroRelatorio(),
+  proximoNumero: (): number => numeroNuvem('relatorio', proximoNumeroRelatorio),
 
   numeracao: (): InfoNumeracao => {
     const agregado = get(
@@ -1113,6 +1153,11 @@ export const relatoriosRepo = {
   },
 
   definirProximoNumero: (n: number): ResultadoNumeracao => {
+    if (nuvemConfigurada())
+      return {
+        ok: false,
+        erro: 'Na nuvem, a numeração usa faixas exclusivas reservadas para cada computador.'
+      }
     const invalido = validarNumeroRelatorio(n)
     if (invalido) return invalido
     gravarConfig('seqRelatorio', n - 1)
@@ -1124,6 +1169,8 @@ export const relatoriosRepo = {
       const atual = relatoriosRepo.get(id)
       if (!atual) return { ok: false, erro: 'Relatório não encontrado.' }
       if (atual.numero === n) return { ok: true, relatorio: atual }
+      if (nuvemConfigurada())
+        return { ok: false, erro: 'Não é possível renumerar documentos vinculados à nuvem.' }
       const invalido = validarNumeroRelatorio(n, id)
       if (invalido) return invalido
       run('UPDATE relatorios SET numero = ?, atualizado_em = ? WHERE id = ?', [n, nowIso(), id])
@@ -1137,7 +1184,13 @@ export const relatoriosRepo = {
   ): Relatorio =>
     tx(() => {
       const pedido = original?.numero ?? dto.numero
-      const numeroRel = pedido && !donoDoNumeroRelatorio(pedido) ? pedido : proximoNumeroRelatorio()
+      const numeroRel = original
+        ? (pedido ?? proximoNumeroRelatorio())
+        : numeroNuvem(
+            'relatorio',
+            () => (pedido && !validarNumeroRelatorio(pedido) ? pedido : proximoNumeroRelatorio()),
+            true
+          )
       gravarConfig('seqRelatorio', Math.max(numeroRel, seqRelatorioAtual()))
       const totais = calcularTotaisRelatorio(dto.itensServico, dto.adiantamentos, dto.reembolsos)
       const agora = nowIso()
@@ -1228,11 +1281,7 @@ export const relatoriosRepo = {
     tx(() => {
       const alvo = get('SELECT numero FROM relatorios WHERE id = ?', [id])
       if (!alvo) return
-      const excluido = numero(alvo.numero)
       run('DELETE FROM relatorios WHERE id = ?', [id])
-      if (excluido === seqRelatorioAtual()) {
-        gravarConfig('seqRelatorio', Math.max(0, excluido - 1))
-      }
     }),
 
   criarDeOrcamento: (orcamentoId: string): Relatorio | null =>
@@ -1264,6 +1313,9 @@ export const relatoriosRepo = {
       const cliente = orc.clienteId ? clientesRepo.get(orc.clienteId)?.nome : null
       const rel = relatoriosRepo.create({
         data: dataCivilHoje(),
+        clienteSnapshot: orc.clienteSnapshot,
+        empresaSnapshot: orc.empresaSnapshot,
+        camposCliente: orc.camposCliente,
         clienteId: orc.clienteId ?? null,
         destinatario: normalizarDestinatario(orc.destinatario),
         formato: orc.formato,
@@ -1310,7 +1362,8 @@ export const anexosRepo = {
   buffer: (id: string): Buffer | null => {
     const l = get('SELECT imagem FROM anexos WHERE id = ?', [id])
     if (!l?.imagem) return null
-    return Buffer.from(l.imagem as Uint8Array)
+    const data = blobParaDataUrl(l.imagem, 'image/jpeg')
+    return data ? Buffer.from(data.split(',')[1], 'base64') : null
   }
 }
 
@@ -1323,6 +1376,10 @@ export const anexosRelatorioRepo = {
   buffer: (id: string): Buffer | null => {
     const l = get('SELECT imagem FROM relatorio_anexos WHERE id = ?', [id])
     if (!l?.imagem) return null
-    return Buffer.from(l.imagem as Uint8Array)
+    const data = blobParaDataUrl(l.imagem, 'image/jpeg')
+    return data ? Buffer.from(data.split(',')[1], 'base64') : null
   }
 }
+
+envolverDocumento(orcamentosRepo, 'orcamento')
+envolverDocumento(relatoriosRepo, 'relatorio')

@@ -64,8 +64,27 @@ const novoId = (): string =>
 /** Converte um arquivo escolhido pelo usuário em um anexo pronto para salvar. */
 export async function arquivoParaAnexo(arquivo: File): Promise<AnexoOrcamento> {
   const img = await carregarImagem(arquivo)
-  const cheia = redimensionar(img, LADO_MAXIMO, QUALIDADE)
-  const mini = redimensionar(img, LADO_MINIATURA, QUALIDADE_MINIATURA)
+  const comprimir = (
+    lado: number,
+    qualidade: number,
+    limite: number
+  ): ReturnType<typeof redimensionar> => {
+    let imagem = redimensionar(img, lado, qualidade)
+    for (
+      let tentativa = 0;
+      (imagem.dataUrl.split(',')[1].length * 3) / 4 > limite && tentativa < 14;
+      tentativa++
+    ) {
+      if (qualidade > 0.58) qualidade -= 0.08
+      else lado = Math.floor(lado * 0.85)
+      imagem = redimensionar(img, lado, qualidade)
+    }
+    if ((imagem.dataUrl.split(',')[1].length * 3) / 4 > limite)
+      throw new Error('Esta imagem não pode ser reduzida com segurança. Escolha outra foto.')
+    return imagem
+  }
+  const cheia = comprimir(LADO_MAXIMO, QUALIDADE, 250 * 1024)
+  const mini = comprimir(LADO_MINIATURA, QUALIDADE_MINIATURA, 20 * 1024)
   return {
     id: novoId(),
     itemServicoId: null,

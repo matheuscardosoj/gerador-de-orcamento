@@ -5,11 +5,15 @@ import type {
   ParametrosEncargos,
   ModoImposto
 } from './calculo/types'
+import type { DocumentoMetadados, EnderecoCliente, CampoCliente } from './evolucao'
+export * from './evolucao'
 
 export * from './calculo/types'
 
 /** Cabeçalho / dados fixos da empresa (singleton). */
 export interface EmpresaConfig {
+  camposClientePadrao?: CampoCliente[]
+  logoHash?: string
   nome: string
   razaoSocial: string
   endereco: string
@@ -40,6 +44,13 @@ export interface ParametrosFinanceiros extends ParametrosEncargos {
 }
 
 export interface Cliente {
+  tipoPessoa?: 'pf' | 'pj' | null
+  documento?: string
+  telefone?: string
+  email?: string
+  endereco?: EnderecoCliente
+  nomeFantasia?: string
+  pessoaContato?: string
   id: string
   nome: string
   /** Tratamento no documento: "A", "Ao Sr.", "À Sra.", "Aos cuidados de"... */
@@ -117,10 +128,11 @@ export interface ItemTexto {
  * Foto anexada ao orçamento. Opcionalmente vinculada a um item de serviço —
  * nesse caso o documento faz uma referência discreta ao item correspondente.
  *
- * A imagem em tamanho cheio fica no banco (BLOB) e NUNCA trafega em lote pelo
- * IPC: a UI e a prévia usam `miniaturaDataUrl`; PDF/DOCX leem o BLOB no main.
+ * A imagem em tamanho cheio fica no banco como texto deduplicado e NUNCA trafega em lote pelo
+ * IPC: a UI e a prévia usam `miniaturaDataUrl`; PDF/DOCX reconstruem os bytes no main.
  */
 export interface AnexoOrcamento {
+  imagemHash?: string
   id: string
   /** Item de serviço referenciado, ou null para anexo solto. */
   itemServicoId?: string | null
@@ -139,7 +151,7 @@ export interface AnexoOrcamento {
   imagemDataUrl?: string | null
 }
 
-export interface Orcamento {
+export interface Orcamento extends DocumentoMetadados {
   id: string
   /** Índice sequencial, começando em 1 (incrementa conforme o último criado). */
   numero: number
@@ -192,6 +204,7 @@ export interface LancamentoRelatorio {
 
 /** Foto do relatório, vinculável a serviço, adiantamento ou reembolso. */
 export interface AnexoRelatorio {
+  imagemHash?: string
   id: string
   referenciaTipo: TipoReferenciaAnexoRelatorio
   referenciaId?: string | null
@@ -220,7 +233,7 @@ export interface TotaisRelatorio {
   tipoSaldo: 'receber' | 'devolver'
 }
 
-export interface Relatorio {
+export interface Relatorio extends DocumentoMetadados {
   id: string
   numero: number
   data: string

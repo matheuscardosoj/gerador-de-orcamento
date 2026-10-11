@@ -1,3 +1,6 @@
+import { RecibosPage } from './pages/RecibosPage'
+import { useEffect, useState } from 'react'
+import type { StatusNuvem } from '@shared/types'
 import { NavProvider, useNav, type Rota } from './lib/nav'
 import { cn, AppIcon } from './ui/primitives'
 import { ClipboardList, ContactRound, FileText, Settings, type LucideIcon } from 'lucide-react'
@@ -13,6 +16,7 @@ import { EditorRelatorioPage } from './pages/EditorRelatorioPage'
 const itens: Array<{ nome: Rota['nome']; label: string; icon: LucideIcon }> = [
   { nome: 'historico', label: 'Orçamentos', icon: FileText },
   { nome: 'historicoRelatorios', label: 'Relatórios', icon: ClipboardList },
+  { nome: 'recibos', label: 'Recibos', icon: FileText },
   { nome: 'cadastros', label: 'Cadastros', icon: ContactRound },
   { nome: 'configuracoes', label: 'Configurações', icon: Settings }
 ]
@@ -22,6 +26,24 @@ function Sidebar(): JSX.Element {
   // Recarrega o nome da empresa ao trocar de tela (reflete edições nas Configurações).
   const { data: empresa } = useAsync(() => api.empresa.get(), [rota.nome])
   const { data: versao } = useAsync(() => api.aplicativo.versao(), [])
+  const [nuvem, setNuvem] = useState<StatusNuvem | null>(null)
+  useEffect(() => {
+    let vivo = true
+    const atualizar = (): void => {
+      void api.nuvem
+        .status()
+        .then((s) => {
+          if (vivo) setNuvem(s)
+        })
+        .catch(() => undefined)
+    }
+    atualizar()
+    const timer = setInterval(atualizar, 5000)
+    return () => {
+      vivo = false
+      clearInterval(timer)
+    }
+  }, [])
   const nomeEmpresa = empresa
     ? empresa.nomeExibicao === 'razaoSocial'
       ? empresa.razaoSocial
@@ -62,7 +84,21 @@ function Sidebar(): JSX.Element {
         })}
       </nav>
       <div className="border-t border-slate-200 px-5 py-3 text-[11px] text-slate-400">
-        v{versao ?? '…'} · dados locais
+        v{versao ?? '…'} · base da empresa
+        <button
+          className="mt-1 block text-left text-slate-600"
+          onClick={() => navegar({ nome: 'configuracoes' })}
+        >
+          {nuvem?.configurada
+            ? nuvem.conflitos.length
+              ? 'Conflito de sincronização'
+              : nuvem.erro
+                ? 'Offline / sincronização pendente'
+                : nuvem.pendentes
+                  ? `${nuvem.pendentes} alterações para sincronizar`
+                  : 'Nuvem sincronizada'
+            : 'Dados neste computador'}
+        </button>
       </div>
     </aside>
   )
@@ -79,6 +115,8 @@ function Conteudo(): JSX.Element {
       return <HistoricoRelatoriosPage />
     case 'editorRelatorio':
       return <EditorRelatorioPage relatorioId={rota.relatorioId} />
+    case 'recibos':
+      return <RecibosPage key={rota.reciboId} reciboId={rota.reciboId} />
     case 'cadastros':
       return <CadastrosPage />
     case 'configuracoes':

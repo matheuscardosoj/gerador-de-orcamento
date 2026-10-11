@@ -226,6 +226,15 @@ export function ServicoCalculoModal({
             </div>
             <div className="space-y-1.5 border-t border-slate-200 bg-white px-4 py-3 text-sm">
               <Linha label="Custo total" valor={resultado.custoTotal} />
+              {(resultado.custoRepassado ?? 0) > 0 && (
+                <>
+                  <Linha
+                    label="Base do acréscimo"
+                    valor={resultado.custoComAcrescimo ?? resultado.custoTotal}
+                  />
+                  <Linha label="Repasses sem acréscimo" valor={resultado.custoRepassado ?? 0} />
+                </>
+              )}
               <Linha
                 label={`Acréscimo (${resultado.margemLucroPercent}%)`}
                 valor={resultado.valorMargem}
@@ -741,7 +750,7 @@ function AvulsosBloco({ e, set }: BlocoProps): JSX.Element {
 
   return (
     <Bloco
-      titulo="Outros custos"
+      titulo="Outros custos e repasses"
       acao={
         <Button size="sm" variant="outline" onClick={add}>
           + Custo
@@ -750,7 +759,10 @@ function AvulsosBloco({ e, set }: BlocoProps): JSX.Element {
     >
       <div className="space-y-2">
         {e.avulsos.length === 0 && (
-          <p className="text-xs text-slate-400">Custos que não se encaixam nas categorias acima.</p>
+          <p className="text-xs text-slate-400">
+            Custos adicionais, como Munck. Desmarque o acréscimo para repassar apenas o custo e o
+            imposto da nota.
+          </p>
         )}
         {e.avulsos.map((a) => (
           <div key={a.id} className="grid grid-cols-[2fr_1fr_auto] gap-2">
@@ -759,7 +771,17 @@ function AvulsosBloco({ e, set }: BlocoProps): JSX.Element {
               value={a.descricao}
               onChange={(ev) => upd(a.id, { descricao: ev.target.value })}
             />
-            <NumberField value={a.valor} onChange={(v) => upd(a.id, { valor: v })} min={0} />
+            <div>
+              <NumberField value={a.valor} onChange={(v) => upd(a.id, { valor: v })} min={0} />
+              <label className="mt-2 flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={a.aplicarAcrescimo !== false}
+                  onChange={(ev) => upd(a.id, { aplicarAcrescimo: ev.target.checked })}
+                />
+                Aplicar acréscimo de lucro
+              </label>
+            </div>
             <div className="flex items-center gap-1">
               <ModoSelect value={a.modo} onChange={(m) => upd(a.id, { modo: m })} />
               <IconButton

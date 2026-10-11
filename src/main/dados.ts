@@ -1,3 +1,7 @@
+import { registrarImagem } from './imagens'
+import { semRastreamento, nuvemConfigurada } from './versoes'
+import { randomUUID as novoId } from 'crypto'
+import { VERSAO_BANCO } from './db/schema'
 import { app, dialog } from 'electron'
 import { copyFileSync, existsSync, mkdirSync, rmSync } from 'fs'
 import { join } from 'path'
@@ -60,7 +64,7 @@ function validar(caminho: string): void {
     const versao = Number(
       (fonte.get('PRAGMA user_version') as { user_version?: number } | null)?.user_version ?? 0
     )
-    if (versao < 1 || versao > 6)
+    if (versao < 1 || versao > VERSAO_BANCO)
       throw new Error(`Este backup usa uma versão de banco não suportada (${versao}).`)
     const obrigatorias = [
       'configuracoes',
@@ -162,9 +166,27 @@ function idOrigemFonte(fonte: Database): { id: string; legado: boolean } {
   return { id: `legado-${String(primeiro?.id ?? 'vazio')}`, legado: true }
 }
 
+function limparAutorizacoesDaCopia(destino: string): void {
+  const copia = new Database(destino)
+  try {
+    copia.exec(
+      "DELETE FROM configuracoes WHERE chave IN ('computadorId','sessaoNuvem','nuvem','usuarioNuvem','cursorNuvem','ultimaNuvem','erroNuvem','bytesNuvem') OR chave LIKE 'estado:%' OR chave LIKE 'transferencia:%';"
+    )
+    if (temTabela(copia, 'reservas'))
+      copia.exec(
+        'DELETE FROM reservas;DELETE FROM fila_nuvem;DELETE FROM sincronizacao;DELETE FROM conflitos_nuvem;'
+      )
+    copia.run("INSERT OR REPLACE INTO configuracoes VALUES ('restauracaoLocal','true')")
+  } finally {
+    copia.close()
+  }
+  validar(destino)
+}
+
 function backupAntesImportar(): string {
   const destino = join(pastaBackups(), `banco-antes-importacao-${agoraNome()}.gdo-backup`)
   comBancoFechado(() => copiarEValidar(caminhoBanco(), destino))
+  limparAutorizacoesDaCopia(destino)
   return destino
 }
 
@@ -184,6 +206,7 @@ export async function exportarDados(): Promise<{ caminho: string | null }> {
 export function exportarDadosPara(destino: string): void {
   idOrigemAtual()
   comBancoFechado(() => copiarEValidar(caminhoBanco(), destino))
+  limparAutorizacoesDaCopia(destino)
 }
 
 function resumo(): Resumo {
@@ -214,6 +237,20 @@ function temTabela(fonte: Database, nome: string): boolean {
   )
 }
 
+function imagemImportada(_fonte: Database, x: Record<string, unknown>): string | null {
+  if (!x.imagem) return null
+  if (typeof x.imagem === 'string') return x.imagem
+  const mime = String(x.mime || 'image/jpeg')
+  return registrarImagem(
+    `data:${mime};base64,${Buffer.from(x.imagem as Uint8Array).toString('base64')}`,
+    x.miniatura
+      ? `data:${mime};base64,${Buffer.from(x.miniatura as Uint8Array).toString('base64')}`
+      : null,
+    Number(x.largura),
+    Number(x.altura),
+    true
+  )
+}
 function copiarAnexosOrcamento(
   fonte: Database,
   origemId: string,
@@ -239,8 +276,8 @@ function copiarAnexosOrcamento(
         x.mime,
         x.largura,
         x.altura,
-        x.imagem,
-        x.miniatura
+        imagemImportada(fonte, x),
+        null
       ]
     )
     total++
@@ -276,8 +313,8 @@ function copiarAnexosRelatorio(
         x.mime,
         x.largura,
         x.altura,
-        x.imagem,
-        x.miniatura
+        imagemImportada(fonte, x),
+        null
       ]
     )
     total++
@@ -474,8 +511,12 @@ function mesclar(fonte: Database): Resumo {
   const servicos = new Map<string, string>()
   const observacoes = new Map<string, string>()
   const pagamentos = new Map<string, string>()
+  const chaveCliente = (nome: unknown, documento?: string): string =>
+    documento?.replace(/[^a-z0-9]/gi, '').toUpperCase() || `nome:${normal(nome)}`
   const clientesExistentes = new Map(
-    clientesRepo.list().map((cliente) => [normal(cliente.nome), cliente] as const)
+    clientesRepo
+      .list()
+      .map((cliente) => [chaveCliente(cliente.nome, cliente.documento), cliente] as const)
   )
   const chaveServico = (nome: unknown, unidade: unknown): string =>
     `${normal(nome)}\u0000${normal(unidade)}`
@@ -492,6 +533,36 @@ function mesclar(fonte: Database): Resumo {
   const pagamentosExistentes = new Map(
     pagamentosRepo.list().map((item) => [chaveTexto(item.texto, item.aplicacao), item] as const)
   )
+  if (temTabela(fonte, 'imagens'))
+    for (const x of linhas(fonte, 'SELECT * FROM imagens'))
+      run('INSERT OR IGNORE INTO imagens VALUES (?,?,?,?,?,?,?)', [
+        x.hash,
+        x.mime,
+        x.base64,
+        x.miniatura_base64,
+        x.bytes,
+        x.largura,
+        x.altura
+      ])
+  const idsAntes = new Set(
+    [
+      ...linhas(fonte, "SELECT 'orcamento' AS tipo,id FROM orcamentos"),
+      ...(temTabela(fonte, 'relatorios')
+        ? linhas(fonte, "SELECT 'relatorio' AS tipo,id FROM relatorios")
+        : []),
+      ...(temTabela(fonte, 'recibos')
+        ? linhas(fonte, "SELECT 'recibo' AS tipo,id FROM recibos")
+        : [])
+    ]
+      .filter((x) =>
+        get('SELECT 1 FROM importacoes_documentos WHERE tipo=? AND origem_id=?', [
+          x.tipo,
+          `${origem.id}:${x.id}`
+        ])
+      )
+      .map((x) => `${x.tipo}:${x.id}`)
+  )
+  const referenciasRelatorio = new Map<string, Map<string, string>>()
   const chaveDocumento = (id: unknown): string => `${origem.id}:${String(id)}`
   const documentoLocalDaMesmaOrigem = (tipo: 'orcamento' | 'relatorio', id: unknown): boolean => {
     if (!mesmaOrigem) return false
@@ -512,13 +583,15 @@ function mesclar(fonte: Database): Resumo {
   for (const registro of linhas(fonte, 'SELECT * FROM clientes')) {
     const x = linha(registro)
     const origemId = String(x.id)
-    const equivalente = clientesExistentes.get(normal(x.nome))
+    const extrasCliente = JSON.parse(String(x.dados_json || '{}'))
+    const equivalente = clientesExistentes.get(chaveCliente(x.nome, extrasCliente.documento))
     if (equivalente) {
       clientes.set(origemId, equivalente.id)
       contar(r, 'clientes', 'ignorados')
       continue
     }
     const novo = clientesRepo.create({
+      ...extrasCliente,
       id: idLivre('clientes', origemId),
       criadoEm: String(x.criado_em),
       nome: String(x.nome),
@@ -528,7 +601,7 @@ function mesclar(fonte: Database): Resumo {
       ativo: x.ativo == null || Number(x.ativo) === 1
     })
     clientes.set(origemId, novo.id)
-    clientesExistentes.set(normal(novo.nome), novo)
+    clientesExistentes.set(chaveCliente(novo.nome, novo.documento), novo)
     contar(r, 'clientes', 'importados')
   }
 
@@ -636,6 +709,7 @@ function mesclar(fonte: Database): Resumo {
       const preparado = novosIdsRelatorio(
         itensRelatorio(fonte, String(x.id), servicos, observacoes, pagamentos)
       )
+      referenciasRelatorio.set(String(x.id), preparado.referencias)
       const ocupado = get('SELECT id FROM relatorios WHERE numero = ?', [x.numero])
       const desejado = ocupado ? undefined : Number(x.numero)
       const novo = relatoriosRepo.create(
@@ -686,18 +760,138 @@ function mesclar(fonte: Database): Resumo {
       )
       contar(r, 'relatorios', 'importados')
     }
+  const destinoDocumento = (tipo: string, id: string): string | null => {
+    const tabela = { orcamento: 'orcamentos', relatorio: 'relatorios', recibo: 'recibos' }[tipo]
+    const m = get('SELECT documento_id FROM importacoes_documentos WHERE tipo=? AND origem_id=?', [
+      tipo,
+      chaveDocumento(id)
+    ])
+    return m
+      ? String(m.documento_id)
+      : mesmaOrigem && tabela && get(`SELECT 1 FROM ${tabela} WHERE id=?`, [id])
+        ? id
+        : null
+  }
+  if (temTabela(fonte, 'recibos'))
+    for (const x of linhas(fonte, 'SELECT * FROM recibos')) {
+      const origemRecibo = String(x.id)
+      if (destinoDocumento('recibo', origemRecibo)) continue
+      const dados = JSON.parse(String(x.dados))
+      const id = novoId()
+      const num =
+        Number(get("SELECT MAX(numero) AS n FROM numeros_usados WHERE tipo='recibo'")?.n ?? 0) + 1
+      const origemDocumento =
+        dados.origemId && dados.origemTipo
+          ? destinoDocumento(dados.origemTipo, dados.origemId)
+          : null
+      const referencia = dados.adiantamentoId
+        ? (referenciasRelatorio.get(dados.origemId)?.get(dados.adiantamentoId) ??
+          dados.adiantamentoId)
+        : null
+      const d = {
+        ...dados,
+        id,
+        numero: num,
+        clienteId: dados.clienteId ? (clientes.get(dados.clienteId) ?? null) : null,
+        origemId: origemDocumento,
+        adiantamentoId: referencia
+      }
+      run('INSERT INTO recibos VALUES (?,?,?)', [id, num, JSON.stringify(d)])
+      run('INSERT INTO numeros_usados VALUES (?,?)', ['recibo', num])
+      run('INSERT INTO importacoes_documentos VALUES (?,?,?)', [
+        'recibo',
+        chaveDocumento(origemRecibo),
+        id
+      ])
+      if (temTabela(fonte, 'recebimentos'))
+        for (const p of linhas(fonte, 'SELECT * FROM recebimentos WHERE recibo_id=?', [
+          origemRecibo
+        ]))
+          run('INSERT INTO recebimentos VALUES (?,?,?,?,?,?)', [
+            novoId(),
+            id,
+            origemDocumento,
+            referencia,
+            p.valor,
+            p.estornado
+          ])
+      r.importados.recibos = (r.importados.recibos ?? 0) + 1
+    }
+  if (temTabela(fonte, 'versoes')) {
+    const idsVersoes = new Map<string, string>()
+    for (const v of linhas(fonte, 'SELECT * FROM versoes ORDER BY tipo,documento_id,numero')) {
+      const tipo = String(v.tipo),
+        origemDoc = String(v.documento_id)
+      const destino = destinoDocumento(tipo, origemDoc)
+      if (
+        !destino ||
+        idsAntes.has(`${tipo}:${origemDoc}`) ||
+        (mesmaOrigem && destino === origemDoc)
+      )
+        continue
+      if (Number(v.numero) === 1) {
+        run('DELETE FROM versoes WHERE tipo=? AND documento_id=?', [tipo, destino])
+        run('DELETE FROM documento_meta WHERE tipo=? AND documento_id=?', [tipo, destino])
+      }
+      const doc = JSON.parse(String(v.documento))
+      doc.id = destino
+      const tabela =
+        tipo === 'orcamento' ? 'orcamentos' : tipo === 'relatorio' ? 'relatorios' : 'recibos'
+      doc.numero = Number(get(`SELECT numero FROM ${tabela} WHERE id=?`, [destino])?.numero)
+      if (doc.clienteId) doc.clienteId = clientes.get(doc.clienteId) ?? null
+      if (doc.clienteSnapshot) doc.clienteSnapshot.id = doc.clienteId
+      if (tipo === 'recibo') {
+        const atual = JSON.parse(
+          String(get('SELECT dados FROM recibos WHERE id=?', [destino])?.dados)
+        )
+        doc.origemId = atual.origemId
+        doc.adiantamentoId = atual.adiantamentoId
+      }
+      const id = novoId()
+      idsVersoes.set(String(v.id), id)
+      run('INSERT INTO versoes VALUES (?,?,?,?,?,?,?,?,?)', [
+        id,
+        tipo,
+        destino,
+        v.numero,
+        v.anterior_id ? (idsVersoes.get(String(v.anterior_id)) ?? null) : null,
+        v.criado_em,
+        v.computador,
+        v.descricao,
+        JSON.stringify(doc)
+      ])
+      run(
+        'INSERT INTO documento_meta VALUES (?,?,?) ON CONFLICT(tipo,documento_id) DO UPDATE SET dados=excluded.dados',
+        [
+          tipo,
+          destino,
+          JSON.stringify({
+            versao: v.numero,
+            clienteSnapshot: doc.clienteSnapshot,
+            empresaSnapshot: doc.empresaSnapshot,
+            camposCliente: doc.camposCliente,
+            computadorResponsavel: doc.computadorResponsavel
+          })
+        ]
+      )
+    }
+  }
   if (get('PRAGMA foreign_key_check'))
     throw new Error('A mesclagem produziria referências internas inválidas e foi cancelada.')
   return r
 }
 
 export function importarDadosDe(origem: string, modo: Modo): ResultadoImportacaoDados {
+  if (nuvemConfigurada())
+    throw new Error(
+      'Restaure ou mescle o backup em um perfil local separado. A importação não publica nem substitui a base da empresa na nuvem.'
+    )
   validar(origem)
   const backupAntes = backupAntesImportar()
   if (modo === 'mesclar') {
     const fonte = new Database(origem)
     try {
-      const r = tx(() => mesclar(fonte))
+      const r = semRastreamento(() => tx(() => mesclar(fonte)))
       return { modo, backupAntes, ...r, reiniciarNecessario: false }
     } finally {
       fonte.close()
@@ -707,6 +901,7 @@ export function importarDadosDe(origem: string, modo: Modo): ResultadoImportacao
   try {
     copyFileSync(origem, temporario)
     validar(temporario)
+    limparAutorizacoesDaCopia(temporario)
     fecharBanco()
     copyFileSync(temporario, caminhoBanco())
     abrirBanco()

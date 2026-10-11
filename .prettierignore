@@ -7,3 +7,5 @@ resources/
 .claude/
 .playwright-cli/
 package-lock.json
+
+supabase/*.sql

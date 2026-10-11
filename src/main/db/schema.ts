@@ -2,6 +2,7 @@
 // Cada entrada de MIGRACOES é aplicada uma única vez, em ordem — para evoluir o
 // schema, ACRESCENTE uma nova função ao fim do array (nunca edite as anteriores).
 import type { Database } from 'node-sqlite3-wasm'
+import { createHash } from 'crypto'
 
 // Singletons (empresa, parâmetros, configuração de IA, contador de numeração)
 // vivem em `configuracoes` como JSON: são lidos e gravados sempre inteiros e
@@ -233,12 +234,51 @@ const v6 = (d: Database): void => {
   `)
 }
 
-const MIGRACOES: Array<(d: Database) => void> = [v1, v2, v3, v4, v5, v6]
+const v7 = (d: Database): void => {
+  d.exec(`
+    ALTER TABLE clientes ADD COLUMN dados_json TEXT NOT NULL DEFAULT '{}';
+    CREATE TABLE imagens (hash TEXT PRIMARY KEY, mime TEXT NOT NULL, base64 TEXT NOT NULL, miniatura_base64 TEXT, bytes INTEGER NOT NULL, largura INTEGER NOT NULL, altura INTEGER NOT NULL);
+    CREATE TABLE documento_meta (tipo TEXT NOT NULL, documento_id TEXT NOT NULL, dados TEXT NOT NULL, PRIMARY KEY(tipo,documento_id));
+    CREATE TABLE versoes (id TEXT PRIMARY KEY, tipo TEXT NOT NULL, documento_id TEXT NOT NULL, numero INTEGER NOT NULL, anterior_id TEXT, criado_em TEXT NOT NULL, computador TEXT NOT NULL, descricao TEXT NOT NULL DEFAULT '', documento TEXT NOT NULL, UNIQUE(tipo,documento_id,numero));
+    CREATE TABLE recibos (id TEXT PRIMARY KEY, numero INTEGER NOT NULL UNIQUE, dados TEXT NOT NULL);
+    CREATE TABLE recebimentos (id TEXT PRIMARY KEY, recibo_id TEXT NOT NULL UNIQUE, relatorio_id TEXT, adiantamento_id TEXT, valor REAL NOT NULL, estornado INTEGER NOT NULL DEFAULT 0);
+    CREATE UNIQUE INDEX idx_recebimento_adiantamento ON recebimentos(relatorio_id,adiantamento_id) WHERE adiantamento_id IS NOT NULL AND estornado = 0;
+    CREATE TABLE numeros_usados (tipo TEXT NOT NULL, numero INTEGER NOT NULL, PRIMARY KEY(tipo,numero));
+    INSERT INTO numeros_usados SELECT 'orcamento',numero FROM orcamentos;
+    INSERT INTO numeros_usados SELECT 'relatorio',numero FROM relatorios;
+    CREATE TABLE reservas (tipo TEXT NOT NULL, numero INTEGER NOT NULL, usado INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(tipo,numero));
+    CREATE TABLE sincronizacao (entidade TEXT PRIMARY KEY, revisao INTEGER NOT NULL DEFAULT 0);
+    CREATE TABLE fila_nuvem (id TEXT PRIMARY KEY, entidade TEXT NOT NULL, base INTEGER NOT NULL, payload TEXT NOT NULL, criado_em TEXT NOT NULL);
+    CREATE TABLE conflitos_nuvem (id TEXT PRIMARY KEY, entidade TEXT NOT NULL, detalhe TEXT NOT NULL, remoto TEXT NOT NULL);
+  `)
+  for (const tabela of ['anexos', 'relatorio_anexos']) {
+    for (const linha of d.all(`SELECT * FROM ${tabela}`) as Array<Record<string, unknown>>) {
+      if (!linha.imagem) continue
+      const bytes = Buffer.from(linha.imagem as Uint8Array)
+      const hash = createHash('sha256').update(bytes).digest('hex')
+      d.run('INSERT OR IGNORE INTO imagens VALUES (?,?,?,?,?,?,?)', [
+        hash,
+        linha.mime,
+        bytes.toString('base64'),
+        linha.miniatura ? Buffer.from(linha.miniatura as Uint8Array).toString('base64') : null,
+        bytes.length,
+        linha.largura,
+        linha.altura
+      ] as never)
+      d.run(`UPDATE ${tabela} SET imagem = ?, miniatura = NULL WHERE id = ?`, [
+        hash,
+        linha.id
+      ] as never)
+    }
+  }
+}
+export const VERSAO_BANCO = 7
+const MIGRACOES: Array<(d: Database) => void> = [v1, v2, v3, v4, v5, v6, v7]
 
-export function aplicarMigracoes(d: Database): void {
+export function aplicarMigracoes(d: Database, ate = MIGRACOES.length): void {
   const linha = d.get('PRAGMA user_version') as { user_version?: number } | null
   const versao = Number(linha?.user_version ?? 0)
-  for (let i = versao; i < MIGRACOES.length; i++) {
+  for (let i = versao; i < ate; i++) {
     d.run('BEGIN')
     try {
       MIGRACOES[i](d)

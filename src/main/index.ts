@@ -1,3 +1,7 @@
+import { registrarVersao } from './versoes'
+import { orcamentosRepo, relatoriosRepo } from './repositories'
+import { recibosRepo } from './recibos'
+import { capturarCadastros, sincronizarNuvem, statusNuvem } from './nuvem'
 import { app, shell, dialog, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -95,6 +99,19 @@ if (temTrava)
     // Inicializa o banco (cria arquivo, migra o JSON ou semeia) e registra o IPC.
     try {
       iniciarBanco()
+      for (const tipo of ['orcamento', 'relatorio', 'recibo'] as const) {
+        const repo =
+          tipo === 'orcamento'
+            ? orcamentosRepo
+            : tipo === 'relatorio'
+              ? relatoriosRepo
+              : recibosRepo
+        for (const d of repo.list()) {
+          const completo = repo.get(d.id)
+          if (completo && !completo.versao)
+            registrarVersao(tipo, completo, 'Versão inicial após migração')
+        }
+      }
     } catch (e) {
       dialog.showErrorBox(
         'Não foi possível atualizar o banco de dados',
@@ -104,6 +121,13 @@ if (temTrava)
       return
     }
     registrarIpc()
+    capturarCadastros()
+    const sincronizarQuandoConectado = (): void => {
+      if (statusNuvem().autenticada) void sincronizarNuvem()
+    }
+    sincronizarQuandoConectado()
+    const intervaloNuvem = setInterval(sincronizarQuandoConectado, 30000)
+    app.once('before-quit', () => clearInterval(intervaloNuvem))
 
     app.on('browser-window-created', (_, window) => {
       optimizer.watchWindowShortcuts(window)

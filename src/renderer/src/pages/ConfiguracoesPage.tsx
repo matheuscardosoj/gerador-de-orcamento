@@ -1,3 +1,4 @@
+import { NuvemSection } from './NuvemSection'
 import { useEffect, useRef, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
@@ -23,7 +24,8 @@ import type {
   ObservacaoPadrao,
   FormaPagamentoPadrao,
   ConfigIA,
-  StatusIA
+  StatusIA,
+  CampoCliente
 } from '@shared/types'
 import type { InfoNumeracao } from '@shared/api'
 import {
@@ -38,7 +40,8 @@ const aplicacoes = [
   { valor: 'relatorio', rotulo: 'Somente relatório' }
 ] as const
 
-type Aba = 'empresa' | 'parametros' | 'observacoes' | 'pagamentos' | 'numeracao' | 'dados' | 'ia'
+type Aba =
+  'nuvem' | 'empresa' | 'parametros' | 'observacoes' | 'pagamentos' | 'numeracao' | 'dados' | 'ia'
 
 export function ConfiguracoesPage(): JSX.Element {
   const [aba, setAba] = useState<Aba>('empresa')
@@ -57,9 +60,11 @@ export function ConfiguracoesPage(): JSX.Element {
           { id: 'pagamentos', label: 'Formas de pagamento' },
           { id: 'numeracao', label: 'Numeração' },
           { id: 'dados', label: 'Dados e backup' },
+          { id: 'nuvem', label: 'Nuvem / Sincronização' },
           { id: 'ia', label: 'IA local' }
         ]}
       />
+      {aba === 'nuvem' && <NuvemSection />}
       {aba === 'empresa' && <SecaoEmpresa />}
       {aba === 'parametros' && <SecaoParametros />}
       {aba === 'observacoes' && <SecaoObservacoes />}
@@ -282,6 +287,38 @@ function SecaoEmpresa(): JSX.Element {
           </Field>
         </div>
 
+        <div className="mt-6">
+          <SectionTitle
+            title="Dados do cliente nos novos documentos"
+            description="O nome sempre aparece. Você pode mudar estes campos em cada proposta, relatório ou recibo."
+          />
+          <div className="flex flex-wrap gap-4">
+            {(
+              [
+                ['documento', 'CPF / CNPJ'],
+                ['endereco', 'Endereço'],
+                ['telefone', 'Telefone'],
+                ['email', 'E-mail'],
+                ['pessoaContato', 'Pessoa de contato']
+              ] as [CampoCliente, string][]
+            ).map(([campo, label]) => (
+              <label key={campo} className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={(form.camposClientePadrao ?? ['documento']).includes(campo)}
+                  onChange={(e) => {
+                    const campos = form.camposClientePadrao ?? ['documento']
+                    set({
+                      camposClientePadrao: e
+                        ? [...campos, campo]
+                        : campos.filter((c) => c !== campo)
+                    })
+                  }}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+        </div>
         {erro && (
           <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
             Não foi possível concluir a alteração dos dados da empresa. {erro}
@@ -1067,7 +1104,7 @@ function PainelNumeracao({
       <Card className="p-6">
         <SectionTitle
           title={titulo}
-          description={`Define o número que o próximo ${documento} vai receber. Ao excluir o último documento, esse número volta a ficar disponível.`}
+          description={`Define o número que o próximo ${documento} vai receber. Números já utilizados não são reutilizados.`}
         />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field
@@ -1162,7 +1199,7 @@ function SecaoDados(): JSX.Element {
       <Card className="p-6">
         <SectionTitle
           title="Cópia de segurança"
-          description="Gera um único arquivo protegido com clientes, documentos, imagens, logo e configurações."
+          description="Gera uma cópia de segurança completa com clientes, documentos, imagens, logo e configurações."
         />
         <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="max-w-2xl text-sm leading-6 text-slate-600">

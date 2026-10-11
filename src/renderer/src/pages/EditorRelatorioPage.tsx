@@ -1,3 +1,4 @@
+import { DadosClienteDocumento, LinhaTempo } from '../components/DocumentoExtras'
 import { useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
@@ -81,6 +82,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
           numero,
           data: dataCivilHoje(),
           clienteId: null,
+          camposCliente: empresa.camposClientePadrao ?? ['documento'],
           destinatario: '',
           formato: 'tabela',
           titulo: 'Relatório de Serviço',
@@ -363,6 +365,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
                 const cliente = dados.clientes.find((x) => x.id === e.target.value)
                 set({
                   clienteId: cliente?.id ?? null,
+                  clienteSnapshot: cliente ?? null,
                   destinatario: cliente ? cliente.nome : rel.destinatario
                 })
               }}
@@ -385,7 +388,11 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
             <Input
               value={rel.destinatario}
               onChange={(e) =>
-                set({ destinatario: normalizarDestinatario(e.target.value), clienteId: null })
+                set({
+                  destinatario: normalizarDestinatario(e.target.value),
+                  clienteId: null,
+                  clienteSnapshot: null
+                })
               }
             />
           </Field>
@@ -471,11 +478,31 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
           onChange={(pagamentos) => set({ pagamentos })}
         />
       </div>
+      <div className="my-4 space-y-3">
+        <DadosClienteDocumento documento={rel} clientes={dados.clientes} onChange={set} />
+        {rel.id && (
+          <LinhaTempo
+            tipo="relatorio"
+            id={rel.id}
+            onRestaurado={() =>
+              void api.relatorios.get(rel.id).then((d) => {
+                if (d) {
+                  setRel(d)
+                  setSnapshotSalvo(JSON.stringify(d))
+                }
+              })
+            }
+          />
+        )}
+      </div>
       {previa && (
         <PreviaRelatorioModal
           relatorio={{ ...rel, totais }}
-          empresa={dados.empresa}
-          tratamento={dados.clientes.find((c) => c.id === rel.clienteId)?.tratamento}
+          empresa={rel.empresaSnapshot ?? dados.empresa}
+          tratamento={
+            rel.clienteSnapshot?.tratamento ??
+            dados.clientes.find((c) => c.id === rel.clienteId)?.tratamento
+          }
           onClose={() => setPrevia(false)}
         />
       )}

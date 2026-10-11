@@ -1,3 +1,4 @@
+import { criarEntradaCalculo } from './engine'
 import { describe, it, expect } from 'vitest'
 import { calcularCustoServico, normalizarEntrada } from './engine'
 import type { EntradaCalculo, ParametrosEncargos } from './types'
@@ -545,4 +546,37 @@ describe('compatibilidade com entradas salvas antes da 1.1', () => {
     expect(r.custoTotal).toBe(2470)
     expect(r.breakdown).toHaveLength(4)
   })
+})
+
+it('não aplica lucro a repasses, mas inclui imposto na nota', () => {
+  const entrada = criarEntradaCalculo({
+    percentualFerias: 0,
+    percentualDecimoTerceiro: 0,
+    percentualFgts: 0,
+    percentualInss: 0,
+    percentualMultaRescisao: 0,
+    custoContratacao: 0,
+    diasBaseMes: 30,
+    margemLucroPadrao: 30,
+    aliquotaNotaPadrao: 7,
+    consumoVeiculoPadrao: 10,
+    precoCombustivelPadrao: 6,
+    valorRefeicaoPadrao: 20,
+    modoImpostoPadrao: 'gross_up'
+  })
+  entrada.avulsos = [
+    { id: 'servico', descricao: 'Custo', valor: 1000, modo: 'cheio' },
+    { id: 'munck', descricao: 'Munck', valor: 1600, modo: 'cheio', aplicarAcrescimo: false }
+  ]
+  expect(calcularCustoServico(entrada)).toMatchObject({
+    custoTotal: 2600,
+    custoComAcrescimo: 1000,
+    custoRepassado: 1600,
+    valorMargem: 300,
+    precoFinal: 2900
+  })
+  entrada.emitirNota = true
+  expect(calcularCustoServico(entrada).precoFinal).toBe(3118.28)
+  entrada.modoImposto = 'simples'
+  expect(calcularCustoServico(entrada).precoFinal).toBe(3103)
 })

@@ -48,13 +48,20 @@ export function nomeSeguroArquivo(valor: string): string {
 }
 
 export function nomeBaseDocumento(
-  tipo: 'orcamento' | 'relatorio',
+  tipo: 'orcamento' | 'relatorio' | 'recibo' | 'cobranca',
   titulo: string,
   nomeCliente: string,
-  data: string
+  data: string,
+  numero = 0,
+  versao = 1
 ): string {
-  const prefixoPadrao = tipo === 'orcamento' ? 'Proposta de Serviço' : 'Relatório de Serviço'
-  const prefixo = nomeSeguroArquivo(titulo) || prefixoPadrao
+  void titulo
+  const prefixo = {
+    orcamento: 'Proposta de Serviço',
+    relatorio: 'Relatório de Serviço',
+    recibo: 'Recibo de Pagamento',
+    cobranca: 'Cobrança de Serviço'
+  }[tipo]
   const cliente = nomeSeguroArquivo(nomeCliente) || 'Cliente'
-  return `${prefixo} - ${cliente} - ${dataNoNomeArquivo(data)}`
+  return `${prefixo} - ${String(Math.max(0, numero)).padStart(6, '0')} - ${cliente} - ${data.slice(0, 10)} - v${String(versao).padStart(3, '0')}`
 }

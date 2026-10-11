@@ -1,3 +1,4 @@
+import { linhasCliente } from '../clientes'
 // Gerador de DOCX. Monta o OOXML diretamente (biblioteca `docx`), espelhando
 // medida a medida o layout de `gerarHtmlOrcamento` — a conversão via HTML
 // perdia margens, realce e bordas, deixando o Word diferente do PDF.
@@ -375,6 +376,7 @@ export function montarDocumentoDocx(
   empresa: EmpresaConfig,
   imagens: Map<string, string> = new Map()
 ): Document {
+  empresa = orc.empresaSnapshot ?? empresa
   const total = orc.itensServico.reduce((s, i) => s + (i.valorTotal || 0), 0)
   const cidade = extrairCidade(empresa.endereco)
 
@@ -391,6 +393,9 @@ export function montarDocumentoDocx(
     )
   }
 
+  corpo.push(
+    ...linhasCliente(orc).map((l) => p(l, { spacing: { line: ENTRELINHA, after: mm(2) } }))
+  )
   corpo.push(
     p(
       orc.titulo || 'Proposta de Serviço',
@@ -418,18 +423,19 @@ export function montarDocumentoDocx(
     corpo.push(...servicosCarta(orc))
   }
 
-  corpo.push(
-    new Paragraph({
-      spacing: { line: ENTRELINHA, before: mm(5), after: mm(5) },
-      children: [
-        new TextRun({ text: 'Valor total da proposta: ', bold: true }),
-        new TextRun({
-          text: `${formatMoeda(total)} (${valorPorExtenso(total)}).`,
-          shading: { fill: AMARELO }
-        })
-      ]
-    })
-  )
+  if (!(orc as Orcamento & { documentoRecibo?: boolean }).documentoRecibo)
+    corpo.push(
+      new Paragraph({
+        spacing: { line: ENTRELINHA, before: mm(5), after: mm(5) },
+        children: [
+          new TextRun({ text: 'Valor total da proposta: ', bold: true }),
+          new TextRun({
+            text: `${formatMoeda(total)} (${valorPorExtenso(total)}).`,
+            shading: { fill: AMARELO }
+          })
+        ]
+      })
+    )
 
   if (orc.prazoDias) {
     corpo.push(
@@ -567,6 +573,7 @@ export function montarDocumentoRelatorioDocx(
     criadoEm: rel.criadoEm,
     atualizadoEm: rel.atualizadoEm
   }
+  empresa = rel.empresaSnapshot ?? empresa
   const corpo: (Paragraph | Table)[] = [cabecalho(empresa)]
   corpo.push(
     p(`${cidade}, ${formatDataExtenso(rel.data)}`, {
@@ -577,6 +584,9 @@ export function montarDocumentoRelatorioDocx(
     corpo.push(
       p(destinatarioNoDocumento(rel.destinatario), { spacing: { line: ENTRELINHA, after: mm(6) } })
     )
+  corpo.push(
+    ...linhasCliente(rel).map((l) => p(l, { spacing: { line: ENTRELINHA, after: mm(2) } }))
+  )
   corpo.push(
     p(
       rel.titulo || 'Relatório de Serviço',

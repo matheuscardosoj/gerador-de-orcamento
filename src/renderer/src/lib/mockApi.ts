@@ -131,7 +131,10 @@ export function criarMockApi(): AppApi {
   }
   const validar = (n: number, ignorarId?: string): ResultadoNumeracao | null => {
     if (!Number.isInteger(n) || n < 1 || n > 999999) {
-      return { ok: false, erro: 'O número deve ser um inteiro entre 1 e 999999.' }
+      return {
+        ok: false,
+        erro: 'O número deve ser um inteiro entre 1 e 999999.'
+      }
     }
     const dono = ocupado(n, ignorarId)
     if (!dono) return null
@@ -171,6 +174,53 @@ export function criarMockApi(): AppApi {
   }
 
   return {
+    recibos: {
+      list: async () => [],
+      get: async () => null,
+      create: async () => {
+        throw new Error('Use o aplicativo desktop para salvar recibos.')
+      },
+      update: async () => null,
+      confirmar: async () => {
+        throw new Error('Disponível no aplicativo desktop.')
+      },
+      cancelar: async () => {
+        throw new Error('Disponível no aplicativo desktop.')
+      }
+    },
+    versoes: {
+      html: async () => '',
+      nomear: async () => {},
+      list: async () => [],
+      restaurar: async () => {
+        throw new Error('Disponível no aplicativo desktop.')
+      },
+      exportar: async () => ({ caminho: null })
+    },
+    nuvem: {
+      config: async () => ({ url: '', chavePublica: '', email: '' }),
+      status: async () => ({
+        configurada: false,
+        autenticada: false,
+        computador: 'prévia',
+        pendentes: 0,
+        conflitos: [],
+        ultimaSincronizacao: null,
+        erro: null,
+        bytesBanco: 0,
+        reservas: { orcamento: 0, relatorio: 0, recibo: 0 }
+      }),
+      conectar: async () => {
+        throw new Error('Configure a nuvem no aplicativo desktop.')
+      },
+      sincronizar: async () => {
+        throw new Error('Disponível no aplicativo desktop.')
+      },
+      dispositivos: async () => [],
+      transferir: async () => {},
+      sair: async () => {},
+      aceitarRemoto: async () => {}
+    },
     aplicativo: {
       versao: async () => '1.3.0-dev',
       alteracoesPendentes: async () => undefined
@@ -394,6 +444,8 @@ export function criarMockApi(): AppApi {
       selecionar: async () => null
     },
     documentos: {
+      gerarReciboPdf: async () => ({ caminho: null }),
+      gerarReciboDocx: async () => ({ caminho: null }),
       gerarPdf: async () => ({ caminho: null }),
       gerarDocx: async () => ({ caminho: null }),
       gerarRelatorioPdf: async () => ({ caminho: null }),

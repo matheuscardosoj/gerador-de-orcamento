@@ -13,7 +13,7 @@ import {
 } from 'fs'
 import { join } from 'path'
 import { Database } from 'node-sqlite3-wasm'
-import { aplicarMigracoes } from './schema'
+import { aplicarMigracoes, VERSAO_BANCO } from './schema'
 
 export type Linha = Record<string, string | number | Uint8Array | null>
 
@@ -98,8 +98,8 @@ function prepararBackupPreV2(caminho: string): string | null {
   } finally {
     sonda.close()
   }
-  if (versao >= 2) return null
-  const backup = caminhoBackupPreV2()
+  if (versao >= VERSAO_BANCO) return null
+  const backup = join(pastaDados(), 'backups', `banco-pre-v${VERSAO_BANCO}.db`)
   if (existsSync(backup)) return backup
   const pasta = join(pastaDados(), 'backups')
   mkdirSync(pasta, { recursive: true })

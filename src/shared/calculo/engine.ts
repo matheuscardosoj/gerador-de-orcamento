@@ -210,7 +210,14 @@ export function calcularCustoServico(entrada: EntradaCalculo): ResultadoCalculo 
   const custoTotal = round2(linhas.reduce((s, l) => s + l.valor, 0))
 
   const margemLucroPercent = e.margemLucroPercent || 0
-  const valorMargem = round2(custoTotal * (margemLucroPercent / 100))
+  const repasses = new Set(
+    e.avulsos.filter((a) => a.aplicarAcrescimo === false).map((a) => `avulso:${a.id}`)
+  )
+  const custoRepassado = round2(
+    linhas.filter((l) => repasses.has(l.chave)).reduce((s, l) => s + l.valor, 0)
+  )
+  const custoComAcrescimo = round2(custoTotal - custoRepassado)
+  const valorMargem = round2(custoComAcrescimo * (margemLucroPercent / 100))
   const precoComMargem = round2(custoTotal + valorMargem)
 
   // Imposto da nota: incide sobre o faturamento.
@@ -231,6 +238,8 @@ export function calcularCustoServico(entrada: EntradaCalculo): ResultadoCalculo 
   }
 
   return {
+    custoComAcrescimo,
+    custoRepassado,
     breakdown: linhas,
     custoTotal,
     margemLucroPercent,

@@ -1,3 +1,4 @@
+import { validarCliente } from '@shared/clientes'
 import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
@@ -9,6 +10,7 @@ import {
   Field,
   Input,
   NumberField,
+  Select,
   Textarea,
   Modal,
   EmptyState,
@@ -143,13 +145,24 @@ function ClienteModal({
   onSaved: () => void
 }): JSX.Element {
   const [form, setForm] = useState<Omit<Cliente, 'id' | 'criadoEm'>>(cliente ?? clienteVazio())
+  const [erro, setErro] = useState('')
+  const [salvando, setSalvando] = useState(false)
   const set = (patch: Partial<typeof form>): void => setForm({ ...form, ...patch })
 
   const salvar = async (): Promise<void> => {
-    if (!form.nome.trim()) return
-    if (cliente) await api.clientes.update(cliente.id, form)
-    else await api.clientes.create(form)
-    onSaved()
+    if (salvando) return
+    setSalvando(true)
+    setErro('')
+    try {
+      validarCliente({ ...form, id: cliente?.id ?? '', criadoEm: cliente?.criadoEm ?? '' })
+      if (cliente) await api.clientes.update(cliente.id, form)
+      else await api.clientes.create(form)
+      onSaved()
+    } catch (e) {
+      setErro(String(e))
+    } finally {
+      setSalvando(false)
+    }
   }
 
   return (
@@ -163,11 +176,111 @@ function ClienteModal({
           <Button variant="secondary" onClick={onClose}>
             Cancelar
           </Button>
-          <Button onClick={salvar}>Salvar</Button>
+          <Button onClick={() => void salvar()} disabled={salvando}>
+            {salvando ? 'Salvando…' : 'Salvar'}
+          </Button>
         </>
       }
     >
       <div className="space-y-4">
+        {erro && (
+          <p role="alert" className="text-red-600">
+            {erro}
+          </p>
+        )}
+        <Field label="Tipo de cliente">
+          <Select
+            value={form.tipoPessoa ?? ''}
+            onChange={(e) => set({ tipoPessoa: (e.target.value || null) as 'pf' | 'pj' | null })}
+          >
+            <option value="">Não informado (opcional)</option>
+            <option value="pf">Pessoa física</option>
+            <option value="pj">Pessoa jurídica</option>
+          </Select>
+        </Field>
+        <Field
+          label={
+            form.tipoPessoa === 'pf'
+              ? 'CPF (opcional)'
+              : form.tipoPessoa === 'pj'
+                ? 'CNPJ (opcional)'
+                : 'CPF / CNPJ (opcional)'
+          }
+          hint="Somente o nome é obrigatório. CNPJ também aceita letras."
+        >
+          <Input
+            value={form.documento ?? ''}
+            onChange={(e) => set({ documento: e.target.value.toUpperCase() })}
+          />
+        </Field>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Telefone">
+            <Input
+              type="tel"
+              value={form.telefone ?? ''}
+              onChange={(e) => set({ telefone: e.target.value })}
+            />
+          </Field>
+          <Field label="E-mail">
+            <Input
+              type="email"
+              value={form.email ?? ''}
+              onChange={(e) => set({ email: e.target.value })}
+            />
+          </Field>
+          <Field label="Nome fantasia (opcional)">
+            <Input
+              value={form.nomeFantasia ?? ''}
+              onChange={(e) => set({ nomeFantasia: e.target.value })}
+            />
+          </Field>
+          <Field label="Pessoa de contato">
+            <Input
+              value={form.pessoaContato ?? ''}
+              onChange={(e) => set({ pessoaContato: e.target.value })}
+            />
+          </Field>
+        </div>
+        <fieldset className="grid gap-3 sm:grid-cols-2">
+          <legend className="mb-2 font-semibold">Endereço</legend>
+          {(['logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'cep'] as const).map(
+            (f) => (
+              <Field
+                key={f}
+                label={
+                  {
+                    logradouro: 'Logradouro',
+                    numero: 'Número',
+                    complemento: 'Complemento',
+                    bairro: 'Bairro',
+                    cidade: 'Cidade',
+                    uf: 'UF',
+                    cep: 'CEP'
+                  }[f]
+                }
+              >
+                <Input
+                  value={form.endereco?.[f] ?? ''}
+                  onChange={(e) =>
+                    set({
+                      endereco: {
+                        logradouro: '',
+                        numero: '',
+                        complemento: '',
+                        bairro: '',
+                        cidade: '',
+                        uf: '',
+                        cep: '',
+                        ...form.endereco,
+                        [f]: f === 'uf' ? e.target.value.toUpperCase() : e.target.value
+                      }
+                    })
+                  }
+                />
+              </Field>
+            )
+          )}
+        </fieldset>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(170px,0.85fr)_minmax(0,1.65fr)] sm:gap-3">
           <Field
             label="Tratamento"

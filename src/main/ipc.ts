@@ -1,6 +1,27 @@
-import { app, ipcMain, dialog } from 'electron'
+import { recibosRepo } from './recibos'
+import {
+  listarVersoes,
+  enfileirar,
+  obterVersao,
+  exigirResponsavel,
+  pacoteDocumento
+} from './versoes'
+import { restaurarVersao } from './historico-documentos'
+import { exportarVersao, htmlVersao, gerarReciboPdf, gerarReciboDocx } from './documents'
+import { run, tx } from './db/sqlite'
+import {
+  configuracaoNuvem,
+  statusNuvem,
+  conectarNuvem,
+  sincronizarNuvem,
+  dispositivosNuvem,
+  transferirDocumento,
+  sairNuvem,
+  aplicarConflito,
+  capturarCadastros
+} from './nuvem'
+import { app, ipcMain, dialog, nativeImage } from 'electron'
 import { readFileSync } from 'fs'
-import { extname } from 'path'
 import {
   empresaRepo,
   parametrosRepo,
@@ -36,15 +57,51 @@ async function selecionarLogo(): Promise<string | null> {
   })
   if (r.canceled || !r.filePaths[0]) return null
   const caminho = r.filePaths[0]
-  const buf = readFileSync(caminho)
-  const ext = extname(caminho).slice(1).toLowerCase()
-  const mime = ext === 'jpg' ? 'jpeg' : ext
-  return `data:image/${mime};base64,${buf.toString('base64')}`
+  let imagem = nativeImage.createFromBuffer(readFileSync(caminho))
+  if (imagem.isEmpty()) throw new Error('Não foi possível abrir esta imagem.')
+  let limite = 1000
+  while (true) {
+    const { width, height } = imagem.getSize()
+    if (Math.max(width, height) > limite)
+      imagem = imagem.resize(width >= height ? { width: limite } : { height: limite })
+    const png = imagem.toPNG()
+    if (png.length <= 150 * 1024) return `data:image/png;base64,${png.toString('base64')}`
+    limite = Math.floor(Math.min(limite, Math.max(width, height)) * 0.8)
+    if (limite < 64)
+      throw new Error('Esta logo não atende ao limite de 150 KiB. Use uma imagem mais simples.')
+  }
 }
 
 // Mapa canal -> função. Registrado em loop via ipcMain.handle.
 // A geração de documentos (documentos.*) é registrada na Fase 5.
 const handlers: Record<string, (...args: unknown[]) => unknown> = {
+  'versoes.html': (id) => htmlVersao(id as string),
+  'versoes.nomear': (id, d) =>
+    tx(() => {
+      const v = obterVersao(String(id))
+      exigirResponsavel(v.tipo, v.documentoId)
+      run('UPDATE versoes SET descricao=? WHERE id=?', [String(d).slice(0, 160), id])
+      enfileirar(`${v.tipo}:${v.documentoId}`, pacoteDocumento(v.tipo, v.documentoId))
+    }),
+  'recibos.list': () => recibosRepo.list(),
+  'recibos.get': (id) => recibosRepo.get(id as string),
+  'recibos.create': (dto) => recibosRepo.create(dto as never),
+  'recibos.update': (id, p) => recibosRepo.update(id as string, p as never),
+  'recibos.confirmar': (id) => recibosRepo.confirmar(id as string),
+  'recibos.cancelar': (id) => recibosRepo.cancelar(id as string),
+  'versoes.list': (t, id) => listarVersoes(t as never, id as string),
+  'versoes.restaurar': (id, c) => restaurarVersao(id as string, c as boolean),
+  'versoes.exportar': (id, f) => exportarVersao(id as string, f as never),
+  'nuvem.config': () => configuracaoNuvem(),
+  'nuvem.status': () => statusNuvem(),
+  'nuvem.conectar': (c, s, m) => conectarNuvem(c as never, s as string, m as never),
+  'nuvem.sincronizar': () => sincronizarNuvem(),
+  'nuvem.dispositivos': () => dispositivosNuvem(),
+  'nuvem.transferir': (t, id, d) => transferirDocumento(t as never, id as string, d as string),
+  'nuvem.sair': () => sairNuvem(),
+  'nuvem.aceitarRemoto': (id) => aplicarConflito(id as string),
+  'documentos.gerarReciboPdf': (id) => gerarReciboPdf(id as string),
+  'documentos.gerarReciboDocx': (id) => gerarReciboDocx(id as string),
   'aplicativo.versao': () => app.getVersion(),
   'aplicativo.alteracoesPendentes': (ativo) => {
     alteracoesPendentes = Boolean(ativo)
@@ -117,6 +174,23 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
 
 export function registrarIpc(): void {
   for (const [canal, fn] of Object.entries(handlers)) {
-    ipcMain.handle(canal, (_evento, ...args) => fn(...args))
+    ipcMain.handle(canal, async (_evento, ...args) => {
+      if (/\.(create|update|save|remove)$/.test(canal))
+        return tx(() => {
+          const resultado = fn(...args)
+          const dominios: Record<string, string> = {
+            clientes: 'clientes',
+            servicos: 'servicos',
+            observacoes: 'observacoes_padrao',
+            pagamentos: 'pagamentos_padrao'
+          }
+          const tabela = dominios[canal.split('.')[0]]
+          if (tabela && canal.endsWith('.remove'))
+            enfileirar(`${tabela}:${String(args[0])}`, { tabela, id: args[0], row: null })
+          capturarCadastros()
+          return resultado
+        })
+      return await fn(...args)
+    })
   }
 }

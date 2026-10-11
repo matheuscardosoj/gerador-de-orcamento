@@ -1,3 +1,4 @@
+import { linhasCliente } from '../clientes'
 // Gera o HTML do orçamento no layout das propostas reais da VS Prestadora.
 // Usado tanto na prévia (renderer) quanto na geração de PDF/DOCX (main).
 import type { AnexoOrcamento, AnexoRelatorio, EmpresaConfig, Orcamento, Relatorio } from '../types'
@@ -136,6 +137,7 @@ function secaoAnexos(orc: Orcamento): string {
 const ALTURA_UTIL_MM = 297 - 15 * 2
 
 export function gerarHtmlOrcamento(orc: Orcamento, empresa: EmpresaConfig): string {
+  empresa = orc.empresaSnapshot ?? empresa
   const total = orc.itensServico.reduce((s, i) => s + (i.valorTotal || 0), 0)
   const cidade = extrairCidade(empresa.endereco)
   const logo = empresa.logoDataUrl
@@ -165,6 +167,9 @@ export function gerarHtmlOrcamento(orc: Orcamento, empresa: EmpresaConfig): stri
     <div class="remetente">
       <p>${esc(cidade)}, ${formatDataExtenso(orc.data)}</p>
       ${orc.destinatario ? `<p>${nl2br(destinatarioNoDocumento(orc.destinatario))}</p>` : ''}
+      ${linhasCliente(orc)
+        .map((l) => `<p>${esc(l)}</p>`)
+        .join('')}
     </div>
 
     <h1 class="titulo">${esc(orc.titulo || 'Proposta de Serviço')}</h1>
@@ -173,8 +178,12 @@ export function gerarHtmlOrcamento(orc: Orcamento, empresa: EmpresaConfig): stri
 
     <div class="servicos">${servicosHtml}</div>
 
-    <!--RESUMO_INICIO--><p class="total"><strong>Valor total da proposta:</strong>
-      <mark>${formatMoeda(total)} (${valorPorExtenso(total)}).</mark></p><!--RESUMO_FIM-->
+    <!--RESUMO_INICIO-->${
+      !(orc as Orcamento & { documentoRecibo?: boolean }).documentoRecibo
+        ? `<p class="total"><strong>Valor total da proposta:</strong>
+      <mark>${formatMoeda(total)} (${valorPorExtenso(total)}).</mark></p>`
+        : ''
+    }<!--RESUMO_FIM-->
 
     ${
       orc.prazoDias
@@ -302,11 +311,14 @@ function apendiceRelatorio(rel: Relatorio, titulo: string, anexos: AnexoRelatori
 
 /** Relatório usa o mesmo layout/paginador da proposta, trocando apenas os blocos de domínio. */
 export function gerarHtmlRelatorio(rel: Relatorio, empresa: EmpresaConfig): string {
+  empresa = rel.empresaSnapshot ?? empresa
   const orcBase: Orcamento = {
     id: rel.id,
     numero: rel.numero,
     data: rel.data,
     clienteId: rel.clienteId,
+    clienteSnapshot: rel.clienteSnapshot,
+    camposCliente: rel.camposCliente,
     destinatario: rel.destinatario,
     formato: rel.formato,
     titulo: rel.titulo || 'Relatório de Serviço',

@@ -71,6 +71,43 @@ export interface ResultadoImportacaoDados {
 }
 
 export interface AppApi {
+  recibos: {
+    list(): Promise<import('./types').Recibo[]>
+    get(id: string): Promise<import('./types').Recibo | null>
+    create(
+      dto: Omit<import('./types').Recibo, 'id' | 'numero' | 'criadoEm' | 'atualizadoEm'>
+    ): Promise<import('./types').Recibo>
+    update(
+      id: string,
+      patch: Partial<import('./types').Recibo>
+    ): Promise<import('./types').Recibo | null>
+    confirmar(id: string): Promise<import('./types').Recibo>
+    cancelar(id: string): Promise<import('./types').Recibo>
+  }
+  versoes: {
+    html(id: string): Promise<string>
+    nomear(id: string, descricao: string): Promise<void>
+    list(
+      tipo: import('./types').TipoDocumento,
+      id: string
+    ): Promise<import('./types').VersaoDocumento[]>
+    restaurar(id: string, copiar: boolean): Promise<import('./types').Documento>
+    exportar(id: string, formato: 'pdf' | 'docx'): Promise<DocumentoResultado>
+  }
+  nuvem: {
+    config(): Promise<import('./types').ConfigNuvem>
+    status(): Promise<import('./types').StatusNuvem>
+    conectar(
+      config: import('./types').ConfigNuvem,
+      senha: string,
+      modo: 'publicar' | 'baixar'
+    ): Promise<import('./types').StatusNuvem>
+    sincronizar(): Promise<import('./types').StatusNuvem>
+    dispositivos(): Promise<Array<{ id: string; nome: string }>>
+    transferir(tipo: import('./types').TipoDocumento, id: string, destino: string): Promise<void>
+    sair(): Promise<void>
+    aceitarRemoto(id: string): Promise<void>
+  }
   aplicativo: {
     versao(): Promise<string>
     alteracoesPendentes(ativo: boolean): Promise<void>
@@ -139,6 +176,8 @@ export interface AppApi {
     selecionar(): Promise<string | null>
   }
   documentos: {
+    gerarReciboPdf(id: string): Promise<DocumentoResultado>
+    gerarReciboDocx(id: string): Promise<DocumentoResultado>
     gerarPdf(orcamentoId: string): Promise<DocumentoResultado>
     gerarDocx(orcamentoId: string): Promise<DocumentoResultado>
     gerarRelatorioPdf(relatorioId: string): Promise<DocumentoResultado>

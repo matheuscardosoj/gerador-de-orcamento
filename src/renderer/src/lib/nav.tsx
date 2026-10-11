@@ -15,6 +15,7 @@ export type Rota =
   | { nome: 'editor'; orcamentoId?: string }
   | { nome: 'historicoRelatorios' }
   | { nome: 'editorRelatorio'; relatorioId?: string }
+  | { nome: 'recibos'; reciboId?: string }
   | { nome: 'cadastros' }
   | { nome: 'configuracoes' }
 

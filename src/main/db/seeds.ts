@@ -1,5 +1,4 @@
 import { randomUUID } from 'crypto'
-import { LOGO_VS_DATAURL } from './logo-embutida'
 import type {
   BancoDados,
   ConfigIA,
@@ -26,7 +25,7 @@ const empresa: EmpresaConfig = {
   email: 'vsprestadoradeservicos@outlook.com',
   site: 'https://www.vsprestadora.com.br',
   cnpj: '04.871.989/0001-60',
-  logoDataUrl: LOGO_VS_DATAURL,
+  logoDataUrl: null,
   textoAssinatura: 'V S DE JESUS',
   corFaixaRodape: '#0f6d6b',
   nomeExibicao: 'nome'
@@ -180,12 +179,26 @@ export function bancoInicial(): BancoDados {
   const pagamentosPadrao = pagamentosBase.map((p) => ({ id: randomUUID(), ...p }))
 
   return {
-    empresa,
+    empresa: {
+      ...empresa,
+      nome: '',
+      razaoSocial: '',
+      endereco: '',
+      telefones: '',
+      email: '',
+      site: '',
+      cnpj: '',
+      logoDataUrl: null,
+      textoAssinatura: ''
+    },
     parametros,
     clientes: [],
     servicos,
     observacoesPadrao,
-    pagamentosPadrao,
+    pagamentosPadrao: pagamentosPadrao.map((p) => ({
+      ...p,
+      texto: 'Pagamento conforme combinado entre as partes.'
+    })),
     orcamentos: [],
     seqOrcamento: 0,
     configIA: { ...configIAPadrao }
