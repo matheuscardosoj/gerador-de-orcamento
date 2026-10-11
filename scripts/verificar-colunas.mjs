@@ -98,7 +98,39 @@ try {
           .map((el) => el.textContent.trim())
         return JSON.stringify(visiveis) === JSON.stringify(esperadas)
       }, esperadas)
-      dicas.push({ tipo, esperadas })
+      const medidas = await page.evaluate(() =>
+        [...document.querySelectorAll('[role="tooltip"]')]
+          .filter((el) => getComputedStyle(el).visibility === 'visible')
+          .map((el) => {
+            const r = el.getBoundingClientRect()
+            const anterior = el.style.pointerEvents
+            el.style.pointerEvents = 'auto'
+            const pontos = [
+              [r.left + 2, r.top + 2],
+              [r.right - 2, r.top + 2],
+              [r.left + 2, r.bottom - 2],
+              [r.right - 2, r.bottom - 2],
+              [r.left + r.width / 2, r.top + r.height / 2]
+            ].map(([x, y]) => {
+              const atingido = document.elementFromPoint(x, y)
+              return atingido === el || el.contains(atingido)
+            })
+            el.style.pointerEvents = anterior
+            return {
+              inteiramenteVisivel: pontos.every(Boolean),
+              dentroDaJanela:
+                r.left >= 7 &&
+                r.top >= 7 &&
+                r.right <= innerWidth - 7 &&
+                r.bottom <= innerHeight - 7
+            }
+          })
+      )
+      for (const medida of medidas) {
+        assert.ok(medida.inteiramenteVisivel, `${nome}: dica cortada ou obstruída pelo cabeçalho`)
+        assert.ok(medida.dentroDaJanela, `${nome}: dica fora da janela`)
+      }
+      dicas.push({ tipo, esperadas, medidas })
     }
     await linha.locator('td').first().hover()
     await conferirDicas([])
@@ -111,6 +143,8 @@ try {
       await conferirDicas([])
       await botao.focus()
       await conferirDicas([label])
+      await botao.press('Escape')
+      await conferirDicas([])
       await botao.evaluate((el) => el.blur())
       await conferirDicas([])
     }
@@ -189,6 +223,20 @@ try {
         }
         resultados.push({ tipo, fim, ...medidas })
         if (!fim) await page.screenshot({ path: join(saida, `${tipo}-${largura}.png`) })
+        for (const botao of [botoes.first(), botoes.last()]) {
+          const label = await botao.getAttribute('aria-label')
+          await botao.hover()
+          await conferirDicas([label])
+          if (!fim && (largura === 1024 || largura === 2560))
+            await page.screenshot({
+              path: join(
+                saida,
+                `${tipo}-dica-${largura}-${label.startsWith('Abrir') ? 'abrir' : 'ultima'}.png`
+              )
+            })
+          await linha.locator('td').first().hover()
+          await conferirDicas([])
+        }
       }
     }
   }

@@ -5,7 +5,9 @@ import {
   isValidElement,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
+  useState,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type TextareaHTMLAttributes,
@@ -99,8 +101,30 @@ export function IconButton({
   variant?: ButtonVariant
   size?: ButtonSize
 }): JSX.Element {
+  const ancora = useRef<HTMLSpanElement>(null)
+  const dicaId = useId()
+  const [mouse, setMouse] = useState(false)
+  const [foco, setFoco] = useState(false)
+  const [dispensada, setDispensada] = useState(false)
+  const aberta = (mouse || foco) && !dispensada
   return (
-    <span className="group/icon-button relative inline-flex">
+    <span
+      ref={ancora}
+      className="relative inline-flex"
+      onMouseEnter={() => {
+        setMouse(true)
+        setDispensada(false)
+      }}
+      onMouseLeave={() => setMouse(false)}
+      onFocus={() => {
+        setFoco(true)
+        setDispensada(false)
+      }}
+      onBlur={() => setFoco(false)}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') setDispensada(true)
+      }}
+    >
       <Button
         type="button"
         variant={variant}
@@ -108,16 +132,69 @@ export function IconButton({
         aria-label={label}
         className={cn('h-9 w-9 px-0', className)}
         {...props}
+        aria-describedby={
+          [props['aria-describedby'], aberta ? dicaId : undefined].filter(Boolean).join(' ') ||
+          undefined
+        }
       >
         <AppIcon icon={icon} />
       </Button>
-      <span
-        role="tooltip"
-        className="pointer-events-none invisible absolute right-0 bottom-full z-40 mb-1.5 w-max max-w-xs whitespace-normal rounded-md bg-slate-800 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-md transition-opacity group-hover/icon-button:visible group-hover/icon-button:opacity-100 group-focus-within/icon-button:visible group-focus-within/icon-button:opacity-100"
-      >
-        {label}
-      </span>
+      {aberta && <DicaIconButton ancora={ancora} id={dicaId} label={label} />}
     </span>
+  )
+}
+
+/** Fora da tabela para não ser cortada por rolagem, cartões ou colunas fixas. */
+function DicaIconButton({
+  ancora,
+  id,
+  label
+}: {
+  ancora: { readonly current: HTMLSpanElement | null }
+  id: string
+  label: string
+}): JSX.Element {
+  const dica = useRef<HTMLSpanElement>(null)
+  const [posicao, setPosicao] = useState<{ top: number; left: number } | null>(null)
+  useLayoutEffect(() => {
+    const posicionar = (): void => {
+      if (!ancora.current || !dica.current) return
+      const alvo = ancora.current.getBoundingClientRect()
+      const tamanho = dica.current.getBoundingClientRect()
+      const margem = 8
+      const acima = alvo.top - tamanho.height - margem
+      const top = acima >= margem ? acima : alvo.bottom + margem
+      setPosicao({
+        top: Math.max(margem, Math.min(top, innerHeight - tamanho.height - margem)),
+        left: Math.max(
+          margem,
+          Math.min(alvo.right - tamanho.width, innerWidth - tamanho.width - margem)
+        )
+      })
+    }
+    posicionar()
+    window.addEventListener('resize', posicionar)
+    window.addEventListener('scroll', posicionar, true)
+    return () => {
+      window.removeEventListener('resize', posicionar)
+      window.removeEventListener('scroll', posicionar, true)
+    }
+  }, [ancora, label])
+  return createPortal(
+    <span
+      ref={dica}
+      id={id}
+      role="tooltip"
+      className="pointer-events-none fixed z-[100] w-max max-w-[min(20rem,calc(100vw-16px))] whitespace-normal rounded-md bg-slate-800 px-2 py-1 text-xs font-medium text-white shadow-md"
+      style={{
+        top: posicao?.top ?? 0,
+        left: posicao?.left ?? 0,
+        visibility: posicao ? 'visible' : 'hidden'
+      }}
+    >
+      {label}
+    </span>,
+    document.body
   )
 }
 
