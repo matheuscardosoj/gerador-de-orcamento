@@ -2,6 +2,17 @@
 
 Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
+## 1.4.0-rc.2 — 2026-10-11
+
+- Atalhos de recibo/cobrança nos históricos de propostas e relatórios, sem salvar ou registrar pagamentos ao abrir.
+- Históricos compartilhando busca por múltiplos termos, filtros, colunas selecionáveis/reordenáveis e preferências persistentes por computador.
+- Reordenação por mouse e teclado nas listas de documentos, custos, catálogo e padrões, preservando vínculos e valores.
+- Revisão e sugestões da IA local com comparação/aprovação, preservação de números, cancelamento durante geração/inicialização, tempo limite e proteção de edição concorrente.
+- Clientes com apenas PF/PJ, PF como padrão e somente nome obrigatório.
+- Proteção de recibos novos não salvos, foco estável, associação de rótulos a campos com botões e suporte a diálogos sobrepostos.
+- Esquema 8, backup verificado anterior à migração e preservação da identidade do perfil de destino na restauração.
+- Validação com 125 testes, executável real e cópia do backup do usuário. Merge e versão final continuam aguardando autorização; Supabase real será configurado depois da revisão.
+
 ## 1.4.0-rc.1 — 2026-10-11
 
 Candidato para teste; versão final e merge aguardam autorização.

@@ -16,7 +16,11 @@ import { validarUrlOllamaLocal } from '@shared/validacao'
 import { formatDataCurta, formatMoeda } from '@shared/format'
 import type { Orcamento, Relatorio, StatusIA, ConfigIA } from '@shared/types'
 import type { SugestaoObservacaoEntrada } from '@shared/api'
-import { validarRespostaIA, type RevisaoTextoEntrada } from '@shared/revisao-ia'
+import {
+  aguardarComCancelamento,
+  validarRespostaIA,
+  type RevisaoTextoEntrada
+} from '@shared/revisao-ia'
 
 const OCIOSO_MS = 5 * 60_000
 const TIMEOUT_BOOT_MS = 90_000
@@ -185,7 +189,9 @@ async function chamarEmbutida(
   sistema: string,
   signal?: AbortSignal
 ): Promise<string> {
-  const porta = await garantirServidor()
+  const porta = signal
+    ? await aguardarComCancelamento(garantirServidor(), signal)
+    : await garantirServidor()
   signal?.throwIfAborted()
   const r = await fetch(`http://127.0.0.1:${porta}/v1/chat/completions`, {
     method: 'POST',

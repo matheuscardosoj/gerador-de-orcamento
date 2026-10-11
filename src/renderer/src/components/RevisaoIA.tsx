@@ -49,7 +49,12 @@ export function RevisaoIA({
       const s = await api.ia.revisarTexto({ id, campo, texto: alvo, anotacao })
       if (requisicao.current === id) setSugestao(s)
     } catch (e) {
-      if (requisicao.current === id) setErro(String(e).replace(/^Error:\s*/, ''))
+      if (requisicao.current === id)
+        setErro(
+          String(e)
+            .replace(/^Error:\s*/, '')
+            .replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, '')
+        )
     } finally {
       if (requisicao.current === id) {
         setGerando(false)

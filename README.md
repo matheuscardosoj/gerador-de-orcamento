@@ -70,7 +70,8 @@ o app tenta o Ollama automaticamente.
 
 ## Status
 
-**Candidato 1.4.0-rc.1** — dados compartilhados, clientes com campos opcionais,
+**Candidato 1.4.0-rc.2** — históricos configuráveis, listas por arraste e revisão
+de textos com IA local, além de dados compartilhados e clientes com campos opcionais,
 recibos/cobranças, recebimentos, versões imutáveis e imagens deduplicadas.
 Versão final e merge dependem de aprovação. A conexão real Supabase será validada
 depois da criação do projeto da empresa.
@@ -121,6 +122,26 @@ documentos novos.
 
 ## Documentos
 
+Os três históricos compartilham filtros de estado, período e valor, busca sem
+acentos com múltiplos termos e seleção/ordenação de colunas. Suas preferências ficam
+no computador, acompanham a restauração completa e não são enviadas à nuvem.
+Mesclagem mantém as preferências do destino. Orçamentos e relatórios têm um atalho
+para preparar recibos/cobranças sem salvar nem lançar pagamentos.
+
+As listas editáveis de documentos, custos, catálogo e textos padrão usam a mesma
+alça de arraste, com teclado e cancelamento por Escape. A ordem mantém os IDs,
+vínculos de fotos e cálculos e é preservada em versões e exportações.
+
+A IA revisa descrições, introduções, observações, condições de pagamento e textos
+de recibos. O usuário compara e aprova a sugestão; dados numéricos alterados são
+recusados. Cancelamento, limite de 120 segundos e proteção de edição concorrente
+mantêm o texto original. Modelo embutido e Ollama continuam inteiramente locais.
+Somente PF/PJ aparece no cadastro, com PF como valor inicial.
+
+O esquema 8 acrescenta ordem ao catálogo e mantém a apresentação existente na
+migração. Restauração mantém a identidade já existente no perfil de destino; o
+backup não transporta identidade, sessão ou autorização de outro computador.
+
 Somente nome/razão social é obrigatório no cliente. PF/PJ, CPF/CNPJ (inclusive
 alfanumérico), telefone, e-mail, endereço, nome fantasia e contato são opcionais,
 com validação quando preenchidos. Cada documento escolhe quais dados exibir e
@@ -157,3 +178,9 @@ Scripts `verificar-app.mjs`, `verificar-estilos.mjs`, `verificar-recibos.mjs`,
 `output/`. A migração trabalha com uma cópia do banco instalado, sem alterar o original.
 Os scripts de aplicativo/exportação também aceitam o executável candidato para
 validar o pacote, sem atualizar a instalação de uso.
+
+`verificar-melhorias.mjs` cobre os atalhos, descartes, preferências, busca, arraste
+por mouse/teclado e revisão de textos. `verificar-ia-local.mjs` executa o modelo
+real e verifica cancelamento durante a inicialização. `atualizar-backup-candidato.mjs`
+usa uma cópia do backup fornecido para migrar, exportar, comparar os dados e
+restaurar o resultado em um perfil separado.

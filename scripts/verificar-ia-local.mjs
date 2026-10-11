@@ -16,10 +16,28 @@ try {
   await page.getByRole('button', { name: 'Orçamentos', exact: true }).waitFor()
   const inicio = performance.now()
   const texto = 'Será feito o corte de 3 arvores com retirada dos residuos no valor de R$ 1.600,00.'
-  const sugestao = await page.evaluate(async (texto) => {
+  const revisao = await page.evaluate(async (texto) => {
     await window.api.ia.save({ modo: 'embutida' })
-    return window.api.ia.revisarTexto({ id: crypto.randomUUID(), campo: 'descricaoServico', texto })
+    const id = crypto.randomUUID()
+    const pendente = window.api.ia.revisarTexto({ id, campo: 'descricaoServico', texto }).then(
+      () => '',
+      (e) => String(e)
+    )
+    await new Promise((r) => setTimeout(r, 30))
+    const inicioCancelamento = performance.now()
+    await window.api.ia.cancelarRevisao(id)
+    const cancelada = await pendente
+    const cancelamentoMs = Math.round(performance.now() - inicioCancelamento)
+    const sugestao = await window.api.ia.revisarTexto({
+      id: crypto.randomUUID(),
+      campo: 'descricaoServico',
+      texto
+    })
+    return { cancelada, cancelamentoMs, sugestao }
   }, texto)
+  const { sugestao } = revisao
+  assert.ok(revisao.cancelada.includes('cancelada'))
+  assert.ok(revisao.cancelamentoMs < 2000)
   assert.ok(sugestao.trim())
   assert.ok(sugestao.includes('3'))
   assert.ok(sugestao.includes('1.600,00'))
@@ -27,7 +45,8 @@ try {
     texto,
     sugestao,
     segundos: Math.round((performance.now() - inicio) / 100) / 10,
-    modeloLocal: true
+    modeloLocal: true,
+    cancelamentoInicializacaoMs: revisao.cancelamentoMs
   }
   writeFileSync(join(pasta, 'resultado.json'), JSON.stringify(resultado, null, 2))
   console.log(JSON.stringify({ ...resultado, pasta }))

@@ -181,9 +181,90 @@ try {
   await alcas.nth(4).scrollIntoViewIfNeeded()
   await alcas.nth(4).focus()
   await page.keyboard.press('Space')
+  await page.waitForSelector('[data-arrastando="true"]')
+  await page.waitForTimeout(50)
   await page.keyboard.press('ArrowDown')
+  await page.waitForTimeout(50)
+  await page.keyboard.press('Escape')
+  await page.waitForSelector('[data-arrastando="true"]', { state: 'detached' })
+  await page.waitForTimeout(120)
+  await arrastar(page, alcas.nth(4), alcas.nth(5))
+  await arrastar(page, alcas.nth(6), alcas.nth(7))
+  await arrastar(page, alcas.nth(8), alcas.nth(9))
+  await page.getByRole('button', { name: 'Salvar', exact: true }).click()
+  const ordenado = await page.evaluate((id) => window.api.orcamentos.get(id), ids.p)
+  assert.deepEqual(
+    ordenado.observacoes.map((i) => i.id),
+    ['o2', 'o1']
+  )
+  assert.deepEqual(
+    ordenado.pagamentos.map((i) => i.id),
+    ['p2', 'p1']
+  )
+  assert.deepEqual(
+    ordenado.anexos.map((i) => i.id),
+    ['a2', 'a1']
+  )
+  assert.deepEqual(
+    ordenado.anexos.map((i) => i.itemServicoId),
+    ['s2', 's1']
+  )
+  const docs = join(pasta, 'documentos')
+  mkdirSync(docs, { recursive: true })
+  await app.evaluate(({ app, dialog }, dir) => {
+    app.setPath('documents', dir)
+    dialog.showSaveDialog = async (o) => ({ canceled: false, filePath: o.defaultPath })
+  }, docs)
+  const arquivos = await page.evaluate(
+    async (id) => [
+      (await window.api.documentos.gerarPdf(id)).caminho,
+      (await window.api.documentos.gerarDocx(id)).caminho
+    ],
+    ids.p
+  )
+  await page.getByRole('button', { name: '+ Com cálculo', exact: true }).click()
+  const calculo = page.getByRole('dialog', { name: 'Calcular custo do serviço', exact: true })
+  const blocos = [
+    ['Mão de obra', '+ Grupo'],
+    ['Alimentação', '+ Refeição'],
+    ['Ferramentas (manutenção / insumos)', '+ Item'],
+    ['Combustível / deslocamento', '+ Veículo'],
+    ['Estadia / hospedagem', '+ Estadia'],
+    ['Outros custos e repasses', '+ Custo']
+  ]
+  for (const [titulo, adicionar] of blocos) {
+    const bloco = calculo
+      .getByRole('heading', { name: titulo, exact: true })
+      .locator('xpath=ancestor::*[contains(@class,"rounded-xl")][1]')
+    await bloco.getByRole('button', { name: adicionar, exact: true }).click()
+    await bloco.getByRole('button', { name: adicionar, exact: true }).click()
+    const linhas = bloco.getByRole('button', { name: 'Arrastar para reordenar' })
+    assert.equal(await linhas.count(), 2)
+    const descricoes = bloco.locator('input:not([type=number]):not([type=checkbox])')
+    await descricoes.nth(0).fill('Primeiro item')
+    await descricoes.nth(1).fill('Segundo item')
+    if (titulo === 'Outros custos e repasses') {
+      await bloco.locator('input[type=number]').nth(0).fill('10')
+      await bloco.locator('input[type=number]').nth(1).fill('20')
+    }
+    const preco = await calculo.getByText('Preço final', { exact: true }).locator('..').innerText()
+    await arrastar(page, linhas.nth(0), linhas.nth(1))
+    assert.equal(await descricoes.nth(1).inputValue(), 'Primeiro item')
+    assert.equal(
+      await calculo.getByText('Preço final', { exact: true }).locator('..').innerText(),
+      preco
+    )
+  }
+  const alcaCalculo = calculo.getByRole('button', { name: 'Arrastar para reordenar' }).first()
+  await alcaCalculo.scrollIntoViewIfNeeded()
+  await alcaCalculo.focus()
+  await page.keyboard.press('Space')
+  await page.waitForSelector('[data-arrastando="true"]')
+  await page.waitForTimeout(50)
   await page.keyboard.press('Escape')
   await page.waitForTimeout(120)
+  assert.ok(await calculo.isVisible())
+  await calculo.getByRole('button', { name: 'Cancelar', exact: true }).click()
   await page.getByRole('button', { name: 'Editar serviço Corte de 3 árvores', exact: true }).click()
   const descricao = page.getByLabel('Descrição do serviço', { exact: true })
   await descricao.fill('Cortar 3 árvores por R$ 1.600,00.')
@@ -244,6 +325,9 @@ try {
     buscaAcentosETermos: true,
     revisaoIAConfirmada: true,
     edicaoConcorrenteProtegida: true,
+    listasCalculo: 6,
+    fotosVinculosPreservados: true,
+    arquivos,
     erros
   }
   writeFileSync(join(pasta, 'resultado.json'), JSON.stringify(resultado, null, 2))
