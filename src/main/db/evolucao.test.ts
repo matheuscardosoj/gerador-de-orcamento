@@ -127,6 +127,27 @@ it('confirma recebimentos uma vez e estorna somente o lançamento criado pelo re
   recibos.recibosRepo.cancelar(r.id)
   expect(repos.relatoriosRepo.get(rel.id)?.totais.saldo).toBe(1000)
 })
+it('cria outra proposta a partir de uma versão com foto sem duplicar o ativo', async () => {
+  const p = proposta()
+  repos.orcamentosRepo.update(p.id, {
+    anexos: [
+      {
+        id: 'foto-para-copia',
+        titulo: 'Foto',
+        descricao: '',
+        mime: 'image/png',
+        largura: 1,
+        altura: 1,
+        imagemDataUrl: PNG
+      }
+    ]
+  })
+  const v = versoes.listarVersoes('orcamento', p.id)[0]
+  const { restaurarVersao } = await import('../historico-documentos')
+  const copia = restaurarVersao(v.id, true) as Orcamento
+  expect(copia.anexos[0].id).not.toBe((v.documento as Orcamento).anexos[0].id)
+  expect(copia.anexos[0].imagemHash).toBe((v.documento as Orcamento).anexos[0].imagemHash)
+})
 it('emite recibo de adiantamento existente sem descontar duas vezes', () => {
   const rel = repos.relatoriosRepo.criarDeOrcamento(proposta().id)!
   repos.relatoriosRepo.update(rel.id, {

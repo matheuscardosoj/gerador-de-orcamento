@@ -2,12 +2,14 @@ import { obterVersao } from './versoes'
 import { orcamentosRepo, relatoriosRepo } from './repositories'
 import { recibosRepo } from './recibos'
 import type { Documento, Recibo, Relatorio } from '@shared/types'
+import { randomUUID } from 'crypto'
 export function restaurarVersao(id: string, copiar: boolean): Documento {
   const v = obterVersao(id)
   const d = structuredClone(v.documento)
   const repo =
     v.tipo === 'orcamento' ? orcamentosRepo : v.tipo === 'relatorio' ? relatoriosRepo : recibosRepo
   if (copiar) {
+    if ('anexos' in d) d.anexos = d.anexos.map((a) => ({ ...a, id: randomUUID() }))
     const dto = {
       ...d,
       status: 'rascunho',

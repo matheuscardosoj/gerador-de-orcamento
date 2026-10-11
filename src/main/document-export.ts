@@ -115,6 +115,8 @@ async function exportar(
   )
   d = paraDocumento(d)
   const empresa = d.empresaSnapshot ?? empresaRepo.get()
+  if (empresa.logoHash && !imagemDataUrl(empresa.logoHash))
+    throw new Error('A logo desta versão ainda não está disponível. Sincronize antes de emitir.')
   let html: string
   let buffer: Buffer | undefined
   if (tipo === 'relatorio') {

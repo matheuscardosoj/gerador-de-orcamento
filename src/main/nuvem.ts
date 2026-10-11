@@ -15,6 +15,7 @@ import { join } from 'path'
 import { pastaDados } from './db/sqlite'
 
 let ocupado = false
+let conectando = false
 const tipos: TipoDocumento[] = ['orcamento', 'relatorio', 'recibo']
 const tabelas = [
   'clientes',
@@ -125,7 +126,7 @@ export async function conectarNuvem(
   senha: string,
   modo: 'publicar' | 'baixar'
 ): Promise<StatusNuvem> {
-  if (ocupado) throw new Error('Aguarde a sincronização atual.')
+  if (ocupado || conectando) throw new Error('Aguarde a sincronização atual.')
   if (!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(c.url))
     throw new Error('Use a URL HTTPS do projeto Supabase.')
   if (!c.chavePublica.startsWith('sb_publishable_')) {
@@ -145,6 +146,7 @@ export async function conectarNuvem(
       'Use um perfil separado para conectar outra empresa. Este perfil já está vinculado a um projeto.'
     )
   const anterior = config<ConfigNuvem>('nuvem')
+  conectando = true
   salvar('nuvem', { ...c, url: c.url.replace(/\/$/, '') })
   try {
     const s = (await pedido(
@@ -207,6 +209,11 @@ export async function conectarNuvem(
           throw new Error(
             'A nuvem está vazia. Publique primeiro pelo computador que contém os dados.'
           )
+        const base = await baixarAlteracoes(0)
+        if (!base.some((e) => e.entidade === 'configuracoes:empresa' && e.payload.row))
+          throw new Error(
+            'A nuvem não contém uma base completa. Conclua a publicação no primeiro computador.'
+          )
         semRastreamento(() =>
           tx(() => {
             for (const t of [
@@ -236,17 +243,21 @@ export async function conectarNuvem(
               'conflitos_nuvem'
             ])
               run(`DELETE FROM ${t}`)
-            salvar('cursorNuvem', 0)
+            for (const e of ordenarDependencias(base)) aplicar(e)
+            salvar('cursorNuvem', Math.max(0, ...base.map((e) => e.sequencia)))
           })
         )
       }
     }
+    conectando = false
     return await sincronizarNuvem()
   } catch (e) {
     if (!anterior && !get('SELECT 1 FROM fila_nuvem LIMIT 1') && !config<number>('cursorNuvem')) {
       run("DELETE FROM configuracoes WHERE chave IN ('nuvem','sessaoNuvem','usuarioNuvem')")
     }
     throw e
+  } finally {
+    conectando = false
   }
 }
 function upsert(t: string, row: Record<string, unknown>): void {
@@ -282,6 +293,29 @@ type Remoto = {
     tipo?: TipoDocumento
     excluido?: boolean
   }
+}
+async function baixarAlteracoes(inicio: number): Promise<Remoto[]> {
+  let cursor = inicio
+  const todas: Remoto[] = []
+  while (true) {
+    const dados = (await pedido(
+      `/rest/v1/gdo_entities?select=*&sequencia=gt.${cursor}&order=sequencia.asc&limit=50`
+    )) as Remoto[]
+    if (!dados.length) return todas
+    todas.push(...dados)
+    cursor = Math.max(cursor, ...dados.map((e) => e.sequencia))
+  }
+}
+function ordenarDependencias(dados: Remoto[]): Remoto[] {
+  const ordem = (e: Remoto): number =>
+    e.payload.tabela
+      ? 0
+      : e.payload.tipo === 'orcamento'
+        ? 1
+        : e.payload.tipo === 'relatorio'
+          ? 2
+          : 3
+  return dados.sort((a, b) => ordem(a) - ordem(b) || a.sequencia - b.sequencia)
 }
 function aplicar(e: Remoto): void {
   const p = e.payload
@@ -341,7 +375,7 @@ function aplicar(e: Remoto): void {
   )
 }
 export async function sincronizarNuvem(): Promise<StatusNuvem> {
-  if (ocupado) return statusNuvem()
+  if (ocupado || conectando) return statusNuvem()
   ocupado = true
   try {
     if (get('SELECT 1 FROM conflitos_nuvem LIMIT 1'))
@@ -382,26 +416,9 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
       })
     }
     let cursor = config<number>('cursorNuvem') ?? 0
-    const alteracoes: Remoto[] = []
-    while (true) {
-      const dados = (await pedido(
-        `/rest/v1/gdo_entities?select=*&sequencia=gt.${cursor}&order=sequencia.asc&limit=50`
-      )) as Remoto[]
-      if (!dados.length) break
-      alteracoes.push(...dados)
-      cursor = Math.max(cursor, ...dados.map((e) => e.sequencia))
-    }
-    // O feed contém o último estado de cada entidade: um cliente alterado
-    // depois da proposta precisa ser aplicado antes dela em uma base vazia.
-    const ordem = (e: Remoto): number =>
-      e.payload.tabela
-        ? 0
-        : e.payload.tipo === 'orcamento'
-          ? 1
-          : e.payload.tipo === 'relatorio'
-            ? 2
-            : 3
-    alteracoes.sort((a, b) => ordem(a) - ordem(b) || a.sequencia - b.sequencia)
+    const alteracoes = await baixarAlteracoes(cursor)
+    cursor = Math.max(cursor, ...alteracoes.map((e) => e.sequencia))
+    ordenarDependencias(alteracoes)
     semRastreamento(() =>
       tx(() => {
         for (const e of alteracoes) {

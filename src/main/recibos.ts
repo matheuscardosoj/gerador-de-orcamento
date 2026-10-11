@@ -7,6 +7,7 @@ import { round2, normalizarDataCivil } from '@shared/format'
 import type { Recibo } from '@shared/types'
 
 function validar(r: Recibo): void {
+  if (!['parcial', 'total'].includes(r.quitacao)) throw new Error('Tipo de quitação inválido.')
   if (!Number.isFinite(r.valor) || r.valor < 0) throw new Error('Valor inválido.')
   if (!['rascunho', 'pendente', 'recebido', 'cancelado'].includes(r.status))
     throw new Error('Estado de recibo inválido.')
@@ -27,6 +28,7 @@ function validar(r: Recibo): void {
     throw new Error('Data inválida.')
 }
 function gravar(r: Recibo): Recibo {
+  r.valor = round2(r.valor)
   validar(r)
   run('INSERT INTO recibos VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET dados=excluded.dados', [
     r.id,
@@ -84,6 +86,15 @@ export const recibosRepo = {
       exigirResponsavel('recibo', id)
       if (r.status === 'recebido') return r
       if (r.status === 'cancelado') throw new Error('Este recibo foi cancelado.')
+      if (r.numero <= 0) {
+        const numero = numeroNuvem('recibo', () => 0, true)
+        if (numero <= 0)
+          throw new Error(
+            'Sincronize para reservar um número antes de confirmar o recibo. A cobrança continua salva.'
+          )
+        r.numero = numero
+        run('UPDATE recibos SET numero=?,dados=? WHERE id=?', [numero, JSON.stringify(r), id])
+      }
       const novo = { ...r, status: 'recebido' as const, atualizadoEm: new Date().toISOString() }
       validar(novo)
       if (r.origemTipo === 'relatorio' && r.origemId) {
