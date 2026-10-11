@@ -1,6 +1,6 @@
 {
   "name": "gerador-de-orcamento",
-  "version": "1.3.1",
+  "version": "1.4.0-rc.1",
   "description": "Gerador de Orçamentos - VS Prestadora de Serviços",
   "main": "./out/main/index.js",
   "author": "VS Prestadora de Serviços",
