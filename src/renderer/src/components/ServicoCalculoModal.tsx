@@ -17,7 +17,8 @@ import {
   Modal,
   NumberField,
   Select,
-  cn
+  cn,
+  Mensagem
 } from '../ui/primitives'
 import { novoId, type ResultadoServico } from './tipos'
 import { mensagemValidacao, validarEntradaCalculo } from '@shared/validacao'
@@ -118,11 +119,7 @@ export function ServicoCalculoModal({
 
   return (
     <Modal open onClose={onCancel} title="Calcular custo do serviço" size="2xl">
-      {erro && (
-        <p role="alert" className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-          {erro}
-        </p>
-      )}
+      {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         {/* Coluna de entradas */}
         <div className="space-y-4">
@@ -188,7 +185,7 @@ export function ServicoCalculoModal({
               )}
               <Field
                 label="Acréscimo sobre o custo (%)"
-                hint="Percentual somado ao custo total; não representa margem sobre o preço final"
+                hint="Aplicado aos custos marcados para acréscimo; despesas repassadas ficam fora desta base"
               >
                 <NumberField
                   value={e.margemLucroPercent}
@@ -773,14 +770,13 @@ function AvulsosBloco({ e, set }: BlocoProps): JSX.Element {
             />
             <div>
               <NumberField value={a.valor} onChange={(v) => upd(a.id, { valor: v })} min={0} />
-              <label className="mt-2 flex items-center gap-2 text-xs">
-                <input
-                  type="checkbox"
+              <div className="mt-2">
+                <Checkbox
                   checked={a.aplicarAcrescimo !== false}
-                  onChange={(ev) => upd(a.id, { aplicarAcrescimo: ev.target.checked })}
+                  onChange={(aplicarAcrescimo) => upd(a.id, { aplicarAcrescimo })}
+                  label="Aplicar acréscimo de lucro"
                 />
-                Aplicar acréscimo de lucro
-              </label>
+              </div>
             </div>
             <div className="flex items-center gap-1">
               <ModoSelect value={a.modo} onChange={(m) => upd(a.id, { modo: m })} />

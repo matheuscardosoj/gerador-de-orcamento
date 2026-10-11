@@ -15,7 +15,9 @@ import {
   Modal,
   EmptyState,
   Badge,
-  ConfirmDialog
+  ConfirmDialog,
+  Checkbox,
+  Mensagem
 } from '../ui/primitives'
 import { IconButton } from '../ui/primitives'
 import { formatMoeda } from '@shared/format'
@@ -70,15 +72,9 @@ function SecaoClientes(): JSX.Element {
       <div className="mb-4 flex justify-end">
         <Button onClick={() => setEdit('novo')}>+ Novo cliente</Button>
       </div>
-      {erro && (
-        <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-          {erro}
-        </p>
-      )}
+      {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
       {erroCarga && (
-        <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-          Não foi possível carregar os clientes. {erroCarga}
-        </p>
+        <Mensagem className="mb-4">Não foi possível carregar os clientes. {erroCarga}</Mensagem>
       )}
       <div className="divide-y divide-slate-100">
         {(data ?? []).map((c) => (
@@ -170,7 +166,7 @@ function ClienteModal({
       open
       onClose={onClose}
       title={cliente ? 'Editar cliente' : 'Novo cliente'}
-      size="md"
+      size="xl"
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
@@ -183,11 +179,10 @@ function ClienteModal({
       }
     >
       <div className="space-y-4">
-        {erro && (
-          <p role="alert" className="text-red-600">
-            {erro}
-          </p>
-        )}
+        {erro && <Mensagem>{erro}</Mensagem>}
+        <Field label="Nome / razão social (obrigatório)">
+          <Input value={form.nome} onChange={(e) => set({ nome: e.target.value })} autoFocus />
+        </Field>
         <Field label="Tipo de cliente">
           <Select
             value={form.tipoPessoa ?? ''}
@@ -213,7 +208,7 @@ function ClienteModal({
             onChange={(e) => set({ documento: e.target.value.toUpperCase() })}
           />
         </Field>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Telefone">
             <Input
               type="tel"
@@ -241,8 +236,8 @@ function ClienteModal({
             />
           </Field>
         </div>
-        <fieldset className="grid gap-3 sm:grid-cols-2">
-          <legend className="mb-2 font-semibold">Endereço</legend>
+        <fieldset className="grid gap-4 sm:grid-cols-2">
+          <legend className="mb-4 text-sm font-semibold text-slate-700">Endereço</legend>
           {(['logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'cep'] as const).map(
             (f) => (
               <Field
@@ -292,21 +287,15 @@ function ClienteModal({
               placeholder="A / Ao Sr. / À Sra."
             />
           </Field>
-          <Field label="Nome / destinatário">
-            <Input value={form.nome} onChange={(e) => set({ nome: e.target.value })} autoFocus />
-          </Field>
         </div>
         <Field label="Contato" hint="Telefone, e-mail ou responsável">
           <Input value={form.contato ?? ''} onChange={(e) => set({ contato: e.target.value })} />
         </Field>
-        <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-          <input
-            type="checkbox"
-            checked={form.ativo}
-            onChange={(e) => set({ ativo: e.target.checked })}
-          />
-          Cliente ativo para novos documentos
-        </label>
+        <Checkbox
+          checked={form.ativo}
+          onChange={(ativo) => set({ ativo })}
+          label="Cliente ativo para novos documentos"
+        />
         <Field label="Observação">
           <Textarea
             value={form.observacao ?? ''}
@@ -337,9 +326,7 @@ function SecaoServicos(): JSX.Element {
         <Button onClick={() => setEdit('novo')}>+ Novo serviço</Button>
       </div>
       {erroCarga && (
-        <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-          Não foi possível carregar os serviços. {erroCarga}
-        </p>
+        <Mensagem className="mb-4">Não foi possível carregar os serviços. {erroCarga}</Mensagem>
       )}
       <div className="divide-y divide-slate-100">
         {(data ?? []).map((s) => (

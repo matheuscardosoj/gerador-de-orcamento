@@ -113,7 +113,7 @@ export function IconButton({
       </Button>
       <span
         role="tooltip"
-        className="pointer-events-none absolute bottom-full left-1/2 z-40 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-800 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-md transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+        className="pointer-events-none invisible absolute right-0 bottom-full z-40 mb-1.5 w-max max-w-xs whitespace-normal rounded-md bg-slate-800 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-md transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
       >
         {label}
       </span>
@@ -217,7 +217,7 @@ export function Field({
       } as never)
     : children
   return (
-    <div className={cn('block space-y-1', className)}>
+    <div className={cn('block min-w-0 space-y-1', className)}>
       {label &&
         (idControle ? (
           <label htmlFor={idControle} className="block text-sm font-medium text-slate-700">
@@ -256,7 +256,7 @@ export function Checkbox({
   return (
     <label
       className={cn(
-        'inline-flex items-center gap-2 text-sm text-slate-700',
+        'inline-flex items-start gap-2 text-sm leading-5 text-slate-700',
         disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
       )}
     >
@@ -265,7 +265,7 @@ export function Checkbox({
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
         disabled={disabled}
-        className="h-4 w-4 rounded border-slate-300 text-brand-teal focus:ring-brand-teal/40"
+        className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-teal accent-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/40"
       />
       {label}
     </label>
@@ -298,7 +298,7 @@ export function SectionTitle({
 }): JSX.Element {
   return (
     <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
-      <div>
+      <div className="min-w-0 break-words">
         <h2 className="text-lg font-semibold text-slate-800">{title}</h2>
         {description && <p className="mt-0.5 text-sm text-slate-500">{description}</p>}
       </div>
@@ -330,6 +330,32 @@ export function Badge({
     >
       {children}
     </span>
+  )
+}
+
+/** Mensagens de página e de modal compartilham espaçamento e contraste. */
+export function Mensagem({
+  children,
+  tom = 'erro',
+  className
+}: {
+  children: ReactNode
+  tom?: 'erro' | 'aviso' | 'info' | 'sucesso'
+  className?: string
+}): JSX.Element {
+  const cores = {
+    erro: 'bg-red-50 text-red-700',
+    aviso: 'bg-amber-50 text-amber-800',
+    info: 'bg-slate-50 text-slate-600',
+    sucesso: 'bg-emerald-50 text-emerald-700'
+  }
+  return (
+    <div
+      role={tom === 'erro' || tom === 'aviso' ? 'alert' : 'status'}
+      className={cn('rounded-lg px-4 py-3 text-sm leading-6', cores[tom], className)}
+    >
+      {children}
+    </div>
   )
 }
 
@@ -462,7 +488,7 @@ export function Modal({
         )}
         <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
         {footer && (
-          <div className="flex shrink-0 justify-end gap-2 border-t border-slate-200 px-6 py-4">
+          <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-slate-200 px-6 py-4">
             {footer}
           </div>
         )}

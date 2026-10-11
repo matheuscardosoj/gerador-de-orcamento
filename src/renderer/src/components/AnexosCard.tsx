@@ -10,7 +10,8 @@ import {
   SectionTitle,
   Select,
   Textarea,
-  cn
+  cn,
+  Mensagem
 } from '../ui/primitives'
 import type { AnexoOrcamento } from '@shared/types'
 
@@ -105,11 +106,7 @@ export function AnexosCard<T extends AnexoEditavel>({
           e.target.value = ''
         }}
       />
-      {erro && (
-        <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-          {erro}
-        </p>
-      )}
+      {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
       <div
         onDragOver={(e) => {
           e.preventDefault()

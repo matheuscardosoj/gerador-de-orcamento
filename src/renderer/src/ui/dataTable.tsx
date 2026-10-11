@@ -32,7 +32,7 @@ export function DataTableViewport({
 }): JSX.Element {
   return (
     <div
-      className={cn('data-table-viewport overflow-x-auto', className)}
+      className={cn('data-table-viewport relative overflow-x-auto', className)}
       tabIndex={0}
       aria-label="Tabela com rolagem horizontal"
     >

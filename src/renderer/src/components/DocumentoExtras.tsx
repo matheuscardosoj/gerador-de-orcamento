@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react'
 import type { Cliente, DocumentoMetadados, TipoDocumento, VersaoDocumento } from '@shared/types'
 import { api } from '../lib/api'
-import { Button, Card, Input, Modal, Select } from '../ui/primitives'
+import {
+  Button,
+  Card,
+  Input,
+  Modal,
+  Select,
+  Checkbox,
+  SectionTitle,
+  Field,
+  Mensagem
+} from '../ui/primitives'
 import { useNav } from '../lib/nav'
 import { paginarDocumento } from '@shared/documento/paginar'
 
@@ -17,26 +27,23 @@ export function DadosClienteDocumento({
   const c = documento.clienteSnapshot ?? clientes.find((c) => c.id === documento.clienteId)
   const campos = documento.camposCliente ?? ['documento']
   return (
-    <Card>
-      <h3 className="mb-3 font-semibold">Dados do cliente no documento</h3>
-      <p className="mb-3 text-sm text-slate-500">
-        {c?.nome ?? 'Selecione um cliente cadastrado.'} · As alterações no cadastro não modificam
-        versões salvas.
-      </p>
+    <Card className="p-6">
+      <SectionTitle
+        title="Dados do cliente no documento"
+        description={`${c?.nome ?? 'Selecione um cliente cadastrado.'} · As alterações no cadastro não modificam versões salvas.`}
+      />
       <div className="flex flex-wrap gap-4">
         {(['documento', 'endereco', 'telefone', 'email', 'pessoaContato'] as const).map((f) => (
-          <label key={f} className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={campos.includes(f)}
-              onChange={(e) =>
-                onChange({
-                  camposCliente: e.target.checked ? [...campos, f] : campos.filter((x) => x !== f),
-                  clienteSnapshot: c ?? null
-                })
-              }
-            />
-            {
+          <Checkbox
+            key={f}
+            checked={campos.includes(f)}
+            onChange={(checked) =>
+              onChange({
+                camposCliente: checked ? [...campos, f] : campos.filter((x) => x !== f),
+                clienteSnapshot: c ?? null
+              })
+            }
+            label={
               {
                 documento: 'CPF/CNPJ',
                 endereco: 'Endereço',
@@ -45,31 +52,31 @@ export function DadosClienteDocumento({
                 pessoaContato: 'Pessoa de contato'
               }[f]
             }
-          </label>
+          />
         ))}
       </div>
-      {documento.clienteId && (
+      <div className="mt-6 flex flex-wrap gap-2">
+        {documento.clienteId && (
+          <Button
+            variant="outline"
+            onClick={() =>
+              onChange({
+                clienteSnapshot: clientes.find((c) => c.id === documento.clienteId) ?? null
+              })
+            }
+          >
+            Atualizar a partir do cadastro
+          </Button>
+        )}
         <Button
-          className="mt-3"
           variant="outline"
-          onClick={() =>
-            onChange({
-              clienteSnapshot: clientes.find((c) => c.id === documento.clienteId) ?? null
-            })
-          }
+          onClick={() => {
+            void api.empresa.get().then((empresaSnapshot) => onChange({ empresaSnapshot }))
+          }}
         >
-          Atualizar a partir do cadastro
+          Atualizar dados da empresa
         </Button>
-      )}
-      <Button
-        className="mt-3 ml-2"
-        variant="outline"
-        onClick={() => {
-          void api.empresa.get().then((empresaSnapshot) => onChange({ empresaSnapshot }))
-        }}
-      >
-        Atualizar dados da empresa
-      </Button>
+      </div>
     </Card>
   )
 }
@@ -157,38 +164,42 @@ export function LinhaTempo({
         onClose={() => setAberto(false)}
         title="Linha do tempo do documento"
         size="xl"
-        footer={<Button onClick={() => setAberto(false)}>Fechar</Button>}
+        footer={
+          <Button variant="secondary" onClick={() => setAberto(false)}>
+            Fechar
+          </Button>
+        }
       >
         <div className="space-y-4">
-          {erro && (
-            <p role="alert" className="text-red-600">
-              {erro}
-            </p>
-          )}
-          <Select
-            aria-label="Escolher versão"
-            value={selecionada?.id ?? ''}
-            onChange={(e) => setSelecionada(versoes.find((v) => v.id === e.target.value) ?? null)}
-          >
-            {versoes.map((v) => (
-              <option key={v.id} value={v.id}>
-                v{v.numero} · {new Date(v.criadoEm).toLocaleString('pt-BR')} · {v.computador}
-                {v.descricao ? ` · ${v.descricao}` : ''}
-              </option>
-            ))}
-          </Select>
+          {erro && <Mensagem>{erro}</Mensagem>}
+          <Field label="Versão do documento">
+            <Select
+              aria-label="Escolher versão"
+              value={selecionada?.id ?? ''}
+              onChange={(e) => setSelecionada(versoes.find((v) => v.id === e.target.value) ?? null)}
+            >
+              {versoes.map((v) => (
+                <option key={v.id} value={v.id}>
+                  v{v.numero} · {new Date(v.criadoEm).toLocaleString('pt-BR')} · {v.computador}
+                  {v.descricao ? ` · ${v.descricao}` : ''}
+                </option>
+              ))}
+            </Select>
+          </Field>
           {selecionada && (
             <>
-              <Input
-                placeholder="Nome deste marco (opcional)"
-                defaultValue={selecionada.descricao}
-                key={selecionada.id}
-                onBlur={(e) =>
-                  void executar(async () => {
-                    await api.versoes.nomear(selecionada.id, e.target.value)
-                  })
-                }
-              />
+              <Field label="Descrição desta versão" hint="Opcional">
+                <Input
+                  placeholder="Nome deste marco (opcional)"
+                  defaultValue={selecionada.descricao}
+                  key={selecionada.id}
+                  onBlur={(e) =>
+                    void executar(async () => {
+                      await api.versoes.nomear(selecionada.id, e.target.value)
+                    })
+                  }
+                />
+              </Field>
               <div className="flex flex-wrap gap-2">
                 <Button
                   disabled={ocupado}
@@ -239,12 +250,18 @@ export function LinhaTempo({
               {anterior && (
                 <div className="grid gap-3 md:grid-cols-2">
                   <div>
-                    <h4 className="font-semibold">Versão anterior</h4>
-                    <p className="whitespace-pre-wrap text-sm">{resumo(anterior)}</p>
+                    <h4 className="mb-2 text-sm font-semibold text-slate-700">Versão anterior</h4>
+                    <p className="rounded-lg border border-slate-200 bg-slate-50 p-4 whitespace-pre-wrap text-sm leading-6 text-slate-600">
+                      {resumo(anterior)}
+                    </p>
                   </div>
                   <div>
-                    <h4 className="font-semibold">Versão selecionada</h4>
-                    <p className="whitespace-pre-wrap text-sm">{resumo(selecionada)}</p>
+                    <h4 className="mb-2 text-sm font-semibold text-slate-700">
+                      Versão selecionada
+                    </h4>
+                    <p className="rounded-lg border border-slate-200 bg-slate-50 p-4 whitespace-pre-wrap text-sm leading-6 text-slate-600">
+                      {resumo(selecionada)}
+                    </p>
                   </div>
                 </div>
               )}
@@ -255,29 +272,31 @@ export function LinhaTempo({
                   const d = e.currentTarget.contentDocument
                   if (d) paginarDocumento(d)
                 }}
-                className="h-[430px] w-full border"
+                className="h-[430px] w-full rounded-lg border border-slate-200 bg-white"
               />
             </>
           )}
-          <div className="border-t pt-4">
-            <p className="mb-2 text-sm">
-              Transferir a responsabilidade de emissão para outro computador. Todas as pendências
-              precisam estar sincronizadas.
-            </p>
-            <Select
-              aria-label="Computador de destino"
-              value={destino}
-              onChange={(e) => setDestino(e.target.value)}
-            >
-              <option value="">Escolha o computador</option>
-              {pcs.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nome}
-                </option>
-              ))}
-            </Select>
+          <div className="border-t border-slate-200 pt-6">
+            <SectionTitle
+              title="Transferência de responsabilidade"
+              description="Todas as pendências precisam estar sincronizadas para transferir a emissão a outro computador."
+            />
+            <Field label="Computador de destino">
+              <Select
+                aria-label="Computador de destino"
+                value={destino}
+                onChange={(e) => setDestino(e.target.value)}
+              >
+                <option value="">Escolha o computador</option>
+                {pcs.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nome}
+                  </option>
+                ))}
+              </Select>
+            </Field>
             <Button
-              className="mt-2"
+              className="mt-6"
               disabled={!destino || ocupado}
               onClick={() =>
                 void executar(async () => {

@@ -12,7 +12,8 @@ import {
   NumberField,
   Select,
   SectionTitle,
-  Textarea
+  Textarea,
+  Mensagem
 } from '../ui/primitives'
 import { dataCivilHoje, formatMoeda, normalizarDataCivil } from '@shared/format'
 import { calcularTotaisRelatorio } from '@shared/relatorio'
@@ -286,26 +287,22 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
       descricao="Serviços prestados, adiantamentos e reembolsos"
       acoes={acoes}
     >
-      {erro && (
-        <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-          {erro}
-        </p>
-      )}
+      {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
       {errosValidacao.length > 0 && (
-        <div role="alert" className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+        <Mensagem tom="aviso" className="mb-4">
           <p className="font-medium">Revise os campos destacados antes de concluir o relatório.</p>
           <p className="mt-1">{mensagemValidacao(errosValidacao)}</p>
-        </div>
+        </Mensagem>
       )}
       {mensagem && (
-        <p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
+        <Mensagem tom="sucesso" className="mb-4">
           {mensagem}
-        </p>
+        </Mensagem>
       )}
       {rel.origemOrcamento && (
-        <p className="mb-4 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-800">
+        <Mensagem tom="info" className="mb-4">
           Gerado da proposta Nº {rel.origemOrcamento.numero}. Alterações aqui não mudam a proposta.
-        </p>
+        </Mensagem>
       )}
       <Card className="mb-6 p-6">
         <SectionTitle title="Dados do relatório" />
@@ -477,8 +474,6 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
           )}
           onChange={(pagamentos) => set({ pagamentos })}
         />
-      </div>
-      <div className="my-4 space-y-3">
         <DadosClienteDocumento documento={rel} clientes={dados.clientes} onChange={set} />
         {rel.id && (
           <LinhaTempo

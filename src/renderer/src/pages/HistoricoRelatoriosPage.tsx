@@ -4,7 +4,15 @@ import { api } from '../lib/api'
 import { useAsync } from '../lib/hooks'
 import { useNav } from '../lib/nav'
 import { PageShell } from '../ui/layout'
-import { Badge, Button, ConfirmDialog, EmptyState, IconButton, Input } from '../ui/primitives'
+import {
+  Badge,
+  Button,
+  ConfirmDialog,
+  EmptyState,
+  IconButton,
+  Input,
+  Mensagem
+} from '../ui/primitives'
 import { DataTableFrame, Pagination, SortableHeader, TableActions } from '../ui/dataTable'
 import { formatDataCurta, formatMoeda } from '@shared/format'
 import { compararOrigemRelatorio } from '@shared/historico'
@@ -102,9 +110,9 @@ export function HistoricoRelatoriosPage(): JSX.Element {
         </div>
       )}
       {(erro || erroCarga) && (
-        <p role="alert" className="mb-4 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">
+        <Mensagem className="mb-4">
           {erro ?? `Não foi possível carregar os relatórios. ${erroCarga}`}
-        </p>
+        </Mensagem>
       )}
       {loading ? (
         <p className="text-sm text-slate-500">Carregando…</p>
@@ -270,7 +278,7 @@ export function HistoricoRelatoriosPage(): JSX.Element {
       <ConfirmDialog
         open={Boolean(excluir)}
         title="Excluir relatório"
-        description={`O relatório Nº ${excluir?.numero ?? ''} será excluído. Se ele tiver o último número entregue, esse número ficará disponível novamente.`}
+        description={`O relatório Nº ${excluir?.numero ?? ''} será excluído. Seu número e suas versões salvas serão preservados e o número não será reutilizado.`}
         busy={excluindo}
         onCancel={() => setExcluir(null)}
         onConfirm={confirmarExclusao}

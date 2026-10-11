@@ -16,7 +16,8 @@ import {
   Badge,
   SectionTitle,
   IconButton,
-  cn
+  cn,
+  Mensagem
 } from '../ui/primitives'
 import { dataCivilHoje, formatMoeda, normalizarDataCivil, round2 } from '@shared/format'
 import type {
@@ -314,16 +315,12 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
         </>
       }
     >
-      {erro && (
-        <div role="alert" className="mb-4 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">
-          {erro}
-        </div>
-      )}
+      {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
       {errosValidacao.length > 0 && (
-        <div role="alert" className="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <Mensagem tom="aviso" className="mb-4">
           <p className="font-medium">Revise os campos destacados antes de concluir o documento.</p>
           <p className="mt-1">{mensagemValidacao(errosValidacao)}</p>
-        </div>
+        </Mensagem>
       )}
       {mensagem && (
         <div
@@ -379,8 +376,6 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
           atualizarVinculo={(_anexo, id) => ({ itemServicoId: id || null })}
           buscarImagem={(id) => api.anexos.imagem(id)}
         />
-      </div>
-      <div className="my-4 space-y-3">
         <DadosClienteDocumento documento={orc} clientes={dados.clientes} onChange={set} />
         {orc.id && (
           <LinhaTempo
@@ -577,7 +572,11 @@ export function AnotacaoInterna({
       hint={`Aparece só na listagem de ${tipoDocumento === 'relatorio' ? 'relatórios' : 'orçamentos'} e na busca — não sai no documento.`}
       className="md:col-span-3"
     >
-      {aviso && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{aviso}</p>}
+      {aviso && (
+        <Mensagem tom="aviso" className="mb-4">
+          {aviso}
+        </Mensagem>
+      )}
       <div className="flex items-start gap-2">
         <Textarea
           value={documento.observacaoInterna ?? ''}
@@ -677,9 +676,9 @@ export function ServicosCard({
       />
 
       {errosValidacao.length > 0 && (
-        <p role="alert" className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <Mensagem tom="aviso" className="mb-4">
           Revise os serviços destacados antes de concluir o documento.
-        </p>
+        </Mensagem>
       )}
 
       {orc.itensServico.length === 0 ? (

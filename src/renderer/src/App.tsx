@@ -73,7 +73,7 @@ function Sidebar(): JSX.Element {
               onClick={() => navegar({ nome: item.nome })}
               aria-current={ativo ? 'page' : undefined}
               className={cn(
-                'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-brand-teal/40',
                 ativo ? 'bg-brand-teal/10 text-brand-tealDark' : 'text-slate-600 hover:bg-slate-100'
               )}
             >
@@ -86,7 +86,7 @@ function Sidebar(): JSX.Element {
       <div className="border-t border-slate-200 px-5 py-3 text-[11px] text-slate-400">
         v{versao ?? '…'} · base da empresa
         <button
-          className="mt-1 block text-left text-slate-600"
+          className="mt-1 block rounded-lg text-left text-slate-600 hover:text-brand-tealDark focus:outline-none focus:ring-2 focus:ring-brand-teal/40"
           onClick={() => navegar({ nome: 'configuracoes' })}
         >
           {nuvem?.configurada

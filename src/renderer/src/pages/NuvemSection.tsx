@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import type { ConfigNuvem, StatusNuvem } from '@shared/types'
-import { Button, Card, Field, Input, Select, ConfirmDialog } from '../ui/primitives'
+import {
+  Button,
+  Card,
+  Field,
+  Input,
+  Select,
+  ConfirmDialog,
+  SectionTitle,
+  Mensagem
+} from '../ui/primitives'
 export function NuvemSection(): JSX.Element {
   const [c, setC] = useState<ConfigNuvem>({ url: '', chavePublica: '', email: '' })
   const [senha, setSenha] = useState('')
@@ -28,8 +37,11 @@ export function NuvemSection(): JSX.Element {
   }
   const mb = (s?.bytesBanco ?? 0) / 1024 / 1024
   return (
-    <Card>
-      <h3 className="mb-3 font-semibold">Nuvem da empresa</h3>
+    <Card className="p-6">
+      <SectionTitle
+        title="Nuvem da empresa"
+        description="Dados compartilhados com os computadores conectados à mesma conta"
+      />
       <p className="mb-4 text-sm text-slate-600">
         Use o mesmo projeto Supabase e a mesma conta em todos os computadores desta empresa. Cada
         empresa configura seu próprio projeto. Plano gratuito: 500 MB de banco; pouca atividade pode
@@ -39,17 +51,9 @@ export function NuvemSection(): JSX.Element {
         Configure as tabelas com o arquivo de instalação Supabase fornecido com o aplicativo e crie
         sua conta no painel de autenticação. Depois preencha os dados abaixo.
       </p>
-      {erro && (
-        <p role="alert" className="text-red-600">
-          {erro}
-        </p>
-      )}
-      {s?.erro && (
-        <p role="alert" className="text-red-600">
-          {s.erro}
-        </p>
-      )}
-      <div className="grid gap-3">
+      {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
+      {s?.erro && <Mensagem className="mb-4">{s.erro}</Mensagem>}
+      <div className="grid gap-4 md:grid-cols-2">
         <Field label="URL do projeto">
           <Input
             value={c.url}
@@ -88,7 +92,7 @@ export function NuvemSection(): JSX.Element {
             </Select>
           </Field>
         )}
-        <div className="flex flex-wrap gap-2">
+        <div className="mt-2 flex flex-wrap gap-2 md:col-span-2">
           <Button
             disabled={ocupado || !senha || !c.url || !c.chavePublica || !c.email}
             onClick={() => setConfirmar(true)}
@@ -117,7 +121,7 @@ export function NuvemSection(): JSX.Element {
         </div>
       </div>
       {s && (
-        <div className="mt-5 space-y-2 text-sm">
+        <div className="mt-6 space-y-3 border-t border-slate-200 pt-6 text-sm text-slate-600">
           <p>
             {s.autenticada ? 'Conta conectada' : 'Conta desconectada'} · {s.pendentes} alterações
             aguardando envio
@@ -142,7 +146,10 @@ export function NuvemSection(): JSX.Element {
           </p>
           <p className="text-xs text-slate-500">Identificação deste computador: {s.computador}</p>
           {s.conflitos.map((x) => (
-            <div key={x.id} className="rounded border border-amber-300 p-3">
+            <div
+              key={x.id}
+              className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"
+            >
               <p>{x.detalhe}</p>
               <p>
                 Para preservar a edição local, crie uma cópia no editor antes de adotar a versão
@@ -167,6 +174,8 @@ export function NuvemSection(): JSX.Element {
       <ConfirmDialog
         open={confirmar}
         title="Conectar à base da empresa"
+        confirmLabel="Conectar"
+        danger={false}
         description={
           modo === 'baixar' && !s?.configurada
             ? 'Uma cópia de segurança será criada e a base local será substituída pelos dados da nuvem. Após conectar, reabra os documentos.'

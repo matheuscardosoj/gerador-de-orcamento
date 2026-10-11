@@ -15,7 +15,8 @@ import {
   SectionTitle,
   Checkbox,
   EmptyState,
-  ConfirmDialog
+  ConfirmDialog,
+  Mensagem
 } from '../ui/primitives'
 import { AppIcon } from '../ui/primitives'
 import type {
@@ -302,27 +303,24 @@ function SecaoEmpresa(): JSX.Element {
                 ['pessoaContato', 'Pessoa de contato']
               ] as [CampoCliente, string][]
             ).map(([campo, label]) => (
-              <label key={campo} className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={(form.camposClientePadrao ?? ['documento']).includes(campo)}
-                  onChange={(e) => {
-                    const campos = form.camposClientePadrao ?? ['documento']
-                    set({
-                      camposClientePadrao: e
-                        ? [...campos, campo]
-                        : campos.filter((c) => c !== campo)
-                    })
-                  }}
-                />
-                {label}
-              </label>
+              <Checkbox
+                key={campo}
+                label={label}
+                checked={(form.camposClientePadrao ?? ['documento']).includes(campo)}
+                onChange={(e) => {
+                  const campos = form.camposClientePadrao ?? ['documento']
+                  set({
+                    camposClientePadrao: e ? [...campos, campo] : campos.filter((c) => c !== campo)
+                  })
+                }}
+              />
             ))}
           </div>
         </div>
         {erro && (
-          <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          <Mensagem className="mt-4">
             Não foi possível concluir a alteração dos dados da empresa. {erro}
-          </p>
+          </Mensagem>
         )}
 
         <div className="mt-6 flex justify-end">
@@ -384,11 +382,11 @@ function SecaoParametros(): JSX.Element {
           title="Encargos CLT (%)"
           description="Estimativa configurável aplicada sobre o salário proporcional; confirme percentuais com o contador ou a folha"
         />
-        <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+        <Mensagem tom="aviso" className="mb-4">
           A provisão rescisória não substitui o cálculo oficial: a multa do FGTS depende do
           histórico integral dos depósitos e a contribuição patronal varia conforme o enquadramento
           tributário.
-        </p>
+        </Mensagem>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
           <Field label="Férias (%)">
             <NumberField
@@ -507,11 +505,7 @@ function SecaoParametros(): JSX.Element {
             </select>
           </Field>
         </div>
-        {erro && (
-          <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-            {erro}
-          </p>
-        )}
+        {erro && <Mensagem className="mt-4">{erro}</Mensagem>}
         <div className="mt-6 flex justify-end">
           <BotaoSalvar salvando={salvando} ok={ok} />
         </div>
@@ -542,14 +536,10 @@ function SecaoObservacoes(): JSX.Element {
         description="Defina onde o texto pode ser usado e se ele entra automaticamente em documentos novos"
       />
       {erroCarga && (
-        <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-          Não foi possível carregar as observações. {erroCarga}
-        </p>
+        <Mensagem className="mb-4">Não foi possível carregar as observações. {erroCarga}</Mensagem>
       )}
       {erro && (
-        <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-          Não foi possível alterar as observações. {erro}
-        </p>
+        <Mensagem className="mb-4">Não foi possível alterar as observações. {erro}</Mensagem>
       )}
       <div className="mb-4 flex flex-col gap-2 sm:flex-row">
         <Textarea
@@ -729,14 +719,14 @@ function SecaoPagamentos(): JSX.Element {
         description="Defina onde o texto pode ser usado e se ele entra automaticamente em documentos novos"
       />
       {erroCarga && (
-        <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+        <Mensagem className="mb-4">
           Não foi possível carregar as formas de pagamento. {erroCarga}
-        </p>
+        </Mensagem>
       )}
       {erro && (
-        <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+        <Mensagem className="mb-4">
           Não foi possível alterar as formas de pagamento. {erro}
-        </p>
+        </Mensagem>
       )}
       <div className="mb-4 flex flex-col gap-2 sm:flex-row">
         <Textarea
@@ -1010,16 +1000,9 @@ function SecaoIA(): JSX.Element {
         </div>
 
         {status && (
-          <p
-            role={status.disponivel ? 'status' : 'alert'}
-            className={
-              status.disponivel
-                ? 'mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800'
-                : 'mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800'
-            }
-          >
+          <Mensagem tom={status.disponivel ? 'sucesso' : 'aviso'} className="mt-4">
             {status.detalhe}
-          </p>
+          </Mensagem>
         )}
 
         <div className="mt-5 flex justify-end gap-2">
@@ -1136,9 +1119,7 @@ function PainelNumeracao({
         </div>
 
         {erro && (
-          <p role="alert" className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-            Não foi possível definir o próximo número. {erro}
-          </p>
+          <Mensagem className="mt-4">Não foi possível definir o próximo número. {erro}</Mensagem>
         )}
 
         <div className="mt-5 flex justify-end">
@@ -1258,11 +1239,7 @@ function SecaoDados(): JSX.Element {
           {resultado}
         </p>
       )}
-      {erro && (
-        <p role="alert" className="rounded-xl bg-red-50 p-4 text-sm leading-6 text-red-800">
-          {erro}
-        </p>
-      )}
+      {erro && <Mensagem>{erro}</Mensagem>}
       <ConfirmDialog
         open={Boolean(confirmacao)}
         title={confirmacao === 'restaurar' ? 'Restaurar backup' : 'Importar mantendo dados'}

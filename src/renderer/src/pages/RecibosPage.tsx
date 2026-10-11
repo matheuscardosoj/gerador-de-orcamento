@@ -11,7 +11,10 @@ import {
   Textarea,
   NumberField,
   ConfirmDialog,
-  Modal
+  SectionTitle,
+  EmptyState,
+  Badge,
+  Mensagem
 } from '../ui/primitives'
 import { DadosClienteDocumento, LinhaTempo } from '../components/DocumentoExtras'
 import type {
@@ -22,10 +25,10 @@ import type {
   ResumoRelatorio,
   Relatorio
 } from '@shared/types'
-import { dataCivilHoje, formatMoeda } from '@shared/format'
+import { dataCivilHoje, formatMoeda, formatDataCurta } from '@shared/format'
 import { gerarHtmlOrcamento } from '@shared/documento/template'
 import { reciboComoDocumento } from '@shared/documento/recibo'
-import { paginarDocumento } from '@shared/documento/paginar'
+import { PreviaDocumentoModal } from '../components/PreviaDocumentoModal'
 const vazio = (): Recibo => ({
   id: '',
   numero: 0,
@@ -175,29 +178,52 @@ export function RecibosPage({ reciboId }: { reciboId?: string }): JSX.Element {
         )
       }
     >
-      {erro && (
-        <p role="alert" className="mb-4 text-red-600">
-          {erro}
-        </p>
-      )}
+      {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
       {!r ? (
         <div className="space-y-3">
-          {lista.length === 0 && <Card>Nenhum recibo cadastrado.</Card>}
+          {lista.length === 0 && (
+            <Card className="p-6">
+              <EmptyState
+                title="Nenhum recibo cadastrado"
+                description="Crie uma cobrança ou um recibo para registrar o pagamento de um serviço."
+              />
+            </Card>
+          )}
           {lista.map((d) => (
-            <Card key={d.id}>
+            <Card key={d.id} className="overflow-hidden">
               <button
-                className="w-full text-left"
+                className="w-full space-y-2 p-6 text-left transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-teal/40"
                 onClick={() => {
                   setR(d)
                   setSalvo(JSON.stringify(d))
                 }}
               >
-                <strong>
+                <span className="block font-medium text-slate-800">
                   {d.numero > 0 ? String(d.numero).padStart(6, '0') : 'Rascunho'} ·{' '}
                   {d.destinatario || 'Cliente não informado'}
-                </strong>
-                <p>
-                  {formatMoeda(d.valor)} · {d.status} · {d.data}
+                </span>
+                <p className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                  {formatMoeda(d.valor)} · {formatDataCurta(d.data)}
+                  <Badge
+                    color={
+                      d.status === 'recebido'
+                        ? 'green'
+                        : d.status === 'cancelado'
+                          ? 'red'
+                          : d.status === 'pendente'
+                            ? 'amber'
+                            : 'slate'
+                    }
+                  >
+                    {
+                      {
+                        recebido: 'Recebido',
+                        cancelado: 'Cancelado',
+                        pendente: 'Pagamento pendente',
+                        rascunho: 'Rascunho'
+                      }[d.status]
+                    }
+                  </Badge>
                 </p>
                 <p className="text-sm text-slate-500">{d.descricao}</p>
               </button>
@@ -205,8 +231,12 @@ export function RecibosPage({ reciboId }: { reciboId?: string }): JSX.Element {
           ))}
         </div>
       ) : (
-        <div className="space-y-4">
-          <Card>
+        <div className="space-y-5">
+          <Card className="p-6">
+            <SectionTitle
+              title="Dados do recibo"
+              description="Identificação do serviço e do pagamento"
+            />
             <fieldset disabled={somenteLeitura || ocupado} className="grid gap-4 md:grid-cols-2">
               <Field label="Cliente">
                 <Select
@@ -260,7 +290,11 @@ export function RecibosPage({ reciboId }: { reciboId?: string }): JSX.Element {
                 >
                   <option value="rascunho">Rascunho</option>
                   <option value="pendente">Pagamento pendente</option>
-                  {somenteLeitura && <option value={r.status}>{r.status}</option>}
+                  {somenteLeitura && (
+                    <option value={r.status}>
+                      {r.status === 'recebido' ? 'Recebido' : 'Cancelado'}
+                    </option>
+                  )}
                 </Select>
               </Field>
               <Field label="Quitação">
@@ -367,7 +401,8 @@ export function RecibosPage({ reciboId }: { reciboId?: string }): JSX.Element {
           {!somenteLeitura && (
             <DadosClienteDocumento documento={r} clientes={clientes} onChange={set} />
           )}
-          <Card>
+          <Card className="p-6">
+            <SectionTitle title="Pagamento e emissão" />
             <div className="flex flex-wrap gap-2">
               {r.status !== 'recebido' && r.status !== 'cancelado' && (
                 <Button disabled={ocupado} onClick={() => setConfirmacao('receber')}>
@@ -430,6 +465,8 @@ export function RecibosPage({ reciboId }: { reciboId?: string }): JSX.Element {
       <ConfirmDialog
         open={!!confirmacao}
         title={confirmacao === 'receber' ? 'Confirmar recebimento' : 'Cancelar documento'}
+        confirmLabel={confirmacao === 'receber' ? 'Confirmar recebimento' : 'Cancelar / estornar'}
+        danger={confirmacao !== 'receber'}
         description={
           confirmacao === 'receber'
             ? 'Confirme somente se o valor foi efetivamente recebido. O saldo do relatório vinculado será atualizado uma única vez.'
@@ -452,16 +489,12 @@ export function RecibosPage({ reciboId }: { reciboId?: string }): JSX.Element {
         }}
       />
       {previa && r && empresa && (
-        <Modal open title="Prévia do recibo" onClose={() => setPrevia(false)} size="xl">
-          <iframe
-            title="Recibo"
-            srcDoc={gerarHtmlOrcamento(reciboComoDocumento(r), r.empresaSnapshot ?? empresa)}
-            onLoad={(e) => {
-              if (e.currentTarget.contentDocument) paginarDocumento(e.currentTarget.contentDocument)
-            }}
-            className="h-[650px] w-full"
-          />
-        </Modal>
+        <PreviaDocumentoModal
+          titulo={r.status === 'recebido' ? 'Prévia do recibo' : 'Prévia da cobrança'}
+          tituloFrame="Recibo"
+          html={gerarHtmlOrcamento(reciboComoDocumento(r), r.empresaSnapshot ?? empresa)}
+          onClose={() => setPrevia(false)}
+        />
       )}
     </PageShell>
   )
