@@ -8,7 +8,9 @@ import { orcamentosRepo, relatoriosRepo, empresaRepo } from './repositories'
 import { recibosRepo } from './recibos'
 import { gerarHtmlOrcamento, gerarHtmlRelatorio } from '@shared/documento/template'
 import { montarDocumentoDocx, montarDocumentoRelatorioDocx } from '@shared/documento/docx'
-import { reciboComoDocumento } from '@shared/documento/recibo'
+import { gerarHtmlRecibo } from '@shared/documento/recibo-template'
+import { montarReciboDocx } from '@shared/documento/recibo-docx'
+import { lerPaginacaoRecibo } from '@shared/documento/recibo-paginacao'
 import { paginarDocumento } from '@shared/documento/paginar'
 import { destinatarioComTratamento, nomeBaseDocumento } from '@shared/documento/comum'
 import { exigirValidacao, validarOrcamentoFinal, validarRelatorioFinal } from '@shared/validacao'
@@ -129,9 +131,11 @@ async function exportar(
     )
     if (formato === 'docx')
       buffer = await Packer.toBuffer(montarDocumentoRelatorioDocx(rel, empresa, mapa))
+  } else if (recibo) {
+    html = gerarHtmlRecibo(d as Recibo, empresa)
   } else {
-    const orc = recibo ? reciboComoDocumento(d as Recibo) : (d as Orcamento)
-    if (!recibo) exigirValidacao(validarOrcamentoFinal(orc))
+    const orc = d as Orcamento
+    exigirValidacao(validarOrcamentoFinal(orc))
     const mapa = imagens(orc)
     html = gerarHtmlOrcamento(
       { ...orc, anexos: orc.anexos.map((a) => ({ ...a, imagemDataUrl: mapa.get(a.id) })) },
@@ -139,14 +143,25 @@ async function exportar(
     )
     if (formato === 'docx') buffer = await Packer.toBuffer(montarDocumentoDocx(orc, empresa, mapa))
   }
-  if (formato === 'pdf') {
+  if (formato === 'pdf' || recibo) {
     const tmp = join(app.getPath('temp'), `gdo-${randomUUID()}.html`)
     const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true } })
     try {
       await writeFile(tmp, html, 'utf8')
       await win.loadFile(tmp)
+      await win.webContents.executeJavaScript('document.fonts.ready')
       await win.webContents.executeJavaScript(`(${paginarDocumento.toString()})(document)`)
-      buffer = await win.webContents.printToPDF({ printBackground: true, preferCSSPageSize: true })
+      if (formato === 'pdf')
+        buffer = await win.webContents.printToPDF({
+          printBackground: true,
+          preferCSSPageSize: true
+        })
+      else {
+        const paginacao = await win.webContents.executeJavaScript(
+          `(${lerPaginacaoRecibo.toString()})(document)`
+        )
+        buffer = await Packer.toBuffer(montarReciboDocx(d as Recibo, empresa, paginacao))
+      }
     } finally {
       win.destroy()
       await unlink(tmp).catch(() => undefined)
@@ -177,7 +192,7 @@ export function htmlVersao(id: string): string {
   const v = obterVersao(id)
   const d = paraDocumento(v.documento)
   const empresa = d.empresaSnapshot ?? empresaRepo.get()
-  if (v.tipo === 'recibo') return gerarHtmlOrcamento(reciboComoDocumento(d as Recibo), empresa)
+  if (v.tipo === 'recibo') return gerarHtmlRecibo(d as Recibo, empresa)
   const doc = d as Orcamento | Relatorio
   const mapa = imagens(doc)
   const completo = {

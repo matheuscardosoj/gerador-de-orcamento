@@ -20,7 +20,7 @@ export function PreviaDocumentoModal({
         srcDoc={html}
         onLoad={(e) => {
           const doc = e.currentTarget.contentDocument
-          if (doc) paginarDocumento(doc)
+          if (doc) void doc.fonts.ready.then(() => paginarDocumento(doc))
         }}
         className="h-[70vh] w-full rounded-lg border border-slate-200 bg-white"
       />

@@ -18,6 +18,116 @@
 // os anexos sempre começando numa folha própria.
 export function paginarDocumento(doc: Document): void {
   try {
+    // Recibos têm sua própria folha A5 horizontal e fechamento indivisível.
+    const reciboOriginal = doc.querySelector<HTMLElement>('.recibo-pagina')
+    const recibo = reciboOriginal?.querySelector<HTMLElement>('.recibo')
+    if (reciboOriginal && recibo) {
+      if (doc.body.dataset.reciboPaginado) return
+      const estiloPagina = doc.defaultView!.getComputedStyle(reciboOriginal)
+      const alturaUtil =
+        reciboOriginal.clientHeight -
+        parseFloat(estiloPagina.paddingTop) -
+        parseFloat(estiloPagina.paddingBottom) -
+        (3 * 96) / 25.4
+      const cabecalho = recibo.querySelector<HTMLElement>('.recibo-cabecalho')!
+      const titulo = recibo.querySelector<HTMLElement>('.recibo-titulo')!
+      const unidades = [...recibo.children].filter(
+        (el) => el !== cabecalho && el !== titulo
+      ) as HTMLElement[]
+      const altura = (el: HTMLElement): number => {
+        const estilo = doc.defaultView!.getComputedStyle(el)
+        return (
+          el.offsetHeight +
+          (parseFloat(estilo.marginTop) || 0) +
+          (parseFloat(estilo.marginBottom) || 0)
+        )
+      }
+      let miolo: HTMLElement
+      let usado = 0
+      let alturaCabecalho = 0
+      const novaPagina = (): void => {
+        const pagina = doc.createElement('div')
+        pagina.className = reciboOriginal.className
+        miolo = doc.createElement('div')
+        miolo.className = 'recibo'
+        pagina.appendChild(miolo)
+        reciboOriginal.parentNode!.insertBefore(pagina, reciboOriginal)
+        const c = cabecalho.cloneNode(true) as HTMLElement
+        const t = titulo.cloneNode(true) as HTMLElement
+        miolo.append(c, t)
+        usado = altura(c) + altura(t)
+        alturaCabecalho = usado
+      }
+      novaPagina()
+      const fechar = unidades.find((el) => el.classList.contains('recibo-fechamento'))
+      const alturaFechamento = fechar ? altura(fechar) : 0
+      for (const unidade of unidades) {
+        const texto = unidade.querySelector<HTMLElement>(
+          '.recibo-descricao, .recibo-observacao-texto'
+        )
+        if (texto) {
+          // Mede na largura real e divide apenas em limites de palavras, mantendo todas elas.
+          const palavras = texto.textContent?.match(/\S+\s*/g) ?? []
+          let inicio = 0
+          while (inicio < palavras.length) {
+            const parte = unidade.cloneNode(true) as HTMLElement
+            const conteudo = parte.querySelector<HTMLElement>(
+              '.recibo-descricao, .recibo-observacao-texto'
+            )!
+            miolo!.appendChild(parte)
+            const medir = (fim: number): number => {
+              conteudo.textContent = palavras.slice(inicio, fim).join('')
+              return altura(parte)
+            }
+            let disponivel = alturaUtil - usado
+            const restante = medir(palavras.length)
+            // Quando couber em uma folha, leva serviço e assinatura juntos para a próxima.
+            if (
+              restante <= disponivel &&
+              restante + alturaFechamento > disponivel &&
+              restante + alturaFechamento <= alturaUtil - alturaCabecalho &&
+              usado > alturaCabecalho
+            ) {
+              parte.remove()
+              novaPagina()
+              miolo!.appendChild(parte)
+              disponivel = alturaUtil - usado
+            }
+            let lo = inicio,
+              hi = palavras.length
+            while (lo < hi) {
+              const meio = Math.ceil((lo + hi) / 2)
+              if (medir(meio) <= disponivel) lo = meio
+              else hi = meio - 1
+            }
+            if (lo === inicio) {
+              parte.remove()
+              if (usado <= alturaCabecalho)
+                throw new Error(
+                  'O texto do recibo contém uma palavra que não cabe na folha. Divida o texto em palavras menores.'
+                )
+              novaPagina()
+              continue
+            }
+            usado += medir(lo)
+            inicio = lo
+            if (inicio < palavras.length) novaPagina()
+          }
+        } else {
+          const h = altura(unidade)
+          if (usado + h > alturaUtil && usado > alturaCabecalho) novaPagina()
+          if (usado + h > alturaUtil)
+            throw new Error(
+              'A identificação ou o fechamento do recibo não cabe em A5. Reduza os campos de apresentação ou o texto do local.'
+            )
+          miolo!.appendChild(unidade)
+          usado += h
+        }
+      }
+      reciboOriginal.remove()
+      doc.body.dataset.reciboPaginado = 'true'
+      return
+    }
     // CSS "mm" é sempre 96px / 25.4mm por especificação — não depende de DPI
     // nem de zoom, então dá para converter direto, sem medir nada no DOM.
     const MM_PARA_PX = 96 / 25.4

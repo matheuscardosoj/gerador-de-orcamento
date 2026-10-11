@@ -60,17 +60,21 @@ try {
       }
     })
   )
-  await page.evaluate(() =>
-    window.api.empresa.save({
-      nome: 'Empresa de Teste',
-      razaoSocial: 'Empresa de Serviços Ltda.',
-      endereco: 'Rua Exemplo, 10, Rio Verde - GO',
-      cnpj: '04.871.989/0001-60',
-      telefones: '(64) 99999-0000',
-      email: 'empresa@example.com',
-      textoAssinatura: 'Empresa de Serviços Ltda.',
-      camposClientePadrao: ['documento', 'endereco', 'telefone', 'email', 'pessoaContato']
-    })
+  const logo = `data:image/png;base64,${readFileSync('build/logo-vs.png').toString('base64')}`
+  await page.evaluate(
+    (logoDataUrl) =>
+      window.api.empresa.save({
+        logoDataUrl,
+        nome: 'Empresa de Teste',
+        razaoSocial: 'Empresa de Serviços Ltda.',
+        endereco: 'Rua Exemplo, 10, Rio Verde - GO',
+        cnpj: '04.871.989/0001-60',
+        telefones: '(64) 99999-0000',
+        email: 'empresa@example.com',
+        textoAssinatura: 'Empresa de Serviços Ltda.',
+        camposClientePadrao: ['documento', 'endereco', 'telefone', 'email', 'pessoaContato']
+      }),
+    logo
   )
   await page.getByRole('button', { name: 'Orçamentos', exact: true }).click()
   await page.getByRole('button', { name: '+ Novo orçamento', exact: true }).first().click()
@@ -173,6 +177,26 @@ try {
   await page.getByRole('button', { name: 'Salvar', exact: true }).click()
   let recibo = (await page.evaluate(() => window.api.recibos.list()))[0]
   await page.getByRole('button', { name: 'Prévia', exact: true }).click()
+  await page
+    .frameLocator('iframe[title="Recibo"]')
+    .locator('body[data-recibo-paginado="true"]')
+    .waitFor()
+  assert.equal(
+    await page.frameLocator('iframe[title="Recibo"]').locator('.recibo-pagina').count(),
+    1
+  )
+  await page
+    .frameLocator('iframe[title="Recibo"]')
+    .getByRole('img', { name: 'Logo da empresa' })
+    .waitFor()
+  assert.ok(
+    await page
+      .frameLocator('iframe[title="Recibo"]')
+      .locator('.recibo-assinatura')
+      .evaluate((el) => {
+        return parseFloat(getComputedStyle(el).marginTop) >= (18 * 96) / 25.4 - 1
+      })
+  )
   await page.screenshot({ path: join(saida, 'previa-cobranca.png'), fullPage: true })
   await page.getByRole('button', { name: 'Fechar', exact: true }).click()
   for (const metodo of ['gerarReciboPdf', 'gerarReciboDocx'])
@@ -199,6 +223,14 @@ try {
     3500
   )
   await page.getByRole('button', { name: 'Prévia', exact: true }).click()
+  await page
+    .frameLocator('iframe[title="Recibo"]')
+    .locator('body[data-recibo-paginado="true"]')
+    .waitFor()
+  assert.equal(
+    await page.frameLocator('iframe[title="Recibo"]').locator('.recibo-pagina').count(),
+    1
+  )
   await page.screenshot({ path: join(saida, 'previa-recibo.png'), fullPage: true })
   await page.getByRole('button', { name: 'Fechar', exact: true }).click()
   for (const metodo of ['gerarReciboPdf', 'gerarReciboDocx'])

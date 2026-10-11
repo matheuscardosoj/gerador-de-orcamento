@@ -26,8 +26,8 @@ import type {
   Relatorio
 } from '@shared/types'
 import { dataCivilHoje, formatMoeda, formatDataCurta } from '@shared/format'
-import { gerarHtmlOrcamento } from '@shared/documento/template'
-import { reciboComoDocumento } from '@shared/documento/recibo'
+import { gerarHtmlRecibo } from '@shared/documento/recibo-template'
+import { resumoServicoRecibo } from '@shared/documento/recibo'
 import { PreviaDocumentoModal } from '../components/PreviaDocumentoModal'
 const vazio = (): Recibo => ({
   id: '',
@@ -135,7 +135,7 @@ export function RecibosPage({ reciboId }: { reciboId?: string }): JSX.Element {
     <PageShell
       titulo={
         r
-          ? `Recibo ${r.numero > 0 ? String(r.numero).padStart(6, '0') : '— rascunho'}`
+          ? `${r.status === 'recebido' ? 'Recibo' : r.status === 'cancelado' ? 'Documento cancelado' : 'Cobrança'} ${r.numero > 0 ? String(r.numero).padStart(6, '0') : '— rascunho'}`
           : 'Recibos e cobranças'
       }
       descricao="Prepare a cobrança e confirme o recebimento para emitir a quitação."
@@ -225,7 +225,7 @@ export function RecibosPage({ reciboId }: { reciboId?: string }): JSX.Element {
                     }
                   </Badge>
                 </p>
-                <p className="text-sm text-slate-500">{d.descricao}</p>
+                <p className="line-clamp-2 text-sm text-slate-500">{d.descricao}</p>
               </button>
             </Card>
           ))}
@@ -347,7 +347,7 @@ export function RecibosPage({ reciboId }: { reciboId?: string }): JSX.Element {
                           clienteSnapshot: d.clienteSnapshot,
                           empresaSnapshot: d.empresaSnapshot,
                           camposCliente: d.camposCliente,
-                          descricao: d.itensServico.map((i) => i.descricao).join('; '),
+                          descricao: resumoServicoRecibo(d.itensServico, d.numero, r.origemTipo!),
                           valor: 'totais' in d ? Math.max(0, d.totais.saldo) : d.valorTotal
                         })
                       })
@@ -381,7 +381,10 @@ export function RecibosPage({ reciboId }: { reciboId?: string }): JSX.Element {
                 </Field>
               )}
               <div className="md:col-span-2">
-                <Field label="Serviço prestado">
+                <Field
+                  label="Serviço prestado"
+                  hint="Use um resumo do serviço; os detalhes podem ficar na proposta ou no relatório de origem."
+                >
                   <Textarea
                     value={r.descricao}
                     onChange={(e) => set({ descricao: e.target.value })}
@@ -492,7 +495,7 @@ export function RecibosPage({ reciboId }: { reciboId?: string }): JSX.Element {
         <PreviaDocumentoModal
           titulo={r.status === 'recebido' ? 'Prévia do recibo' : 'Prévia da cobrança'}
           tituloFrame="Recibo"
-          html={gerarHtmlOrcamento(reciboComoDocumento(r), r.empresaSnapshot ?? empresa)}
+          html={gerarHtmlRecibo(r, r.empresaSnapshot ?? empresa)}
           onClose={() => setPrevia(false)}
         />
       )}
