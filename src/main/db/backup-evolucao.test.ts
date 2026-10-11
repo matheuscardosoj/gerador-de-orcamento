@@ -117,6 +117,15 @@ it('inclui pagamentos, versões e imagens, retirando sessão, identidade e reser
   expect(versoes.computadorId()).toBe(computador)
 })
 
+it('restaurar no mesmo perfil conserva a identidade local e a edição dos próprios documentos', () => {
+  dados.importarDadosDe(backup, 'restaurar')
+  expect(versoes.computadorId()).toBe(computador)
+  const proposta = repos.orcamentosRepo.list()[0]
+  expect(() =>
+    repos.orcamentosRepo.update(proposta.id, { observacaoInterna: 'Revisão após restauração' })
+  ).not.toThrow()
+})
+
 it('restaura em outro computador preservando o saldo e bloqueando autorização herdada', async () => {
   await perfil('restauracao')
   repos.semear()

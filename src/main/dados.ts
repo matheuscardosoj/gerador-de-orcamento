@@ -909,6 +909,8 @@ export function importarDadosDe(origem: string, modo: Modo): ResultadoImportacao
       'Restaure ou mescle o backup em um perfil local separado. A importação não publica nem substitui a base da empresa na nuvem.'
     )
   validar(origem)
+  // A identidade pertence ao perfil de destino; nunca vem do arquivo importado.
+  const computadorDestino = get("SELECT valor FROM configuracoes WHERE chave='computadorId'")?.valor
   const backupAntes = backupAntesImportar()
   if (modo === 'mesclar') {
     const fonte = new Database(origem)
@@ -930,6 +932,17 @@ export function importarDadosDe(origem: string, modo: Modo): ResultadoImportacao
     copyFileSync(origem, temporario)
     validar(temporario)
     limparAutorizacoesDaCopia(temporario)
+    if (computadorDestino) {
+      const copia = new Database(temporario)
+      try {
+        copia.run('INSERT OR REPLACE INTO configuracoes VALUES (?,?)', [
+          'computadorId',
+          computadorDestino
+        ] as never)
+      } finally {
+        copia.close()
+      }
+    }
     fecharBanco()
     copyFileSync(temporario, caminhoBanco())
     abrirBanco()
@@ -940,6 +953,8 @@ export function importarDadosDe(origem: string, modo: Modo): ResultadoImportacao
     fecharBanco()
     copyFileSync(backupAntes, caminhoBanco())
     abrirBanco()
+    if (computadorDestino)
+      run('INSERT OR REPLACE INTO configuracoes VALUES (?,?)', ['computadorId', computadorDestino])
     throw e
   } finally {
     if (existsSync(temporario)) rmSync(temporario, { force: true })
