@@ -19,6 +19,39 @@ const erros = []
 try {
   const page = await app.firstWindow()
   page.on('pageerror', (e) => erros.push(e.message))
+  let estiloPrevia
+  const conferirPrevia = async (tituloFrame) => {
+    const iframe = page.locator(`iframe[title="${tituloFrame}"]`)
+    const moldura = await iframe.evaluate((el) => {
+      const estilo = getComputedStyle(el)
+      const janela = el.closest('[role="dialog"]')
+      return {
+        classes: el.className,
+        borda: estilo.border,
+        raio: estilo.borderRadius,
+        fundo: estilo.backgroundColor,
+        janela: janela.className
+      }
+    })
+    const papel = await page
+      .frameLocator(`iframe[title="${tituloFrame}"]`)
+      .locator('body')
+      .evaluate((body) => {
+        const folha = body.querySelector('.pagina, .recibo-pagina')
+        const estilo = getComputedStyle(folha)
+        return {
+          fundo: getComputedStyle(body).backgroundColor,
+          padding: getComputedStyle(body).padding,
+          margem: estilo.marginTop + ' ' + estilo.marginBottom,
+          contorno: estilo.outline,
+          sombra: estilo.boxShadow
+        }
+      })
+    const atual = { moldura, papel }
+    if (estiloPrevia)
+      assert.deepEqual(atual, estiloPrevia, `${tituloFrame}: estilo da prévia divergente`)
+    else estiloPrevia = atual
+  }
   const conferir = async (nome) => {
     for (const largura of [1024, 1440]) {
       await app.evaluate(({ BrowserWindow }, largura) => {
@@ -96,6 +129,11 @@ try {
     .click()
   await page.getByRole('heading', { name: 'Dados do cliente no documento', exact: true }).waitFor()
   await conferir('editor-proposta')
+  await page.getByRole('button', { name: 'Prévia', exact: true }).click()
+  await page.frameLocator('iframe[title="Prévia"]').locator('.pagina').first().waitFor()
+  await conferirPrevia('Prévia')
+  await conferir('previa-proposta')
+  await page.getByRole('button', { name: 'Fechar', exact: true }).click()
   await page.getByRole('button', { name: 'Versões e transferência', exact: true }).click()
   await page.frameLocator('iframe[title="Prévia da versão"]').locator('body').waitFor()
   await conferir('linha-tempo')
@@ -109,11 +147,29 @@ try {
   await page.getByRole('heading', { name: 'Dados do relatório', exact: true }).waitFor()
   await conferir('editor-relatorio')
   await page.getByRole('button', { name: 'Prévia', exact: true }).click()
+  await page
+    .frameLocator('iframe[title="Prévia do relatório"]')
+    .locator('.pagina')
+    .first()
+    .waitFor()
+  await conferirPrevia('Prévia do relatório')
   await conferir('previa-relatorio')
   await page.getByRole('button', { name: 'Fechar', exact: true }).click()
   await page.getByRole('button', { name: 'Recibos', exact: true }).click()
-  await page.getByText('Recebido', { exact: true }).waitFor()
+  await page.getByRole('table').getByText('Recebido', { exact: true }).waitFor()
   await conferir('lista-recibos')
+  const recibo = await page.evaluate((id) => window.api.recibos.get(id), dados.reciboId)
+  await page.getByRole('button', { name: `Abrir recibo Nº ${recibo.numero}`, exact: true }).click()
+  await conferir('recibo-recebido')
+  await page.getByRole('button', { name: 'Prévia', exact: true }).click()
+  await page
+    .frameLocator('iframe[title="Recibo"]')
+    .locator('body[data-recibo-paginado="true"]')
+    .waitFor()
+  await conferirPrevia('Recibo')
+  await conferir('previa-recibo')
+  await page.getByRole('button', { name: 'Fechar', exact: true }).click()
+  await page.getByRole('button', { name: 'Voltar à lista', exact: true }).click()
   await page.getByRole('button', { name: 'Novo recibo', exact: true }).click()
   await conferir('editor-recibo')
   await page.getByRole('button', { name: 'Cadastros', exact: true }).click()

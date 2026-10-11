@@ -35,6 +35,14 @@ try {
     'Manutenção e limpeza da área.'
   ]
   for (let caso = 0; caso < nomes.length; caso++) {
+    await app.evaluate(
+      ({ BrowserWindow }, largura) => {
+        const janela = BrowserWindow.getAllWindows()[0]
+        janela.unmaximize()
+        janela.setContentSize(largura, 900)
+      },
+      caso === 1 ? 1440 : 1024
+    )
     await page.evaluate(
       (logoDataUrl) =>
         window.api.empresa.save({
@@ -83,9 +91,16 @@ try {
     assert.ok(!htmlAntigo.includes('Cadastro alterado depois'))
     await page.getByRole('button', { name: 'Orçamentos', exact: true }).click()
     await page.getByRole('button', { name: 'Recibos', exact: true }).click()
+    await page.getByLabel('Buscar recibos').fill('Busca sem resultados')
+    await page.getByText('Nenhum recibo encontrado', { exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Limpar filtros', exact: true }).click()
     await page
-      .getByRole('button')
-      .filter({ hasText: `${String(recibo.numero).padStart(6, '0')} · ${nomes[caso]}` })
+      .getByLabel('Filtrar estado dos recibos')
+      .selectOption(caso === 1 ? 'pendente' : 'recebido')
+    await page.getByLabel('Buscar recibos').fill(nomes[caso])
+    await page.screenshot({ path: join(saida, `lista-${caso + 1}.png`), fullPage: true })
+    await page
+      .getByRole('button', { name: `Abrir recibo Nº ${recibo.numero}`, exact: true })
       .click()
     await page.getByRole('button', { name: 'Prévia', exact: true }).click()
     const frame = page.frameLocator('iframe[title="Recibo"]')

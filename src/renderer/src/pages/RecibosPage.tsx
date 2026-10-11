@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { FolderOpen } from 'lucide-react'
 import { api } from '../lib/api'
 import { useNav, useBloqueioEdicao } from '../lib/nav'
 import { PageShell } from '../ui/layout'
@@ -14,6 +15,7 @@ import {
   SectionTitle,
   EmptyState,
   Badge,
+  IconButton,
   Mensagem
 } from '../ui/primitives'
 import { DadosClienteDocumento, LinhaTempo } from '../components/DocumentoExtras'
@@ -29,6 +31,14 @@ import { dataCivilHoje, formatMoeda, formatDataCurta } from '@shared/format'
 import { gerarHtmlRecibo } from '@shared/documento/recibo-template'
 import { resumoServicoRecibo } from '@shared/documento/recibo'
 import { PreviaDocumentoModal } from '../components/PreviaDocumentoModal'
+import { DataTableFrame, Pagination, SortableHeader, TableActions } from '../ui/dataTable'
+const estados = {
+  recebido: { label: 'Recebido', cor: 'green' },
+  cancelado: { label: 'Cancelado', cor: 'red' },
+  pendente: { label: 'Pagamento pendente', cor: 'amber' },
+  rascunho: { label: 'Rascunho', cor: 'slate' }
+} as const
+type CampoLista = 'numero' | 'data' | 'destinatario' | 'valor' | 'status'
 const vazio = (): Recibo => ({
   id: '',
   numero: 0,
@@ -47,6 +57,11 @@ const vazio = (): Recibo => ({
 export function RecibosPage({ reciboId }: { reciboId?: string }): JSX.Element {
   const { navegar } = useNav()
   const [lista, setLista] = useState<Recibo[]>([])
+  const [busca, setBusca] = useState('')
+  const [estado, setEstado] = useState<Recibo['status'] | ''>('')
+  const [campoLista, setCampoLista] = useState<CampoLista>('numero')
+  const [direcao, setDirecao] = useState<'asc' | 'desc'>('desc')
+  const [paginaLista, setPaginaLista] = useState(1)
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [empresa, setEmpresa] = useState<EmpresaConfig | null>(null)
   const [orcamentos, setOrcamentos] = useState<ResumoOrcamento[]>([])
@@ -131,6 +146,52 @@ export function RecibosPage({ reciboId }: { reciboId?: string }): JSX.Element {
     navegar({ nome: 'recibos' })
   }
   const somenteLeitura = r?.status === 'recebido' || r?.status === 'cancelado'
+  const filtrados = useMemo(() => {
+    const normalizar = (texto: string): string =>
+      texto
+        .normalize('NFD')
+        .replace(/\p{Diacritic}/gu, '')
+        .toLowerCase()
+    const texto = normalizar(busca.trim())
+    return lista
+      .filter(
+        (d) =>
+          (!estado || d.status === estado) &&
+          (!texto ||
+            normalizar(
+              `${String(d.numero).padStart(6, '0')} ${d.destinatario} ${d.descricao} ${formatMoeda(d.valor)} ${formatDataCurta(d.data)}`
+            ).includes(texto))
+      )
+      .sort((a, b) => {
+        const av = a[campoLista],
+          bv = b[campoLista]
+        const comparacao =
+          typeof av === 'number' && typeof bv === 'number'
+            ? av - bv
+            : String(av).localeCompare(String(bv), 'pt-BR')
+        return direcao === 'asc' ? comparacao : -comparacao
+      })
+  }, [lista, busca, estado, campoLista, direcao])
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / 12))
+  const paginaAtual = Math.min(paginaLista, totalPaginas)
+  const inicio = (paginaAtual - 1) * 12
+  const ordenar = (campo: CampoLista): void => {
+    if (campo === campoLista) setDirecao((dir) => (dir === 'asc' ? 'desc' : 'asc'))
+    else {
+      setCampoLista(campo)
+      setDirecao(campo === 'destinatario' || campo === 'status' ? 'asc' : 'desc')
+    }
+    setPaginaLista(1)
+  }
+  const exportar = (formato: 'pdf' | 'docx'): void => {
+    if (!r?.id) return
+    void executar(async () => {
+      const documento = somenteLeitura ? r : await salvar()
+      await (formato === 'pdf' ? api.documentos.gerarReciboPdf : api.documentos.gerarReciboDocx)(
+        documento.id
+      )
+    })
+  }
   return (
     <PageShell
       titulo={
@@ -160,6 +221,17 @@ export function RecibosPage({ reciboId }: { reciboId?: string }): JSX.Element {
             <Button variant="outline" onClick={() => setPrevia(true)}>
               Prévia
             </Button>
+            {somenteLeitura &&
+              (['pdf', 'docx'] as const).map((formato) => (
+                <Button
+                  key={formato}
+                  variant="outline"
+                  disabled={ocupado}
+                  onClick={() => exportar(formato)}
+                >
+                  Exportar {formato.toUpperCase()}
+                </Button>
+              ))}
           </>
         ) : (
           <Button
@@ -180,55 +252,147 @@ export function RecibosPage({ reciboId }: { reciboId?: string }): JSX.Element {
     >
       {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
       {!r ? (
-        <div className="space-y-3">
-          {lista.length === 0 && (
-            <Card className="p-6">
-              <EmptyState
-                title="Nenhum recibo cadastrado"
-                description="Crie uma cobrança ou um recibo para registrar o pagamento de um serviço."
+        <div className="space-y-4">
+          {lista.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3">
+              <Input
+                aria-label="Buscar recibos"
+                className="max-w-md"
+                placeholder="Buscar por número, cliente, serviço ou valor…"
+                value={busca}
+                onChange={(e) => {
+                  setBusca(e.target.value)
+                  setPaginaLista(1)
+                }}
               />
-            </Card>
-          )}
-          {lista.map((d) => (
-            <Card key={d.id} className="overflow-hidden">
-              <button
-                className="w-full space-y-2 p-6 text-left transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-teal/40"
-                onClick={() => {
-                  setR(d)
-                  setSalvo(JSON.stringify(d))
+              <Select
+                aria-label="Filtrar estado dos recibos"
+                className="w-full md:w-56"
+                value={estado}
+                onChange={(e) => {
+                  setEstado(e.target.value as typeof estado)
+                  setPaginaLista(1)
                 }}
               >
-                <span className="block font-medium text-slate-800">
-                  {d.numero > 0 ? String(d.numero).padStart(6, '0') : 'Rascunho'} ·{' '}
-                  {d.destinatario || 'Cliente não informado'}
-                </span>
-                <p className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
-                  {formatMoeda(d.valor)} · {formatDataCurta(d.data)}
-                  <Badge
-                    color={
-                      d.status === 'recebido'
-                        ? 'green'
-                        : d.status === 'cancelado'
-                          ? 'red'
-                          : d.status === 'pendente'
-                            ? 'amber'
-                            : 'slate'
-                    }
+                <option value="">Todos os estados</option>
+                {Object.entries(estados).map(([id, e]) => (
+                  <option key={id} value={id}>
+                    {e.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
+          {filtrados.length === 0 ? (
+            <EmptyState
+              title={lista.length ? 'Nenhum recibo encontrado' : 'Nenhum recibo cadastrado'}
+              description={
+                lista.length
+                  ? 'Tente outro termo ou altere o filtro de estado.'
+                  : 'Crie uma cobrança ou um recibo para registrar o pagamento de um serviço.'
+              }
+              action={
+                lista.length ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setBusca('')
+                      setEstado('')
+                    }}
                   >
-                    {
-                      {
-                        recebido: 'Recebido',
-                        cancelado: 'Cancelado',
-                        pendente: 'Pagamento pendente',
-                        rascunho: 'Rascunho'
-                      }[d.status]
-                    }
-                  </Badge>
+                    Limpar filtros
+                  </Button>
+                ) : undefined
+              }
+            />
+          ) : (
+            <>
+              <DataTableFrame minWidth="880px">
+                <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+                  <tr>
+                    {(
+                      [
+                        ['numero', 'Nº', 'w-[9%]'],
+                        ['data', 'Data', 'w-[12%]'],
+                        ['destinatario', 'Cliente / serviço', 'w-[33%]'],
+                        ['valor', 'Valor', 'w-[16%]'],
+                        ['status', 'Estado', 'w-[22%]']
+                      ] as const
+                    ).map(([campo, label, className]) => (
+                      <SortableHeader
+                        key={campo}
+                        label={label}
+                        className={className}
+                        active={campoLista === campo}
+                        direction={direcao}
+                        onSort={() => ordenar(campo)}
+                        align={campo === 'valor' ? 'right' : 'left'}
+                      />
+                    ))}
+                    <th scope="col" className="w-[8%] px-4 py-3">
+                      <span className="sr-only">Ações</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filtrados.slice(inicio, inicio + 12).map((d) => (
+                    <tr key={d.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 font-medium tabular-nums text-slate-700">
+                        {d.numero > 0 ? String(d.numero).padStart(6, '0') : 'Rascunho'}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">{formatDataCurta(d.data)}</td>
+                      <td className="px-4 py-3">
+                        <p
+                          className="line-clamp-2 font-medium text-slate-800"
+                          title={d.destinatario}
+                        >
+                          {d.destinatario || 'Cliente não informado'}
+                        </p>
+                        <p
+                          className="mt-0.5 line-clamp-1 text-xs text-slate-500"
+                          title={d.descricao}
+                        >
+                          {d.descricao || 'Serviço não informado'}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 text-right font-medium tabular-nums text-slate-800">
+                        {formatMoeda(d.valor)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge color={estados[d.status].cor}>{estados[d.status].label}</Badge>
+                        {d.status === 'recebido' && (
+                          <p className="mt-1 text-xs text-slate-500">
+                            Quitação {d.quitacao === 'total' ? 'total' : 'parcial'}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <TableActions>
+                          <IconButton
+                            icon={FolderOpen}
+                            label={`Abrir recibo Nº ${d.numero}`}
+                            onClick={() => {
+                              setR(d)
+                              setSalvo(JSON.stringify(d))
+                            }}
+                          />
+                        </TableActions>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </DataTableFrame>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-slate-500">
+                  {inicio + 1}–{Math.min(inicio + 12, filtrados.length)} de {filtrados.length}{' '}
+                  {filtrados.length === 1 ? 'documento' : 'documentos'}
                 </p>
-                <p className="line-clamp-2 text-sm text-slate-500">{d.descricao}</p>
-              </button>
-            </Card>
-          ))}
+                {totalPaginas > 1 && (
+                  <Pagination pagina={paginaAtual} total={totalPaginas} onIr={setPaginaLista} />
+                )}
+              </div>
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-5">
@@ -422,22 +586,9 @@ export function RecibosPage({ reciboId }: { reciboId?: string }): JSX.Element {
                 </Button>
               )}
               {r.id &&
+                !somenteLeitura &&
                 (['pdf', 'docx'] as const).map((f) => (
-                  <Button
-                    variant="outline"
-                    disabled={ocupado}
-                    key={f}
-                    onClick={() =>
-                      void executar(async () => {
-                        if (!somenteLeitura) await salvar()
-                        await (
-                          f === 'pdf'
-                            ? api.documentos.gerarReciboPdf
-                            : api.documentos.gerarReciboDocx
-                        )(r.id)
-                      })
-                    }
-                  >
+                  <Button variant="outline" disabled={ocupado} key={f} onClick={() => exportar(f)}>
                     Exportar {f.toUpperCase()}
                   </Button>
                 ))}

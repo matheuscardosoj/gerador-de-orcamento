@@ -44,7 +44,7 @@ export function gerarHtmlRecibo(r: Recibo, empresa: EmpresaConfig): string {
     .recibo-assinatura p { width: 60%; margin: 0 auto; padding-top: 1mm; border-top: 1px solid #555; }
     .recibo-assinatura small { display: block; color: #555; font-size: 8pt; }
     @page { size: ${p.largura}mm ${p.altura}mm; margin: 0; }
-    @media screen { body { background: #f1f5f9; padding: 16px 0; } .recibo-pagina { margin: 0 auto 16px; outline: 1px solid #e2e8f0; box-shadow: 0 2px 10px #0f172a14; } }
+    @media screen { body { background: #fff; padding: 24px 0; } .recibo-pagina { margin: 0 auto 24px; outline: 1px solid #e2e8f0; box-shadow: 0 2px 10px rgba(15,23,42,.10); } }
     @media print { .recibo-pagina { break-after: page; } .recibo-pagina:last-child { break-after: auto; } }
   </style></head><body><div class="pagina recibo-pagina"><div class="recibo">
     <header class="recibo-cabecalho">
