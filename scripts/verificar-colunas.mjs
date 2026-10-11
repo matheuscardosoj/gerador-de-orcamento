@@ -55,6 +55,7 @@ const app = await electron.launch({
   env: { ...process.env, GERADOR_USER_DATA_DIR: join(saida, 'perfil') }
 })
 const resultados = []
+const dicas = []
 const erros = []
 try {
   const page = await app.firstWindow()
@@ -89,6 +90,30 @@ try {
       (n) => document.querySelectorAll('.data-table thead th').length === n,
       colunas[tipo].length + 2
     )
+    const linha = page.locator('.data-table tbody tr').first()
+    const conferirDicas = async (esperadas) => {
+      await page.waitForFunction((esperadas) => {
+        const visiveis = [...document.querySelectorAll('[role="tooltip"]')]
+          .filter((el) => getComputedStyle(el).visibility === 'visible')
+          .map((el) => el.textContent.trim())
+        return JSON.stringify(visiveis) === JSON.stringify(esperadas)
+      }, esperadas)
+      dicas.push({ tipo, esperadas })
+    }
+    await linha.locator('td').first().hover()
+    await conferirDicas([])
+    const botoes = linha.locator('td').last().getByRole('button')
+    for (const botao of await botoes.all()) {
+      const label = await botao.getAttribute('aria-label')
+      await botao.hover()
+      await conferirDicas([label])
+      await linha.locator('td').first().hover()
+      await conferirDicas([])
+      await botao.focus()
+      await conferirDicas([label])
+      await botao.evaluate((el) => el.blur())
+      await conferirDicas([])
+    }
     for (const largura of [1024, 1440, 1920, 2560]) {
       await app.evaluate(({ BrowserWindow }, largura) => {
         const janela = BrowserWindow.getAllWindows()[0]
@@ -168,8 +193,13 @@ try {
     }
   }
   assert.deepEqual(erros, [])
-  writeFileSync(join(saida, 'resultado.json'), JSON.stringify({ resultados, erros }, null, 2))
-  console.log(JSON.stringify({ saida, verificacoes: resultados.length, erros }))
+  writeFileSync(
+    join(saida, 'resultado.json'),
+    JSON.stringify({ resultados, dicas, erros }, null, 2)
+  )
+  console.log(
+    JSON.stringify({ saida, verificacoes: resultados.length, dicas: dicas.length, erros })
+  )
 } finally {
   await app.close()
 }

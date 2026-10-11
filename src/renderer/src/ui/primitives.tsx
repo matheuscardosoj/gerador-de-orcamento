@@ -100,7 +100,7 @@ export function IconButton({
   size?: ButtonSize
 }): JSX.Element {
   return (
-    <span className="group relative inline-flex">
+    <span className="group/icon-button relative inline-flex">
       <Button
         type="button"
         variant={variant}
@@ -113,7 +113,7 @@ export function IconButton({
       </Button>
       <span
         role="tooltip"
-        className="pointer-events-none invisible absolute right-0 bottom-full z-40 mb-1.5 w-max max-w-xs whitespace-normal rounded-md bg-slate-800 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-md transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+        className="pointer-events-none invisible absolute right-0 bottom-full z-40 mb-1.5 w-max max-w-xs whitespace-normal rounded-md bg-slate-800 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-md transition-opacity group-hover/icon-button:visible group-hover/icon-button:opacity-100 group-focus-within/icon-button:visible group-focus-within/icon-button:opacity-100"
       >
         {label}
       </span>
