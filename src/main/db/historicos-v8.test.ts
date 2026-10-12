@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { Database } from 'node-sqlite3-wasm'
-import { aplicarMigracoes } from './schema'
+import { aplicarMigracoes, VERSAO_BANCO } from './schema'
 const raiz = mkdtempSync(join(tmpdir(), 'gdo-v8-'))
 vi.mock('electron', () => ({
   app: { getPath: () => raiz, isPackaged: false, getAppPath: () => raiz }
@@ -29,7 +29,7 @@ it('migra catálogo v7 mantendo ordem alfabética, PF/PJ e snapshots antigos', (
     JSON.parse(String(d.get("SELECT dados_json FROM clientes WHERE id='pf'")?.dados_json))
       .tipoPessoa
   ).toBe('pf')
-  expect(d.get('PRAGMA user_version')?.user_version).toBe(8)
+  expect(d.get('PRAGMA user_version')?.user_version).toBe(VERSAO_BANCO)
   d.close()
 })
 it('reordena atomicamente e mantém preferências dos três históricos isoladas', async () => {

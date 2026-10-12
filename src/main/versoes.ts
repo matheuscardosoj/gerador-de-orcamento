@@ -1,6 +1,7 @@
 import { registrarImagem, imagemDataUrl } from './imagens'
 import { randomUUID } from 'crypto'
 import { hostname } from 'os'
+import { avisarDados } from './eventos'
 import { all, get, run, texto, tx } from './db/sqlite'
 import type { Documento, DocumentoMetadados, TipoDocumento, VersaoDocumento } from '@shared/types'
 
@@ -24,6 +25,7 @@ export function nuvemConfigurada(): boolean {
   return !!get("SELECT 1 FROM configuracoes WHERE chave='nuvem'")
 }
 export function enfileirar(entidade: string, payload: unknown): void {
+  if (!suspenso) avisarDados({ origem: 'local', entidades: [entidade] })
   if (suspenso || !nuvemConfigurada()) return
   const remoto = Number(
     get('SELECT revisao FROM sincronizacao WHERE entidade=?', [entidade])?.revisao ?? 0
@@ -41,6 +43,17 @@ export function enfileirar(entidade: string, payload: unknown): void {
 export function lerMeta(tipo: TipoDocumento, id: string): DocumentoMetadados {
   const l = get('SELECT dados FROM documento_meta WHERE tipo=? AND documento_id=?', [tipo, id])
   const meta: DocumentoMetadados = l ? JSON.parse(texto(l.dados)) : {}
+  const identificador = get(
+    'SELECT * FROM identificadores_documento WHERE tipo=? AND documento_id=?',
+    [tipo, id]
+  )
+  if (identificador) {
+    meta.idInterno = identificador.id_interno == null ? null : Number(identificador.id_interno)
+    meta.usuarioCriador = identificador.usuario_criador
+      ? texto(identificador.usuario_criador)
+      : null
+    meta.alteradoPor = identificador.alterado_por ? texto(identificador.alterado_por) : null
+  }
   if (meta.empresaSnapshot?.logoHash)
     meta.empresaSnapshot = {
       ...meta.empresaSnapshot,

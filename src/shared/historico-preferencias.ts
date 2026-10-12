@@ -14,6 +14,8 @@ export interface PreferenciasHistorico {
 }
 export const colunasHistorico: Record<TipoDocumento, string[]> = {
   orcamento: [
+    'ordem',
+    'idInterno',
     'data',
     'destinatario',
     'valor',
@@ -25,6 +27,8 @@ export const colunasHistorico: Record<TipoDocumento, string[]> = {
     'versao'
   ],
   relatorio: [
+    'ordem',
+    'idInterno',
     'data',
     'destinatario',
     'origem',
@@ -38,6 +42,8 @@ export const colunasHistorico: Record<TipoDocumento, string[]> = {
     'versao'
   ],
   recibo: [
+    'ordem',
+    'idInterno',
     'data',
     'destinatario',
     'valor',
@@ -65,10 +71,19 @@ export function preferenciasPadrao(tipo: TipoDocumento): PreferenciasHistorico {
     origem: '',
     colunas:
       tipo === 'relatorio'
-        ? ['data', 'destinatario', 'origem', 'servicosValor', 'valor', 'status']
+        ? [
+            'ordem',
+            'idInterno',
+            'data',
+            'destinatario',
+            'origem',
+            'servicosValor',
+            'valor',
+            'status'
+          ]
         : tipo === 'recibo'
-          ? ['data', 'destinatario', 'valor', 'status']
-          : ['data', 'destinatario', 'valor', 'status']
+          ? ['ordem', 'idInterno', 'data', 'destinatario', 'valor', 'status']
+          : ['ordem', 'idInterno', 'data', 'destinatario', 'valor', 'status']
   }
 }
 export function normalizarPreferencias(
@@ -81,7 +96,11 @@ export function normalizarPreferencias(
   for (const k of ['busca', 'estado', 'de', 'ate', 'minimo', 'maximo', 'saldo', 'origem'] as const)
     if (typeof p[k] === 'string') padrao[k] = p[k].slice(0, 500)
   if (p.direcao === 'asc' || p.direcao === 'desc') padrao.direcao = p.direcao
-  if (typeof p.campo === 'string' && ['numero', ...colunasHistorico[tipo]].includes(p.campo))
+  if (
+    typeof p.campo === 'string' &&
+    p.campo !== 'ordem' &&
+    ['numero', ...colunasHistorico[tipo]].includes(p.campo)
+  )
     padrao.campo = p.campo
   if (Array.isArray(p.colunas))
     padrao.colunas = [

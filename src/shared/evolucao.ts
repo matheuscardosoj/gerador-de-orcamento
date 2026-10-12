@@ -10,6 +10,9 @@ export interface EnderecoCliente {
 }
 export type CampoCliente = 'documento' | 'endereco' | 'telefone' | 'email' | 'pessoaContato'
 export interface DocumentoMetadados {
+  idInterno?: number | null
+  usuarioCriador?: string | null
+  alteradoPor?: string | null
   versao?: number
   clienteSnapshot?: Cliente | null
   empresaSnapshot?: EmpresaConfig
@@ -63,4 +66,44 @@ export interface StatusNuvem {
   erro: string | null
   bytesBanco: number
   reservas: Record<TipoDocumento, number>
+  empresaId?: string
+  usuarioId?: string
+  protocolo?: number
+  tempoReal?: 'desconectado' | 'conectando' | 'conectado' | 'indisponivel'
+  erroTempoReal?: string | null
+}
+
+export interface EventoDados {
+  origem: 'local' | 'nuvem'
+  entidades: string[]
+  status?: boolean
+}
+export interface MembroEmpresa {
+  usuarioId: string
+  nome: string
+  email: string
+  ativo: boolean
+}
+export interface ControleEdicao {
+  tipo: TipoDocumento
+  documentoId: string
+  usuarioId: string
+  usuarioNome: string
+  computador: string
+  geracao: number
+  expiraEm: string | null
+  offline: boolean
+  revisao: number
+  podeEditar: boolean
+}
+export interface RascunhoCompartilhado {
+  id: string
+  tipo: TipoDocumento
+  documentoId: string
+  baseRevisao: number
+  base: Documento
+  documento: Documento
+  criadoEm: string
+  atualizadoEm: string
+  estado: 'local' | 'conflito' | 'aplicado'
 }

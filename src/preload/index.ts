@@ -15,6 +15,16 @@ function crud<T, C>(dominio: string): CrudApi<T, C> {
 }
 
 const api: AppApi = {
+  eventos: {
+    observarDados: (callback) => {
+      const listener = (_evento: unknown, dados: import('../shared/evolucao').EventoDados): void =>
+        callback(dados)
+      ipcRenderer.on('dados.alterados', listener)
+      return () => {
+        ipcRenderer.removeListener('dados.alterados', listener)
+      }
+    }
+  },
   preferencias: {
     historico: (tipo) => invoke('preferencias.historico', tipo) as never,
     salvarHistorico: (tipo, dados) => invoke('preferencias.salvarHistorico', tipo, dados) as never

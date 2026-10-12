@@ -288,8 +288,45 @@ const v8 = (d: Database): void => {
     d.run('UPDATE clientes SET dados_json=? WHERE id=?', [JSON.stringify(dados), c.id])
   }
 }
-export const VERSAO_BANCO = 8
-const MIGRACOES: Array<(d: Database) => void> = [v1, v2, v3, v4, v5, v6, v7, v8]
+const v9 = (d: Database): void => {
+  d.exec(`
+    CREATE TABLE identificadores_documento (
+      tipo TEXT NOT NULL, documento_id TEXT NOT NULL, id_interno INTEGER,
+      usuario_criador TEXT, alterado_por TEXT,
+      PRIMARY KEY(tipo,documento_id), UNIQUE(tipo,id_interno)
+    );
+    CREATE TABLE edicoes_documento (
+      tipo TEXT NOT NULL, documento_id TEXT NOT NULL, usuario TEXT NOT NULL,
+      computador TEXT NOT NULL, geracao INTEGER NOT NULL, expira_em TEXT,
+      offline INTEGER NOT NULL DEFAULT 0, base_revisao INTEGER NOT NULL,
+      PRIMARY KEY(tipo,documento_id)
+    );
+    CREATE TABLE rascunhos_compartilhados (
+      id TEXT PRIMARY KEY, tipo TEXT NOT NULL, documento_id TEXT NOT NULL,
+      usuario TEXT, computador TEXT NOT NULL, base_revisao INTEGER NOT NULL,
+      base TEXT NOT NULL, documento TEXT NOT NULL, criado_em TEXT NOT NULL,
+      atualizado_em TEXT NOT NULL, estado TEXT NOT NULL DEFAULT 'local'
+    );
+    CREATE TABLE auditoria_colaboracao (
+      id TEXT PRIMARY KEY, criado_em TEXT NOT NULL, usuario TEXT,
+      computador TEXT, acao TEXT NOT NULL, entidade TEXT, dados TEXT NOT NULL
+    );
+  `)
+  for (const l of d.all(
+    "SELECT chave,valor FROM configuracoes WHERE chave LIKE 'historico:%'"
+  ) as Array<{ chave: string; valor: string }>) {
+    const p = JSON.parse(l.valor)
+    if (Array.isArray(p.colunas))
+      p.colunas = [
+        'ordem',
+        'idInterno',
+        ...p.colunas.filter((c: string) => !['ordem', 'idInterno'].includes(c))
+      ]
+    d.run('UPDATE configuracoes SET valor=? WHERE chave=?', [JSON.stringify(p), l.chave])
+  }
+}
+export const VERSAO_BANCO = 9
+const MIGRACOES: Array<(d: Database) => void> = [v1, v2, v3, v4, v5, v6, v7, v8, v9]
 
 export function aplicarMigracoes(d: Database, ate = MIGRACOES.length): void {
   const linha = d.get('PRAGMA user_version') as { user_version?: number } | null

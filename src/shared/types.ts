@@ -179,6 +179,7 @@ export interface Orcamento extends DocumentoMetadados {
 
 /** Dados compactos usados no histórico; não inclui coleções nem imagens. */
 export interface ResumoOrcamento {
+  idInterno?: number | null
   versao?: number
   id: string
   numero: number
@@ -260,6 +261,7 @@ export interface Relatorio extends DocumentoMetadados {
 
 /** Dados compactos usados no histórico de relatórios. */
 export interface ResumoRelatorio {
+  idInterno?: number | null
   versao?: number
   servicosBusca?: string[]
   id: string

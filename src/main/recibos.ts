@@ -81,6 +81,11 @@ export const recibosRepo = {
     return { ok: true }
   },
   list: (): Recibo[] => {
+    const identificadores = new Map(
+      all("SELECT documento_id,id_interno FROM identificadores_documento WHERE tipo='recibo'").map(
+        (l) => [texto(l.documento_id), l.id_interno == null ? null : Number(l.id_interno)]
+      )
+    )
     const metas = new Map(
       all("SELECT documento_id,dados FROM documento_meta WHERE tipo='recibo'").map((l) => [
         texto(l.documento_id),
@@ -89,7 +94,8 @@ export const recibosRepo = {
     )
     return all('SELECT id,dados FROM recibos ORDER BY numero DESC').map((l) => ({
       ...JSON.parse(texto(l.dados)),
-      ...metas.get(texto(l.id))
+      ...metas.get(texto(l.id)),
+      idInterno: identificadores.get(texto(l.id)) ?? null
     }))
   },
   get: (id: string): Recibo | null => {

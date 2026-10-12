@@ -176,6 +176,7 @@ export function criarMockApi(): AppApi {
   }
 
   return {
+    eventos: { observarDados: () => () => {} },
     preferencias: {
       historico: async (tipo) => {
         return normalizarPreferencias(

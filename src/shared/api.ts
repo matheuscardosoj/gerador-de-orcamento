@@ -73,6 +73,9 @@ export interface ResultadoImportacaoDados {
 }
 
 export interface AppApi {
+  eventos: {
+    observarDados(callback: (evento: import('./evolucao').EventoDados) => void): () => void
+  }
   preferencias: {
     historico(
       tipo: import('./types').TipoDocumento

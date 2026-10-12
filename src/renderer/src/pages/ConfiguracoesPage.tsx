@@ -49,6 +49,7 @@ export function ConfiguracoesPage(): JSX.Element {
   const [aba, setAba] = useState<Aba>('empresa')
   return (
     <PageShell
+      largura="full"
       titulo="Configurações"
       descricao="Dados fixos, parâmetros de cálculo e textos padrão"
     >
@@ -60,7 +61,7 @@ export function ConfiguracoesPage(): JSX.Element {
           { id: 'parametros', label: 'Parâmetros financeiros' },
           { id: 'observacoes', label: 'Observações padrão' },
           { id: 'pagamentos', label: 'Formas de pagamento' },
-          { id: 'numeracao', label: 'Numeração' },
+          { id: 'numeracao', label: 'Numeração dos documentos' },
           { id: 'dados', label: 'Dados e backup' },
           { id: 'nuvem', label: 'Nuvem / Sincronização' },
           { id: 'ia', label: 'IA local' }

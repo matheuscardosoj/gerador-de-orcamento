@@ -79,7 +79,12 @@ function SecaoClientes({
   edit: Cliente | 'novo' | null
   setEdit: (edit: Cliente | 'novo' | null) => void
 }): JSX.Element {
-  const { data, loading, error: erroCarga, reload } = useAsync(() => api.clientes.list(), [])
+  const {
+    data,
+    loading,
+    error: erroCarga,
+    reload
+  } = useAsync(() => api.clientes.list(), [], ['clientes'])
   const [busca, setBusca] = useState('')
   const [estado, setEstado] = useState('')
   const [tipo, setTipo] = useState('')
@@ -477,7 +482,12 @@ function SecaoServicos({
   edit: ServicoCatalogo | 'novo' | null
   setEdit: (edit: ServicoCatalogo | 'novo' | null) => void
 }): JSX.Element {
-  const { data, loading, error: erroCarga, reload } = useAsync(() => api.servicos.list(), [])
+  const {
+    data,
+    loading,
+    error: erroCarga,
+    reload
+  } = useAsync(() => api.servicos.list(), [], ['servicos'])
   const [busca, setBusca] = useState('')
   const [excluir, setExcluir] = useState<ServicoCatalogo | null>(null)
   const [reordenando, setReordenando] = useState(false)

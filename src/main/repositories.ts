@@ -451,6 +451,7 @@ function paraOrcamento(l: Linha, filhos: boolean, comMiniaturas = filhos): Orcam
 
 function listarResumosOrcamento(): ResumoOrcamento[] {
   const versoes = versoesResumo('orcamento')
+  const identificadores = idsResumo('orcamento')
   const servicosPorOrcamento = new Map<string, string[]>()
   for (const linha of all('SELECT orcamento_id, descricao FROM itens_servico ORDER BY ordem')) {
     const id = texto(linha.orcamento_id)
@@ -468,6 +469,7 @@ function listarResumosOrcamento(): ResumoOrcamento[] {
     return {
       id,
       versao: versoes.get(id),
+      idInterno: identificadores.get(id) ?? null,
       numero: numero(linha.numero),
       data: normalizarDataCivil(texto(linha.data)),
       destinatario: normalizarDestinatario(texto(linha.destinatario_resumo)),
@@ -963,6 +965,7 @@ function paraRelatorio(l: Linha, filhos: boolean, comMiniaturas = filhos): Relat
 }
 
 function listarResumosRelatorio(): ResumoRelatorio[] {
+  const identificadores = idsResumo('relatorio')
   const versoes = versoesResumo('relatorio')
   const servicos = new Map<string, string[]>()
   for (const r of all(
@@ -982,6 +985,7 @@ function listarResumosRelatorio(): ResumoRelatorio[] {
     return {
       id: texto(linha.id),
       versao: versoes.get(texto(linha.id)),
+      idInterno: identificadores.get(texto(linha.id)) ?? null,
       servicosBusca: servicos.get(texto(linha.id)) ?? [],
       numero: numero(linha.numero),
       data: normalizarDataCivil(texto(linha.data)),
@@ -1009,6 +1013,13 @@ function listarResumosRelatorio(): ResumoRelatorio[] {
   })
 }
 
+function idsResumo(tipo: string): Map<string, number | null> {
+  return new Map(
+    all('SELECT documento_id,id_interno FROM identificadores_documento WHERE tipo=?', [tipo]).map(
+      (l) => [texto(l.documento_id), l.id_interno == null ? null : Number(l.id_interno)]
+    )
+  )
+}
 function versoesResumo(tipo: string): Map<string, number> {
   return new Map(
     all(

@@ -39,6 +39,7 @@ import { descricaoExclusaoRecibo, rotuloExclusaoRecibo } from '@shared/recibo-ex
 import type { Recibo, ResumoOrcamento, ResumoRelatorio, TipoDocumento } from '@shared/types'
 
 export interface RegistroHistorico {
+  idInterno?: number | null
   id: string
   numero: number
   data: string
@@ -82,7 +83,9 @@ export const registroRecibo = (r: Recibo, origem: string): RegistroHistorico => 
   quitacao: r.quitacao === 'total' ? 'Total' : 'Parcial'
 })
 const labels: Record<string, string> = {
-  numero: 'Nº',
+  ordem: 'Ordem',
+  idInterno: 'ID interno',
+  numero: 'Nº documento',
   data: 'Data',
   destinatario: 'Cliente',
   valor: 'Valor',
@@ -116,6 +119,7 @@ function valorCampo(r: RegistroHistorico, k: string): string | number {
   return (r as unknown as Record<string, string | number>)[k] ?? ''
 }
 function textoCampo(r: RegistroHistorico, k: string): string {
+  if (k === 'idInterno') return r.idInterno ? String(r.idInterno) : 'Pendente'
   const v = valorCampo(r, k)
   if (['valor', 'servicosValor'].includes(k))
     return (
@@ -208,6 +212,7 @@ export function HistoricoDocumentos({
               (pref.origem === 'avulso' ? !r.origemTipo : r.origemTipo === pref.origem)) &&
             correspondeBusca(pref.busca, [
               r.numero,
+              r.idInterno ?? '',
               String(r.numero).padStart(6, '0'),
               r.destinatario,
               r.servicos ?? '',
@@ -244,7 +249,7 @@ export function HistoricoDocumentos({
   const larguraColuna = (campo: string): number =>
     ['destinatario', 'servicos', 'descricao', 'anotacao', 'origem'].includes(campo)
       ? 240
-      : campo === 'versao'
+      : ['versao', 'ordem', 'idInterno'].includes(campo)
         ? 90
         : 145
   const larguraAcoes = tipo === 'orcamento' ? 220 : tipo === 'relatorio' ? 145 : 110
@@ -421,33 +426,39 @@ export function HistoricoDocumentos({
             </colgroup>
             <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
-                {['numero', ...pref.colunas].map((k) => (
-                  <SortableHeader
-                    key={k}
-                    label={
-                      k === 'valor'
-                        ? tipo === 'orcamento'
-                          ? 'Total'
-                          : tipo === 'relatorio'
-                            ? 'Saldo'
-                            : 'Valor'
-                        : labels[k]
-                    }
-                    active={pref.campo === k}
-                    direction={pref.direcao}
-                    wrap
-                    className={k === 'numero' ? 'sticky left-0 z-[2] bg-slate-50' : undefined}
-                    onSort={() => ordenar(k)}
-                    align={['valor', 'servicosValor'].includes(k) ? 'right' : 'left'}
-                  />
-                ))}
+                {['numero', ...pref.colunas].map((k) =>
+                  k === 'ordem' ? (
+                    <th key={k} scope="col" className="px-4 py-3 text-left">
+                      Ordem
+                    </th>
+                  ) : (
+                    <SortableHeader
+                      key={k}
+                      label={
+                        k === 'valor'
+                          ? tipo === 'orcamento'
+                            ? 'Total'
+                            : tipo === 'relatorio'
+                              ? 'Saldo'
+                              : 'Valor'
+                          : labels[k]
+                      }
+                      active={pref.campo === k}
+                      direction={pref.direcao}
+                      wrap
+                      className={k === 'numero' ? 'sticky left-0 z-[2] bg-slate-50' : undefined}
+                      onSort={() => ordenar(k)}
+                      align={['valor', 'servicosValor'].includes(k) ? 'right' : 'left'}
+                    />
+                  )
+                )}
                 <th className="sticky right-0 z-[2] bg-slate-50 px-4 py-3 shadow-[-1px_0_0_0_#e2e8f0]">
                   <span className="sr-only">Ações</span>
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtrados.slice(inicio, inicio + 12).map((r) => (
+              {filtrados.slice(inicio, inicio + 12).map((r, indice) => (
                 <tr key={r.id} className="group/linha-historico h-[62px] hover:bg-slate-50">
                   <td className="sticky left-0 z-[1] whitespace-nowrap bg-white px-4 py-3 font-medium text-slate-800 shadow-[1px_0_0_0_#e2e8f0] group-hover/linha-historico:bg-slate-50">
                     {r.numero > 0 ? String(r.numero).padStart(6, '0') : 'Rascunho'}
@@ -457,7 +468,9 @@ export function HistoricoDocumentos({
                       key={k}
                       className={`px-4 py-3 text-slate-600 ${['valor', 'servicosValor'].includes(k) ? 'text-right font-medium' : ''}`}
                     >
-                      {k === 'status' ? (
+                      {k === 'ordem' ? (
+                        inicio + indice + 1
+                      ) : k === 'status' ? (
                         <Badge color={estados[r.status]?.cor ?? 'slate'}>{textoCampo(r, k)}</Badge>
                       ) : (
                         <span className="line-clamp-2 break-words" title={textoCampo(r, k)}>

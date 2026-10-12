@@ -2,6 +2,7 @@ import { registrarVersao } from './versoes'
 import { orcamentosRepo, relatoriosRepo } from './repositories'
 import { recibosRepo } from './recibos'
 import { capturarCadastros, sincronizarNuvem, statusNuvem } from './nuvem'
+import { observarDados } from './eventos'
 import { app, shell, dialog, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -121,6 +122,12 @@ if (temTrava)
       return
     }
     registrarIpc()
+    const pararEventos = observarDados((evento) => {
+      for (const janela of BrowserWindow.getAllWindows()) {
+        if (!janela.webContents.isDestroyed()) janela.webContents.send('dados.alterados', evento)
+      }
+    })
+    app.once('before-quit', pararEventos)
     capturarCadastros()
     const sincronizarQuandoConectado = (): void => {
       if (statusNuvem().autenticada) void sincronizarNuvem()

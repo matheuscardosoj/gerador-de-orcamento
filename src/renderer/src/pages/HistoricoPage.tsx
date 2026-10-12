@@ -7,7 +7,7 @@ import { Button } from '../ui/primitives'
 import { HistoricoDocumentos, registroOrcamento } from '../components/HistoricoDocumentos'
 export function HistoricoPage(): JSX.Element {
   const { navegar } = useNav()
-  const { data, loading, error, reload } = useAsync(() => api.orcamentos.list(), [])
+  const { data, loading, error, reload } = useAsync(() => api.orcamentos.list(), [], ['orcamento'])
   return (
     <PageShell
       largura="full"
