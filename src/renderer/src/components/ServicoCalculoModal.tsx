@@ -43,11 +43,7 @@ function ModoSelect({
   onChange: (m: ModoAplicacao) => void
 }): JSX.Element {
   return (
-    <Select
-      value={value}
-      onChange={(e) => onChange(e.target.value as ModoAplicacao)}
-      className="w-32"
-    >
+    <Select value={value} onChange={(e) => onChange(e.target.value as ModoAplicacao)}>
       <option value="cheio">Valor cheio</option>
       <option value="diario">Por dia</option>
     </Select>
@@ -94,6 +90,9 @@ export function ServicoCalculoModal({
 
   const set = (patch: Partial<EntradaCalculo>): void => setE((prev) => ({ ...prev, ...patch }))
   const resultado = useMemo(() => calcularCustoServico(e), [e])
+  const semLucro = new Set(
+    e.avulsos.filter((a) => a.aplicarAcrescimo === false).map((a) => `avulso:${a.id}`)
+  )
 
   const valorUnitario = quantidade > 0 ? resultado.precoFinal / quantidade : resultado.precoFinal
 
@@ -120,9 +119,9 @@ export function ServicoCalculoModal({
   }
 
   return (
-    <Modal open onClose={onCancel} title="Calcular custo do serviço" size="2xl">
+    <Modal open onClose={onCancel} title="Calcular custo do serviço" size="3xl">
       {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         {/* Coluna de entradas */}
         <div className="space-y-4">
           <Bloco titulo="Serviço">
@@ -131,18 +130,21 @@ export function ServicoCalculoModal({
                 <Input
                   value={descricao}
                   onChange={(ev) => setDescricao(ev.target.value)}
-                  placeholder="Ex.: Construção de 400m de cerca…"
+                  placeholder="Descreva o serviço que será executado"
                 />
                 <RevisaoIA texto={descricao} campo="descricaoServico" onAplicar={setDescricao} />
               </Field>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <Field label="Unidade">
                   <Input value={unidade} onChange={(ev) => setUnidade(ev.target.value)} />
                 </Field>
-                <Field label="Quantidade" hint="Para derivar valor unitário">
+                <Field
+                  label="Quantidade"
+                  hint="Quantidade de unidades usada para calcular o preço unitário"
+                >
                   <NumberField value={quantidade} onChange={setQuantidade} min={1} />
                 </Field>
-                <Field label="Dias de serviço" hint="Multiplica custos 'por dia'">
+                <Field label="Dias de serviço" hint="Duração usada nos custos aplicados por dia">
                   <NumberField value={e.dias} onChange={(v) => set({ dias: v })} min={1} />
                 </Field>
               </div>
@@ -188,7 +190,7 @@ export function ServicoCalculoModal({
               )}
               <Field
                 label="Acréscimo sobre o custo (%)"
-                hint="Aplicado aos custos marcados para acréscimo; despesas repassadas ficam fora desta base"
+                hint="Percentual de lucro aplicado somente aos custos com essa opção marcada"
               >
                 <NumberField
                   value={e.margemLucroPercent}
@@ -202,7 +204,7 @@ export function ServicoCalculoModal({
         </div>
 
         {/* Coluna de resumo */}
-        <div className="lg:sticky lg:top-4 lg:self-start">
+        <div className="xl:sticky xl:top-4 xl:self-start">
           <Card className="overflow-hidden">
             <div className="border-b border-slate-200 bg-white px-4 py-3">
               <h4 className="text-sm font-semibold text-slate-700">Resumo do cálculo</h4>
@@ -214,9 +216,14 @@ export function ServicoCalculoModal({
                 </p>
               )}
               {resultado.breakdown.map((l) => (
-                <div key={l.chave} className="flex justify-between gap-2 text-xs">
-                  <span className="text-slate-500" title={l.detalhe}>
+                <div key={l.chave} className="flex items-start justify-between gap-3 text-xs">
+                  <span className="min-w-0 break-words text-slate-500" title={l.detalhe}>
                     {l.descricao}
+                    {semLucro.has(l.chave) && (
+                      <span className="mt-0.5 block text-[11px] font-medium text-slate-600">
+                        Cobrado pelo custo, sem lucro
+                      </span>
+                    )}
                   </span>
                   <span className="shrink-0 font-medium text-slate-700">
                     {formatMoeda(l.valor)}
@@ -225,23 +232,25 @@ export function ServicoCalculoModal({
               ))}
             </div>
             <div className="space-y-1.5 border-t border-slate-200 bg-white px-4 py-3 text-sm">
-              <Linha label="Custo total" valor={resultado.custoTotal} />
-              {(resultado.custoRepassado ?? 0) > 0 && (
-                <>
-                  <Linha
-                    label="Base do acréscimo"
-                    valor={resultado.custoComAcrescimo ?? resultado.custoTotal}
-                  />
-                  <Linha label="Repasses sem acréscimo" valor={resultado.custoRepassado ?? 0} />
-                </>
-              )}
               <Linha
-                label={`Acréscimo (${resultado.margemLucroPercent}%)`}
+                label={
+                  (resultado.custoRepassado ?? 0) > 0 ? 'Custos com lucro' : 'Custo do serviço'
+                }
+                valor={resultado.custoComAcrescimo ?? resultado.custoTotal}
+              />
+              <Linha
+                label={`Acréscimo de lucro (${resultado.margemLucroPercent}%)`}
                 valor={resultado.valorMargem}
               />
+              {(resultado.custoRepassado ?? 0) > 0 && (
+                <Linha label="Custos sem lucro" valor={resultado.custoRepassado ?? 0} />
+              )}
+              <div className="border-t border-slate-100 pt-2">
+                <Linha label="Subtotal antes do imposto" valor={resultado.precoComMargem} />
+              </div>
               {resultado.emitirNota && (
                 <Linha
-                  label={`Imposto NFS (${resultado.aliquotaNotaPercent}%)`}
+                  label={`Imposto da nota (${resultado.aliquotaNotaPercent}%)`}
                   valor={resultado.impostoNota}
                 />
               )}
@@ -254,6 +263,12 @@ export function ServicoCalculoModal({
               {quantidade > 0 && (
                 <p className="text-right text-xs text-slate-400">
                   {formatMoeda(valorUnitario)} / {unidade}
+                </p>
+              )}
+              {(resultado.custoRepassado ?? 0) > 0 && (
+                <p className="pt-2 text-xs leading-relaxed text-slate-500">
+                  Custos sem lucro são cobrados pelo valor do custo. O imposto da nota também incide
+                  sobre eles, quando houver emissão.
                 </p>
               )}
             </div>
@@ -274,9 +289,9 @@ export function ServicoCalculoModal({
 
 function Linha({ label, valor }: { label: string; valor: number }): JSX.Element {
   return (
-    <div className="flex justify-between text-slate-600">
-      <span>{label}</span>
-      <span className="font-medium">{formatMoeda(valor)}</span>
+    <div className="flex items-baseline justify-between gap-3 text-slate-600">
+      <span className="min-w-0 leading-5">{label}</span>
+      <span className="shrink-0 whitespace-nowrap font-medium">{formatMoeda(valor)}</span>
     </div>
   )
 }
@@ -312,7 +327,7 @@ function MaoDeObraBloco({ e, set }: BlocoProps): JSX.Element {
               <div className="mb-2 flex items-end gap-2">
                 <Field label="Descrição" className="flex-1">
                   <Input
-                    placeholder="Ex.: Diária a R$ 170 — equipe de cerca"
+                    placeholder="Identifique a equipe ou o profissional"
                     value={g.descricao ?? ''}
                     onChange={(ev) => upd(g.id, { descricao: ev.target.value })}
                   />
@@ -324,7 +339,7 @@ function MaoDeObraBloco({ e, set }: BlocoProps): JSX.Element {
                   className="text-slate-400"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <Field label="Funcionários">
                   <NumberField
                     value={g.qtdFuncionarios}
@@ -469,18 +484,20 @@ function AlimentacaoBloco({
     >
       <div className="space-y-3">
         {e.alimentacoes.length === 0 && (
-          <p className="text-xs text-slate-400">Ex.: café da manhã, almoço, janta.</p>
+          <p className="text-xs text-slate-400">
+            Inclua os custos de alimentação das pessoas envolvidas no serviço.
+          </p>
         )}
         <ListaOrdenavel itens={e.alimentacoes} onChange={(alimentacoes) => set({ alimentacoes })}>
           {e.alimentacoes.map((a) => (
             <div key={a.id} className="rounded-lg border border-slate-200 p-3">
               <LinhaDescricao
                 valor={a.descricao ?? ''}
-                placeholder="Ex.: Almoço na obra"
+                placeholder="Identifique a despesa de alimentação"
                 onChange={(v) => upd(a.id, { descricao: v })}
                 onRemove={() => rem(a.id)}
               />
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <Field label="Pessoas">
                   <NumberField
                     value={a.qtdPessoas}
@@ -532,38 +549,39 @@ function FerramentasBloco({ e, set }: BlocoProps): JSX.Element {
       <div className="space-y-2">
         {e.ferramentas.length === 0 && (
           <p className="text-xs text-slate-400">
-            Ex.: gasolina de motoserra, manutenção de roçadeira.
+            Inclua insumos e despesas de manutenção dos equipamentos usados no serviço.
           </p>
         )}
         <ListaOrdenavel itens={e.ferramentas} onChange={(ferramentas) => set({ ferramentas })}>
           {e.ferramentas.map((f) => (
-            <div key={f.id} className="grid grid-cols-2 gap-2 md:grid-cols-[2fr_1fr_1fr_auto]">
-              <Input
-                placeholder="Descrição"
-                value={f.descricao}
-                onChange={(ev) => upd(f.id, { descricao: ev.target.value })}
+            <div key={f.id} className="rounded-lg border border-slate-200 p-3">
+              <LinhaDescricao
+                valor={f.descricao}
+                placeholder="Identifique o insumo ou a manutenção"
+                onChange={(descricao) => upd(f.id, { descricao })}
+                onRemove={() => rem(f.id)}
               />
-              <Select
-                value={f.tipo}
-                onChange={(ev) => upd(f.id, { tipo: ev.target.value as typeof f.tipo })}
-              >
-                <option value="insumo">Insumo</option>
-                <option value="manutencao">Manutenção</option>
-              </Select>
-              <NumberField
-                format="money"
-                value={f.valor}
-                onChange={(v) => upd(f.id, { valor: v })}
-                min={0}
-              />
-              <div className="flex items-center gap-1">
-                <ModoSelect value={f.modo} onChange={(m) => upd(f.id, { modo: m })} />
-                <IconButton
-                  icon={X}
-                  label="Remover ferramenta"
-                  onClick={() => rem(f.id)}
-                  className="text-slate-400"
-                />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <Field label="Categoria">
+                  <Select
+                    value={f.tipo}
+                    onChange={(ev) => upd(f.id, { tipo: ev.target.value as typeof f.tipo })}
+                  >
+                    <option value="insumo">Insumo</option>
+                    <option value="manutencao">Manutenção</option>
+                  </Select>
+                </Field>
+                <Field label="Valor do custo (R$)">
+                  <NumberField
+                    format="money"
+                    value={f.valor}
+                    onChange={(v) => upd(f.id, { valor: v })}
+                    min={0}
+                  />
+                </Field>
+                <Field label="Aplicação">
+                  <ModoSelect value={f.modo} onChange={(m) => upd(f.id, { modo: m })} />
+                </Field>
               </div>
             </div>
           ))}
@@ -617,11 +635,11 @@ function CombustivelBloco({
               <div key={c.id} className="rounded-lg border border-slate-200 p-3">
                 <LinhaDescricao
                   valor={c.descricao ?? ''}
-                  placeholder="Ex.: Caminhonete da equipe"
+                  placeholder="Identifique o veículo ou o deslocamento"
                   onChange={(v) => upd(c.id, { descricao: v })}
                   onRemove={() => rem(c.id)}
                 />
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field label={c.modo === 'diario' ? 'Km por dia' : 'Km total'}>
                     <NumberField
                       value={c.distanciaKm}
@@ -692,21 +710,23 @@ function EstadiaBloco({ e, set }: BlocoProps): JSX.Element {
     >
       <div className="space-y-3">
         {e.estadias.length === 0 && (
-          <p className="text-xs text-slate-400">Ex.: hotel por pessoa, casa alugada por mês.</p>
+          <p className="text-xs text-slate-400">
+            Inclua despesas de hospedagem por pessoa ou de aluguel de imóvel.
+          </p>
         )}
         <ListaOrdenavel itens={e.estadias} onChange={(estadias) => set({ estadias })}>
           {e.estadias.map((s) => (
             <div key={s.id} className="rounded-lg border border-slate-200 p-3">
               <LinhaDescricao
                 valor={s.descricao ?? ''}
-                placeholder="Ex.: Casa alugada em Itaberaí"
+                placeholder="Identifique a hospedagem ou o aluguel"
                 onChange={(v) => upd(s.id, { descricao: v })}
                 onRemove={() => rem(s.id)}
               />
               <div
                 className={cn(
                   'grid gap-3',
-                  s.tipo === 'aluguel' ? 'grid-cols-3' : 'grid-cols-2 md:grid-cols-4'
+                  s.tipo === 'aluguel' ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2'
                 )}
               >
                 <Field label="Tipo">
@@ -786,41 +806,43 @@ function AvulsosBloco({ e, set }: BlocoProps): JSX.Element {
       <div className="space-y-2">
         {e.avulsos.length === 0 && (
           <p className="text-xs text-slate-400">
-            Custos adicionais, como Munck. Desmarque o acréscimo para repassar apenas o custo e o
-            imposto da nota.
+            Inclua despesas adicionais do serviço. Escolha em cada item se haverá acréscimo de
+            lucro.
           </p>
         )}
         <ListaOrdenavel itens={e.avulsos} onChange={(avulsos) => set({ avulsos })}>
           {e.avulsos.map((a) => (
-            <div key={a.id} className="grid grid-cols-[2fr_1fr_auto] gap-2">
-              <Input
-                placeholder="Descrição"
-                value={a.descricao}
-                onChange={(ev) => upd(a.id, { descricao: ev.target.value })}
+            <div key={a.id} className="rounded-lg border border-slate-200 p-3">
+              <LinhaDescricao
+                valor={a.descricao}
+                placeholder="Identifique a despesa adicional"
+                onChange={(descricao) => upd(a.id, { descricao })}
+                onRemove={() => rem(a.id)}
               />
-              <div>
-                <NumberField
-                  format="money"
-                  value={a.valor}
-                  onChange={(v) => upd(a.id, { valor: v })}
-                  min={0}
-                />
-                <div className="mt-2">
-                  <Checkbox
-                    checked={a.aplicarAcrescimo !== false}
-                    onChange={(aplicarAcrescimo) => upd(a.id, { aplicarAcrescimo })}
-                    label="Aplicar acréscimo de lucro"
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label="Valor do custo (R$)">
+                  <NumberField
+                    format="money"
+                    value={a.valor}
+                    onChange={(v) => upd(a.id, { valor: v })}
+                    min={0}
                   />
-                </div>
+                </Field>
+                <Field label="Aplicação">
+                  <ModoSelect value={a.modo} onChange={(m) => upd(a.id, { modo: m })} />
+                </Field>
               </div>
-              <div className="flex items-center gap-1">
-                <ModoSelect value={a.modo} onChange={(m) => upd(a.id, { modo: m })} />
-                <IconButton
-                  icon={X}
-                  label="Remover outro custo"
-                  onClick={() => rem(a.id)}
-                  className={cn('text-slate-400')}
+              <div className="mt-3 space-y-1.5">
+                <Checkbox
+                  checked={a.aplicarAcrescimo !== false}
+                  onChange={(aplicarAcrescimo) => upd(a.id, { aplicarAcrescimo })}
+                  label="Aplicar acréscimo de lucro"
                 />
+                <p className="text-xs leading-relaxed text-slate-500">
+                  {a.aplicarAcrescimo === false
+                    ? 'Cobrado pelo valor do custo. O imposto da nota será incluído se aplicável.'
+                    : 'O percentual de lucro será aplicado sobre este custo.'}
+                </p>
               </div>
             </div>
           ))}

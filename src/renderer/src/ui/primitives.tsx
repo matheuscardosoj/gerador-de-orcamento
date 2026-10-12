@@ -641,7 +641,7 @@ export function Modal({
   title?: ReactNode
   children: ReactNode
   footer?: ReactNode
-  size?: 'md' | 'lg' | 'xl' | '2xl'
+  size?: 'md' | 'lg' | 'xl' | '2xl' | '3xl'
   busy?: boolean
 }): JSX.Element | null {
   const tituloId = useId()
@@ -724,7 +724,9 @@ export function Modal({
         ? 'max-w-2xl'
         : size === 'xl'
           ? 'max-w-4xl'
-          : 'max-w-5xl'
+          : size === '2xl'
+            ? 'max-w-5xl'
+            : 'max-w-7xl'
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 sm:p-8"

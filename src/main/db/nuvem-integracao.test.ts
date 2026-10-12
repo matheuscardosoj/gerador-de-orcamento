@@ -18,7 +18,7 @@ vi.mock('electron', () => ({
   }
 }))
 const pg = new PGlite()
-const usuario = '11111111-1111-4111-8111-111111111111'
+let usuario = '11111111-1111-4111-8111-111111111111'
 let offline = false,
   perderResposta = false
 let perderTransferencia = false
@@ -60,15 +60,20 @@ beforeAll(async () => {
       const entidade = u.searchParams.get('entidade')?.slice(3)
       const seq = Number(u.searchParams.get('sequencia')?.slice(3) ?? 0)
       result = entidade
-        ? (await pg.query('select * from gdo_entities where entidade=$1', [entidade])).rows
+        ? (
+            await pg.query('select * from gdo_entities where usuario=$1 and entidade=$2', [
+              usuario,
+              entidade
+            ])
+          ).rows
         : (
             await pg.query(
-              'select * from gdo_entities where sequencia>$1 order by sequencia limit $2',
-              [seq, Number(u.searchParams.get('limit') ?? 50)]
+              'select * from gdo_entities where usuario=$1 and sequencia>$2 order by sequencia limit $3',
+              [usuario, seq, Number(u.searchParams.get('limit') ?? 50)]
             )
           ).rows
     } else if (u.pathname === '/rest/v1/gdo_devices')
-      result = (await pg.query('select id,nome from gdo_devices')).rows
+      result = (await pg.query('select id,nome from gdo_devices where usuario=$1', [usuario])).rows
     else {
       const fn = u.pathname.split('/').at(-1)
       if (fn === 'gdo_device') {
@@ -360,4 +365,54 @@ it('sincroniza exclusão de recibos com versões, estornos e números preservado
   expect(
     sql.get('SELECT estornado FROM recebimentos WHERE recibo_id=?', [pago.id])?.estornado
   ).toBe(1)
+})
+
+it('publica também o histórico de documentos excluídos antes da primeira conexão', async () => {
+  const anterior = usuario
+  usuario = '22222222-2222-4222-8222-222222222222'
+  await pg.query('insert into auth.users values ($1)', [usuario])
+  await pg.query("select set_config('request.jwt.claim.sub',$1,false)", [usuario])
+  try {
+    const { recibosRepo } = await import('../recibos')
+    await trocar('primeira-publicacao')
+    const r = recibosRepo.create({
+      data: '2026-10-11',
+      destinatario: 'Cliente',
+      descricao: 'Serviço',
+      valor: 100,
+      local: 'Rio Verde',
+      formaPagamento: 'Pix',
+      status: 'pendente',
+      quitacao: 'parcial',
+      observacao: ''
+    })
+    recibosRepo.confirmar(r.id)
+    recibosRepo.remove(r.id, true)
+    const versoes = sql.all('SELECT id FROM versoes WHERE tipo=? AND documento_id=? ORDER BY id', [
+      'recibo',
+      r.id
+    ])
+    expect(versoes.length).toBeGreaterThanOrEqual(3)
+    expect((await nuvem.conectarNuvem(config, 'senha-de-teste', 'publicar')).erro).toBeNull()
+    expect(nuvem.statusNuvem().pendentes).toBe(0)
+    await trocar('baixar-arquivo')
+    expect((await nuvem.conectarNuvem(config, 'senha-de-teste', 'baixar')).erro).toBeNull()
+    expect(recibosRepo.get(r.id)).toBeNull()
+    expect(
+      sql.all('SELECT id FROM versoes WHERE tipo=? AND documento_id=? ORDER BY id', [
+        'recibo',
+        r.id
+      ])
+    ).toEqual(versoes)
+    expect(sql.get('SELECT estornado FROM recebimentos WHERE recibo_id=?', [r.id])?.estornado).toBe(
+      1
+    )
+    expect(
+      sql.get('SELECT 1 FROM numeros_usados WHERE tipo=? AND numero=?', ['recibo', r.numero])
+    ).toBeTruthy()
+  } finally {
+    usuario = anterior
+    await pg.query("select set_config('request.jwt.claim.sub',$1,false)", [usuario])
+    await trocar('pc2')
+  }
 })

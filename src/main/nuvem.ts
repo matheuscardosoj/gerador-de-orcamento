@@ -186,7 +186,10 @@ export async function conectarNuvem(
             }
           for (const tipo of tipos)
             for (const l of all(
-              `SELECT id FROM ${{ orcamento: 'orcamentos', relatorio: 'relatorios', recibo: 'recibos' }[tipo]}`
+              `SELECT id FROM ${{ orcamento: 'orcamentos', relatorio: 'relatorios', recibo: 'recibos' }[tipo]}
+               UNION SELECT documento_id AS id FROM documento_meta WHERE tipo=?
+               UNION SELECT documento_id AS id FROM versoes WHERE tipo=?`,
+              [tipo, tipo]
             )) {
               const meta = get('SELECT dados FROM documento_meta WHERE tipo=? AND documento_id=?', [
                 tipo,
