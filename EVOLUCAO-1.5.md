@@ -232,3 +232,9 @@ main nem versão final antes da revisão e autorização desta nova entrega.
 - Repositório privado criado e conferido: https://github.com/matheuscardosoj/gerador-de-orcamento. Branch main preservada em 6ad6803 (1.4.1), claude publicada com o candidato. Tags estáveis anteriores enviadas. Auditoria de 815 blobs do histórico sem bancos/backups ou padrões de credenciais privadas; recursos de IA/builds/saídas de teste ignorados.
 - Atalho “Gerador de Orçamentos 1.5 - Candidato” e backup “Base atual - compatível 1.5.0-rc.1.gdo-backup” entregues na Área de Trabalho. Manifesto com hashes e COMO TESTAR.txt em release/candidato-1.5.0-rc.1.
 - Perguntado se o usuário possui outro computador para concluir o ensaio físico com segundo login. A migração e os ensaios reais do mesmo PC estão concluídos; essa conferência de campo e a autorização de merge/versão final continuam pendentes.
+
+### Início do teste físico com segundo usuário
+
+- Usuário informou que a segunda máquina já conectou e mostra Tempo real conectado. Conferência remota somente de leitura confirmou dois usuários e dispositivos distintos. O notebook também tem um registro anterior da conta inicial; a identidade do novo login permanece separada.
+- A base em uso agora tem 18 orçamentos, 4 relatórios e 3 recibos. O roteiro foi ajustado para comparar as quantidades atuais, preservando a referência original da migração.
+- Primeiro computador sem pendências, conflitos ou erro. Solicitado teste com cliente temporário nos dois sentidos, sem recarregar a tela. Resultado humano de atualização, controle de edição e reconexão ainda pendente; não declarar a validação física completa.

@@ -16,7 +16,7 @@ Uma conta criada no Supabase precisa também ser vinculada à empresa no aplicat
 2. Abra **Configurações → Nuvem / Sincronização**. Copie a URL do projeto e a chave pública publishable do primeiro computador; use o e-mail e a senha do **segundo usuário**.
 3. Na primeira conexão, escolha **Baixar a base da empresa** e clique em **Conectar**. Não escolha publicar os dados locais: a base da empresa já está no Supabase.
 4. Aguarde **Tempo real: conectado**, **0 alterações aguardando envio** e ausência de erros/conflitos.
-5. Antes de cadastrar novos documentos, confira nos dois computadores os mesmos **17 orçamentos, 4 relatórios e 3 recibos**, com os mesmos números oficiais e IDs internos. Filtros salvos podem esconder registros; use **Limpar filtros** para conferir a listagem.
+5. Antes de cadastrar novos documentos, confira nos dois computadores as **mesmas quantidades atuais**, os mesmos números oficiais e IDs internos. Na migração havia 17 orçamentos, 4 relatórios e 3 recibos; documentos criados depois também devem aparecer nos dois. Filtros salvos podem esconder registros; use **Limpar filtros** para conferir a listagem.
 
 Não restaure o backup do primeiro computador para configurar a conexão. O download usa a nuvem e registra a identidade própria do segundo computador.
 
