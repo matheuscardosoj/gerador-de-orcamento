@@ -1,3 +1,4 @@
+import { mensagemErro } from '@shared/erros'
 import { RevisaoIA } from '../components/RevisaoIA'
 import { ColaboracaoDocumento } from '../components/ColaboracaoDocumento'
 import { useDocumentoRemoto, AvisoAtualizacao } from '../lib/atualizacao-remota'
@@ -117,8 +118,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
         setRel(novo)
         setSnapshotSalvo(JSON.stringify(novo))
       } catch (e) {
-        if (vivo)
-          setErro(`Não foi possível carregar o editor. ${String(e).replace(/^Error:\s*/, '')}`)
+        if (vivo) setErro(`Não foi possível carregar o editor. ${mensagemErro(e)}`)
       }
     })()
     return () => {
@@ -229,7 +229,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
         )
       return gravado
     } catch (e) {
-      setErro(String(e).replace(/^Error:\s*/, ''))
+      setErro(mensagemErro(e))
       return null
     }
   }
@@ -262,7 +262,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
             : await api.documentos.gerarRelatorioDocx(gravado.id)
         if (resultado.caminho) setMensagem(`Documento gerado com sucesso: ${resultado.caminho}`)
       } catch (e) {
-        setErro(`Não foi possível gerar o documento. ${String(e).replace(/^Error:\s*/, '')}`)
+        setErro(`Não foi possível gerar o documento. ${mensagemErro(e)}`)
       }
     })
   }

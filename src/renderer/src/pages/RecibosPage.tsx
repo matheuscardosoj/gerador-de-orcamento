@@ -1,3 +1,4 @@
+import { mensagemErro } from '@shared/erros'
 import { RevisaoIA } from '../components/RevisaoIA'
 import { ColaboracaoDocumento } from '../components/ColaboracaoDocumento'
 import { useDocumentoRemoto, AvisoAtualizacao } from '../lib/atualizacao-remota'
@@ -131,7 +132,7 @@ export function RecibosPage({
         setOrcamentos(o)
         setRelatorios(rel)
       })
-      .catch((e) => setErro(String(e)))
+      .catch((e) => setErro(mensagemErro(e)))
   }, [])
   useEffect(() => {
     if (!reciboId) return
@@ -141,7 +142,7 @@ export function RecibosPage({
         setR(d)
         setSalvo(JSON.stringify(d))
       })
-      .catch((e) => setErro(String(e)))
+      .catch((e) => setErro(mensagemErro(e)))
   }, [reciboId])
   useEffect(() => {
     if (!origemDocumento) return
@@ -156,7 +157,7 @@ export function RecibosPage({
         if (vivo) setR(vincularRecibo(vazio(), d, origemDocumento.tipo))
       })
       .catch((e) => {
-        if (vivo) setErro(String(e))
+        if (vivo) setErro(mensagemErro(e))
       })
     return () => {
       vivo = false
@@ -168,7 +169,7 @@ export function RecibosPage({
       void api.relatorios
         .get(r.origemId)
         .then(setOrigem)
-        .catch((e) => setErro(String(e)))
+        .catch((e) => setErro(mensagemErro(e)))
   }, [r?.origemTipo, r?.origemId])
   const set = (p: Partial<Recibo>): void => {
     if (r) setR({ ...r, ...p })
@@ -183,11 +184,7 @@ export function RecibosPage({
     try {
       await acao()
     } catch (e) {
-      setErro(
-        String(e)
-          .replace(/^Error:\s*/, '')
-          .replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, '')
-      )
+      setErro(mensagemErro(e))
     } finally {
       setOcupado(false)
     }

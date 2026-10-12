@@ -300,6 +300,9 @@ export function criarMockApi(): AppApi {
       sincronizar: async () => {
         throw new Error('Disponível no aplicativo desktop.')
       },
+      finalizarAtualizacao: async () => {
+        throw new Error('A atualização da base está disponível no aplicativo desktop.')
+      },
       dispositivos: async () => [],
       transferir: async () => {},
       sair: async () => {},

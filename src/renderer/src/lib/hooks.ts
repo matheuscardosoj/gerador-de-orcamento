@@ -1,3 +1,4 @@
+import { mensagemErro } from '@shared/erros'
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import { api } from './api'
 import type {
@@ -107,7 +108,7 @@ export function useAsync<T>(
           setError(null)
         }
       })
-      .catch((e) => vivo && setError(String(e)))
+      .catch((e) => vivo && setError(mensagemErro(e)))
       .finally(() => vivo && setLoading(false))
     return () => {
       vivo = false

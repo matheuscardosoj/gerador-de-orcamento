@@ -6,6 +6,7 @@
 // Modo `ollama`: fala com um Ollama já instalado na máquina.
 // Fora do pacote (npm run dev sem ter rodado `npm run ia`) cai no Ollama sozinho.
 import { app } from 'electron'
+import { mensagemErro } from '@shared/erros'
 import { spawn, type ChildProcess } from 'child_process'
 import { existsSync, readdirSync } from 'fs'
 import { join } from 'path'
@@ -377,7 +378,7 @@ export async function statusIA(): Promise<StatusIA> {
       return {
         modo: 'embutida',
         disponivel: false,
-        detalhe: String(e).replace(/^Error:\s*/, '')
+        detalhe: mensagemErro(e)
       }
     }
   }
@@ -386,8 +387,8 @@ export async function statusIA(): Promise<StatusIA> {
     modo: 'embutida',
     disponivel: ok,
     detalhe: ok
-      ? 'Modelo embutido ausente (rode "npm run ia"); usando o Ollama encontrado na máquina.'
-      : 'Modelo embutido ausente e nenhum Ollama respondendo — preencha a anotação manualmente.'
+      ? 'O modelo embutido não foi encontrado. A revisão usará o Ollama disponível neste computador.'
+      : 'Nenhum modelo de IA local está disponível. Instale a versão completa do aplicativo ou configure o Ollama em Configurações → IA local.'
   }
 }
 
@@ -479,7 +480,7 @@ export async function revisarTexto(entrada: RevisaoTextoEntrada): Promise<string
     return sugestao
   } catch (e) {
     if (controlador.signal.aborted) throw controlador.signal.reason
-    throw new Error(`Não foi possível revisar o texto. ${String(e).replace(/^Error:\s*/, '')}`)
+    throw new Error(mensagemErro(e, 'Não foi possível revisar o texto.'), { cause: e })
   } finally {
     clearTimeout(timer)
     revisoes.delete(entrada.id)

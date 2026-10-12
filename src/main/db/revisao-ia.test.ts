@@ -71,7 +71,9 @@ it('cancela geração e libera a próxima revisão', async () => {
     'fetch',
     vi.fn(async () => ({ ok: false, status: 503 }))
   )
-  await expect(ia.revisarTexto(entrada)).rejects.toThrow('503')
+  const falha = ia.revisarTexto(entrada)
+  await expect(falha).rejects.toThrow('O serviço de IA não conseguiu atender à solicitação')
+  await expect(falha).rejects.toMatchObject({ cause: { message: 'Ollama respondeu 503.' } })
 })
 it('encerra geração após 120 segundos', async () => {
   vi.useFakeTimers()

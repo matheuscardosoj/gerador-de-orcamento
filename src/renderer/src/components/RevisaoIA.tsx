@@ -1,3 +1,4 @@
+import { mensagemErro } from '@shared/erros'
 import { useEffect, useRef, useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import { api } from '../lib/api'
@@ -49,12 +50,7 @@ export function RevisaoIA({
       const s = await api.ia.revisarTexto({ id, campo, texto: alvo, anotacao })
       if (requisicao.current === id) setSugestao(s)
     } catch (e) {
-      if (requisicao.current === id)
-        setErro(
-          String(e)
-            .replace(/^Error:\s*/, '')
-            .replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, '')
-        )
+      if (requisicao.current === id) setErro(mensagemErro(e))
     } finally {
       if (requisicao.current === id) {
         setGerando(false)

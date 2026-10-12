@@ -3,6 +3,7 @@ import { Cloud, RefreshCw, LogOut } from 'lucide-react'
 import { api } from '../lib/api'
 import { useNav } from '../lib/nav'
 import type { ConfigNuvem, StatusNuvem } from '@shared/types'
+import { mensagemErro } from '@shared/erros'
 import {
   Button,
   Card,
@@ -24,6 +25,7 @@ export function NuvemSection(): JSX.Element {
   const [confirmar, setConfirmar] = useState(false)
   const [conciliar, setConciliar] = useState<string | null>(null)
   const [instalacaoCopiada, setInstalacaoCopiada] = useState(false)
+  const [atualizarBase, setAtualizarBase] = useState(false)
   useEffect(() => {
     void api.nuvem.config().then(setC)
     void api.nuvem.status().then(setS)
@@ -42,7 +44,7 @@ export function NuvemSection(): JSX.Element {
       setS(await acao())
       setSenha('')
     } catch (e) {
-      setErro(String(e))
+      setErro(mensagemErro(e))
     } finally {
       setOcupado(false)
     }
@@ -119,7 +121,7 @@ export function NuvemSection(): JSX.Element {
             void api.nuvem
               .copiarInstalacao()
               .then(() => setInstalacaoCopiada(true))
-              .catch((e) => setErro(String(e)))
+              .catch((e) => setErro(mensagemErro(e)))
           }}
         >
           {instalacaoCopiada
@@ -132,7 +134,52 @@ export function NuvemSection(): JSX.Element {
         </p>
       </details>
       {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
-      {s?.erro && <Mensagem className="mb-4">{s.erro}</Mensagem>}
+      {s?.erro && mensagemErro(s.erro) !== erro && <Mensagem className="mb-4">{s.erro}</Mensagem>}
+      {s?.atualizacaoPendente && (
+        <section
+          className="mb-6 rounded-lg border border-slate-200 p-4"
+          aria-label="Atualização da base local"
+        >
+          <SectionTitle
+            title="Atualizar a cópia deste computador"
+            description="A nuvem já está atualizada. Confira as pendências da versão anterior antes de continuar."
+          />
+          <p className="mb-3 text-sm text-slate-600">
+            {s.atualizacaoPendente.total} registros aguardam conferência. As alterações antigas não
+            serão enviadas automaticamente.
+          </p>
+          <ul className="mb-4 max-h-56 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200 text-sm">
+            {s.atualizacaoPendente.registros.map((r) => (
+              <li
+                key={r.id}
+                className="flex flex-wrap items-center justify-between gap-2 px-4 py-3"
+              >
+                <span className="text-slate-700">{r.rotulo}</span>
+                <span className="text-slate-500">
+                  {r.situacao === 'equivalente'
+                    ? 'Já está na nuvem'
+                    : r.situacao === 'ausente'
+                      ? 'Somente neste computador'
+                      : 'Conteúdo diferente'}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mb-4 text-sm text-slate-600">
+            Para atualizar os cadastros, as operações antigas serão guardadas separadamente neste
+            computador e em um backup verificado. Documentos e pagamentos com diferenças precisam de
+            comparação; não serão descartados nem reaplicados por essa ação.
+          </p>
+          <Button
+            icon={RefreshCw}
+            variant="outline"
+            disabled={ocupado || !s.autenticada}
+            onClick={() => setAtualizarBase(true)}
+          >
+            Preservar pendências e atualizar base
+          </Button>
+        </section>
+      )}
       <div className="grid gap-4 md:grid-cols-2">
         <Field label="URL do projeto">
           <Input
@@ -209,6 +256,15 @@ export function NuvemSection(): JSX.Element {
             {s.autenticada ? 'Conta conectada' : 'Conta desconectada'} · {s.pendentes} alterações
             aguardando envio
           </p>
+          {!!s.pendenciasPreservadas && (
+            <p>
+              {s.pendenciasPreservadas} operações anteriores guardadas separadamente neste
+              computador. Elas não foram publicadas na nuvem.
+            </p>
+          )}
+          {s.backupAtualizacao && (
+            <p className="break-words">Backup verificado da atualização: {s.backupAtualizacao}</p>
+          )}
           {s.autenticada && (
             <p>
               Tempo real:{' '}
@@ -223,7 +279,7 @@ export function NuvemSection(): JSX.Element {
                       : 'desconectado'}
             </p>
           )}
-          {s.erroTempoReal && <p className="text-amber-800">{s.erroTempoReal}</p>}
+          {s.erroTempoReal && <p className="text-amber-800">{mensagemErro(s.erroTempoReal)}</p>}
           <p>
             Última sincronização:{' '}
             {s.ultimaSincronizacao
@@ -291,6 +347,18 @@ export function NuvemSection(): JSX.Element {
           ))}
         </div>
       )}
+      <ConfirmDialog
+        open={atualizarBase}
+        title="Preservar pendências e atualizar base"
+        confirmLabel="Guardar e atualizar"
+        danger={false}
+        description="As operações antigas continuarão guardadas neste computador e em um backup verificado, sem envio automático. Os cadastros da nuvem serão recuperados com a numeração atualizada. Documentos e pagamentos com diferenças permanecerão protegidos para revisão."
+        onCancel={() => setAtualizarBase(false)}
+        onConfirm={() => {
+          setAtualizarBase(false)
+          void executar(() => api.nuvem.finalizarAtualizacao(s!.atualizacaoPendente!.revisao))
+        }}
+      />
       <ConfirmDialog
         open={conciliar !== null}
         title="Adotar dados da nuvem"

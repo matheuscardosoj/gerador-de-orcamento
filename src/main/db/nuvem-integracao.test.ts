@@ -45,7 +45,7 @@ beforeAll(async () => {
     select set_config('request.jwt.claim.sub','${usuario}',false);`)
   await pg.exec(readFileSync(join(process.cwd(), 'supabase/schema.sql'), 'utf8'))
   vi.stubGlobal('fetch', async (url: string, options: RequestInit = {}) => {
-    if (offline) throw new Error('Sem conexão de teste')
+    if (offline) throw new TypeError('fetch failed', { cause: { code: 'ENETUNREACH' } })
     const u = new URL(url),
       body = options.body ? JSON.parse(String(options.body)) : {}
     let result: unknown
@@ -107,7 +107,8 @@ beforeAll(async () => {
         ).rows[0].r
         if (perderResposta) {
           perderResposta = false
-          throw new Error('Resposta perdida após gravação')
+          // A transação já foi confirmada; somente a resposta REST se perdeu.
+          throw new TypeError('fetch failed', { cause: { code: 'ECONNRESET' } })
         }
       } else if (fn === 'gdo_usage') result = 123456
       else if (fn === 'gdo_transfer') {
@@ -120,7 +121,7 @@ beforeAll(async () => {
         if (perderTransferencia) {
           perderTransferencia = false
           offline = true
-          throw new Error('Transferência gravada sem resposta')
+          throw new TypeError('fetch failed', { cause: { code: 'ECONNRESET' } })
         }
         result = null
       } else throw new Error(`Endpoint de teste desconhecido: ${u.pathname}`)
@@ -182,8 +183,11 @@ it('preserva a fila após reinício offline e reenvia uma operação sem duplic�
   await trocar('pc1')
   expect(nuvem.statusNuvem().pendentes).toBe(pendentes)
   expect(repos.orcamentosRepo.get(proposta.id)?.titulo).toBe(novo.titulo)
-  expect((await nuvem.sincronizarNuvem()).erro).toContain('Sem conexão')
-  offline = false
+  try {
+    expect((await nuvem.sincronizarNuvem()).erro).toContain('Não foi possível acessar o serviço')
+  } finally {
+    offline = false
+  }
   perderResposta = true
   expect((await nuvem.sincronizarNuvem()).pendentes).toBe(pendentes)
   expect((await nuvem.sincronizarNuvem()).pendentes).toBe(0)
@@ -212,14 +216,17 @@ it('bloqueia o antigo computador após interrupção da transferência, inclusiv
   const pc1 = nuvem.statusNuvem().computador
   await trocar('pc2')
   perderTransferencia = true
-  await expect(nuvem.transferirDocumento('orcamento', proposta.id, pc1)).rejects.toThrow(
-    'Sem conexão'
-  )
-  await trocar('pc2')
-  expect(() => repos.orcamentosRepo.update(proposta.id, { titulo: 'Inválido offline' })).toThrow(
-    'transferência'
-  )
-  offline = false
+  try {
+    await expect(nuvem.transferirDocumento('orcamento', proposta.id, pc1)).rejects.toThrow(
+      'Não foi possível acessar o serviço'
+    )
+    await trocar('pc2')
+    expect(() => repos.orcamentosRepo.update(proposta.id, { titulo: 'Inválido offline' })).toThrow(
+      'transferência'
+    )
+  } finally {
+    offline = false
+  }
   expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
   expect(() => repos.orcamentosRepo.update(proposta.id, { titulo: 'Inválido online' })).toThrow(
     'outro computador'
@@ -258,7 +265,7 @@ it('sincroniza recebimento e saldo na mesma operação sem duplicar após perder
   })
   recibosRepo.confirmar(r.id)
   perderResposta = true
-  expect((await nuvem.sincronizarNuvem()).erro).toContain('Resposta perdida')
+  expect((await nuvem.sincronizarNuvem()).erro).toContain('Não foi possível acessar o serviço')
   expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
   await trocar('pc2')
   expect((await nuvem.sincronizarNuvem()).erro).toBeNull()

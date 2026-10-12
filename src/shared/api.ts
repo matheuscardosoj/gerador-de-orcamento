@@ -178,6 +178,7 @@ export interface AppApi {
       modo: 'publicar' | 'baixar'
     ): Promise<import('./types').StatusNuvem>
     sincronizar(): Promise<import('./types').StatusNuvem>
+    finalizarAtualizacao(revisao: string): Promise<import('./types').StatusNuvem>
     dispositivos(): Promise<Array<{ id: string; nome: string }>>
     transferir(tipo: import('./types').TipoDocumento, id: string, destino: string): Promise<void>
     sair(): Promise<void>

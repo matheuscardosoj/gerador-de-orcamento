@@ -56,6 +56,18 @@ export interface ConfigNuvem {
   chavePublica: string
   email: string
 }
+export interface AtualizacaoNumeracaoPendente {
+  revisao: string
+  total: number
+  equivalentes: number
+  divergentes: number
+  registros: Array<{
+    id: string
+    entidade: string
+    rotulo: string
+    situacao: 'equivalente' | 'divergente' | 'ausente'
+  }>
+}
 export interface StatusNuvem {
   configurada: boolean
   autenticada: boolean
@@ -66,6 +78,9 @@ export interface StatusNuvem {
   erro: string | null
   bytesBanco: number
   atualizandoNumeracao?: boolean
+  atualizacaoPendente?: AtualizacaoNumeracaoPendente | null
+  backupAtualizacao?: string | null
+  pendenciasPreservadas?: number
   reservas: Record<TipoDocumento, number>
   empresaId?: string
   usuarioId?: string

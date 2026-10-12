@@ -1,3 +1,4 @@
+import { mensagemErro } from '@shared/erros'
 import { useState } from 'react'
 import { Pencil, Trash2, Save, FilterX } from 'lucide-react'
 import { correspondeBusca } from '@shared/historico-preferencias'
@@ -54,7 +55,7 @@ export function PadroesConfig({
       await tarefa()
       reload()
     } catch (e) {
-      setErro(String(e).replace(/^Error:\s*/, ''))
+      setErro(mensagemErro(e))
     } finally {
       setOcupado(false)
     }

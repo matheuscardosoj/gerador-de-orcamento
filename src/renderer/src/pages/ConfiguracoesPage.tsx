@@ -1,3 +1,4 @@
+import { mensagemErro } from '@shared/erros'
 import { PadroesConfig } from './PadroesConfig'
 import { NuvemSection } from './NuvemSection'
 import { UsuariosSection } from './UsuariosSection'
@@ -149,13 +150,6 @@ function BotaoSalvar({
   )
 }
 
-function detalheErro(erro: unknown): string {
-  const detalhe = String(erro)
-    .replace(/^Error:\s*/, '')
-    .trim()
-  return detalhe || 'Ocorreu um erro inesperado.'
-}
-
 type ExecutarMutacao<Operacao extends string> = (
   operacao: Operacao,
   tarefa: () => Promise<unknown>
@@ -182,7 +176,7 @@ function useMutacao<Operacao extends string>(): {
       await tarefa()
       return true
     } catch (causa) {
-      setErro(detalheErro(causa))
+      setErro(mensagemErro(causa))
       return false
     } finally {
       emAndamento.current = false
@@ -427,7 +421,7 @@ function SecaoParametros(): JSX.Element {
       await api.parametros.save(form)
       setOk(true)
     } catch (e) {
-      setErro(String(e).replace(/^Error:\s*/, ''))
+      setErro(mensagemErro(e))
     } finally {
       setSalvando(false)
     }
@@ -615,7 +609,7 @@ function SecaoIA(): JSX.Element {
       setStatus({
         modo: form.modo,
         disponivel: false,
-        detalhe: detalheErro(e)
+        detalhe: mensagemErro(e)
       })
     } finally {
       setSalvando(false)
@@ -634,7 +628,7 @@ function SecaoIA(): JSX.Element {
       await api.ia.save(form)
       setStatus(await api.ia.status())
     } catch (e) {
-      setStatus({ modo: form.modo, disponivel: false, detalhe: detalheErro(e) })
+      setStatus({ modo: form.modo, disponivel: false, detalhe: mensagemErro(e) })
     } finally {
       setTestando(false)
     }
@@ -853,7 +847,7 @@ function SecaoDados(): JSX.Element {
       const r = await api.dados.exportar()
       if (r.caminho) setResultado(`Cópia de segurança criada em: ${r.caminho}`)
     } catch (e) {
-      setErro(String(e).replace(/^Error:\s*/, ''))
+      setErro(mensagemErro(e))
     } finally {
       setOcupado(null)
     }
@@ -877,7 +871,7 @@ function SecaoDados(): JSX.Element {
           : `Importação concluída${itens ? `: ${itens}` : ''}.${ignorados ? ` ${ignorados} itens iguais foram mantidos sem duplicar.` : ''}${renumerados ? ` ${renumerados} documento(s) receberam um novo número por conflito.` : ''} A cópia anterior foi salva em: ${r.backupAntes}.`
       )
     } catch (e) {
-      setErro(String(e).replace(/^Error:\s*/, ''))
+      setErro(mensagemErro(e))
     } finally {
       setOcupado(null)
     }

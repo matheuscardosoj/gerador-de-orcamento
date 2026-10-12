@@ -1,3 +1,4 @@
+import { mensagemErro } from '@shared/erros'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Columns3,
@@ -168,7 +169,7 @@ export function HistoricoDocumentos({
       })
       .catch((e) => {
         if (vivo) {
-          setErro(String(e))
+          setErro(mensagemErro(e))
           setCarregadas(true)
         }
       })
@@ -184,7 +185,7 @@ export function HistoricoDocumentos({
     fila.current = fila.current
       .catch(() => undefined)
       .then(() => api.preferencias.salvarHistorico(tipo, proxima))
-      .catch((e) => setErro(`Não foi possível gravar a apresentação. ${e}`))
+      .catch((e) => setErro(mensagemErro(e, 'Não foi possível gravar a apresentação.')))
   }
   const limpar = (): void =>
     mudar({ busca: '', estado: '', de: '', ate: '', minimo: '', maximo: '', saldo: '', origem: '' })
@@ -276,7 +277,7 @@ export function HistoricoDocumentos({
     try {
       await acao()
     } catch (e) {
-      setErro(String(e))
+      setErro(mensagemErro(e))
     } finally {
       setOcupado(false)
     }

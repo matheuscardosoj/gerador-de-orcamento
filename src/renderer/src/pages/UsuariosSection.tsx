@@ -1,3 +1,4 @@
+import { mensagemErro } from '@shared/erros'
 import { useState } from 'react'
 import { UserRoundCheck, UserRoundX, Save, FilterX } from 'lucide-react'
 import { api } from '../lib/api'
@@ -51,7 +52,7 @@ export function UsuariosSection({
       setNome('')
       reload()
     } catch (e) {
-      setErro(String(e).replace(/^Error:\s*/, ''))
+      setErro(mensagemErro(e))
     } finally {
       setOcupado(false)
     }
@@ -66,7 +67,7 @@ export function UsuariosSection({
       setConfirmar(null)
       reload()
     } catch (e) {
-      setErro(String(e).replace(/^Error:\s*/, ''))
+      setErro(mensagemErro(e))
       setConfirmar(null)
     } finally {
       setOcupado(false)

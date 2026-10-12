@@ -1,3 +1,4 @@
+import { mensagemErro } from '@shared/erros'
 import { useEffect, useState } from 'react'
 import { RefreshCw, History, RotateCcw, CopyPlus, FileDown, ArrowRightLeft } from 'lucide-react'
 import type {
@@ -119,7 +120,7 @@ export function LinhaTempo({
     try {
       await acao()
     } catch (e) {
-      setErro(String(e))
+      setErro(mensagemErro(e))
     } finally {
       setOcupado(false)
     }
@@ -136,7 +137,7 @@ export function LinhaTempo({
         setVersoes(v)
         setSelecionada(v[0] ?? null)
       })
-      .catch((e) => setErro(String(e)))
+      .catch((e) => setErro(mensagemErro(e)))
     void api.nuvem
       .dispositivos()
       .then(setPcs)
@@ -147,7 +148,7 @@ export function LinhaTempo({
     void api.versoes
       .html(selecionada.id)
       .then(setHtml)
-      .catch((e) => setErro(String(e)))
+      .catch((e) => setErro(mensagemErro(e)))
   }, [selecionada])
   const anterior = versoes.find((v) => v.id === (comparadaId || selecionada?.anteriorId))
   const diferencas =

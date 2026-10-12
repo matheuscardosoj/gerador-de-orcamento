@@ -1,3 +1,4 @@
+import { mensagemErro } from '@shared/erros'
 import { ListaOrdenavel } from '../ui/ordenavel'
 import { useEffect, useRef, useState } from 'react'
 import { X, ImagePlus } from 'lucide-react'
@@ -66,7 +67,7 @@ export function AnexosCard<T extends AnexoEditavel>({
       else
         onChange([...anexos, ...(prepararNovos ? prepararNovos(novos) : (novos as unknown as T[]))])
     } catch (e) {
-      setErro(String(e).replace(/^Error:\s*/, ''))
+      setErro(mensagemErro(e))
     } finally {
       setProcessando(false)
     }

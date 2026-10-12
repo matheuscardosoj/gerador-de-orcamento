@@ -45,7 +45,11 @@ const chaveLocal = (k) =>
     'erroNuvem',
     'bytesNuvem',
     'restauracaoLocal',
-    'idOrigemDados'
+    'idOrigemDados',
+    'atualizacaoNumeracaoPendente',
+    'operacoesAnterioresSuspensas',
+    'backupAtualizacaoNumeracao',
+    'renumeracaoPendente'
   ].includes(k) ||
   k.startsWith('estado:') ||
   k.startsWith('transferencia:') ||

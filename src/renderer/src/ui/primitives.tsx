@@ -16,6 +16,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { X, type LucideIcon } from 'lucide-react'
+import { mensagemErro } from '@shared/erros'
 import {
   formatarEntradaNumerica,
   lerEntradaNumerica,
@@ -600,7 +601,7 @@ export function Mensagem({
       role={tom === 'erro' || tom === 'aviso' ? 'alert' : 'status'}
       className={cn('rounded-lg px-4 py-3 text-sm leading-6', cores[tom], className)}
     >
-      {children}
+      {tom === 'erro' && typeof children === 'string' ? mensagemErro(children) : children}
     </div>
   )
 }

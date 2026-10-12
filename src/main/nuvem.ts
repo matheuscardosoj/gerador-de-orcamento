@@ -17,6 +17,16 @@ import { avisarDados } from './eventos'
 import { iniciarTempoReal, pararTempoReal, avisarEstadoTempoReal } from './tempo-real'
 import { randomUUID } from 'crypto'
 import { tabelaNumerosUsados, confirmarNumero } from './numeros'
+import {
+  analisarPendenciasAnteriores,
+  conteudoEquivalente,
+  preservarPendenciasAnteriores,
+  retirarPendenciasAnteriores,
+  filaAnterior,
+  suspenderPendenciasAnteriores
+} from './pendencias-anteriores'
+import type { AtualizacaoNumeracaoPendente } from '@shared/evolucao'
+import { mensagemErro } from '@shared/erros'
 
 let ocupado = false
 let sincronizacaoAtual: Promise<StatusNuvem> | null = null
@@ -164,10 +174,27 @@ async function reconhecerEmpresa(criar = false): Promise<ContextoNuvem> {
     throw new Error('Este perfil contém dados de outra empresa. Use um perfil separado.')
   const anteriorContexto = config<ContextoNuvem>('contextoNuvem')
   if (contexto.protocolo >= 3 && (anteriorContexto?.protocolo ?? 1) < 3) {
-    if (get('SELECT 1 FROM fila_nuvem LIMIT 1'))
-      throw new Error(
-        'Há operações da versão anterior. Preserve-as e revise antes de adotar a numeração reorganizada; elas não serão publicadas automaticamente.'
-      )
+    if (anterior && (filaAnterior().length || get('SELECT 1 FROM conflitos_nuvem LIMIT 1'))) {
+      const remotos = await baixarAlteracoes(0, 3)
+      let revisao = analisarPendenciasAnteriores(remotos)
+      if (revisao.equivalentes) {
+        const backup = preservarPendenciasAnteriores(contexto.empresaId, contexto.usuarioId)
+        retirarPendenciasAnteriores(
+          revisao.revisao,
+          revisao.registros.filter((r) => r.situacao === 'equivalente').map((r) => r.id)
+        )
+        salvar('backupAtualizacaoNumeracao', backup)
+        revisao = analisarPendenciasAnteriores(remotos)
+      }
+      if (revisao.total) {
+        salvar('atualizacaoNumeracaoPendente', revisao)
+        const erro = new Error(
+          'Existem alterações locais anteriores à atualização. Confira os registros abaixo e use “Preservar pendências e atualizar base” para guardar uma cópia e baixar os dados atuais da empresa.'
+        ) as Error & { codigo: string }
+        erro.codigo = 'MIGRACAO_PENDENTE'
+        throw erro
+      }
+    }
     exportarDadosPara(join(pastaDados(), `antes-numeracao-v3-${Date.now()}.gdo-backup`))
     tx(() => {
       run('UPDATE reservas SET usado=1')
@@ -180,6 +207,7 @@ async function reconhecerEmpresa(criar = false): Promise<ContextoNuvem> {
   }
   salvar('contextoNuvem', contexto)
   salvar('empresaNuvem', contexto.empresaId)
+  salvar('atualizacaoNumeracaoPendente', null)
   return contexto
 }
 export function ativarTempoReal(): void {
@@ -222,7 +250,7 @@ export async function inicializarNuvem(): Promise<void> {
       ativarTempoReal()
     } else await sincronizarNuvem()
   } catch (e) {
-    salvar('erroNuvem', String(e).replace(/^Error:\s*/, ''))
+    salvar('erroNuvem', mensagemErro(e))
     avisarDados({ origem: 'nuvem', entidades: [], status: true })
   }
 }
@@ -237,7 +265,8 @@ export function statusNuvem(): StatusNuvem {
     configurada: !!config<ConfigNuvem>('nuvem'),
     autenticada: !!config<string>('sessaoNuvem'),
     computador: computadorId(),
-    pendentes: Number(get('SELECT COUNT(*) AS n FROM fila_nuvem')?.n ?? 0),
+    pendentes: filaAnterior().length,
+    pendenciasPreservadas: config<string[]>('operacoesAnterioresSuspensas')?.length ?? 0,
     conflitos: all('SELECT id,entidade,detalhe FROM conflitos_nuvem').map((l) => ({
       id: texto(l.id),
       entidade: texto(l.entidade),
@@ -254,6 +283,8 @@ export function statusNuvem(): StatusNuvem {
     usuarioId: config<ContextoNuvem>('contextoNuvem')?.usuarioId,
     protocolo: protocoloNuvem(),
     atualizandoNumeracao: config<boolean>('renumeracaoPendente') ?? false,
+    atualizacaoPendente: config<AtualizacaoNumeracaoPendente>('atualizacaoNumeracaoPendente'),
+    backupAtualizacao: config<string>('backupAtualizacaoNumeracao'),
     tempoReal: estadoTempoReal,
     erroTempoReal
   }
@@ -308,12 +339,12 @@ export async function conectarNuvem(
       true
     )) as Sessao
     const dono = config<string>('usuarioNuvem')
-    if (dono && dono !== s.user.id && get('SELECT 1 FROM fila_nuvem LIMIT 1'))
+    gravarSessao(s)
+    const contexto = await reconhecerEmpresa(!anterior && modo === 'publicar')
+    if (dono && dono !== s.user.id && filaAnterior().length)
       throw new Error(
         'Conclua a sincronização ou preserve as alterações em rascunhos antes de trocar de usuário.'
       )
-    gravarSessao(s)
-    const contexto = await reconhecerEmpresa(!anterior && modo === 'publicar')
     if (dono && dono !== s.user.id && contexto.protocolo < 2)
       throw new Error('Atualize a configuração do banco para usar logins individuais da empresa.')
     if (contexto.protocolo >= 2) {
@@ -437,6 +468,25 @@ export async function conectarNuvem(
     if (protocoloNuvem() >= 2) ativarTempoReal()
     return status
   } catch (e) {
+    if ((e as { codigo?: string }).codigo === 'MIGRACAO_PENDENTE') {
+      const usuario = sessao()!.user.id
+      const dono = config<string>('usuarioNuvem')
+      const chave = `computadorUsuario:${usuario}`
+      if (!config<string>(chave))
+        salvar(chave, dono && dono !== usuario ? randomUUID() : computadorId())
+      salvar('computadorId', config<string>(chave))
+      salvar('usuarioNuvem', usuario)
+      salvar('erroNuvem', (e as Error).message)
+      avisarDados({ origem: 'nuvem', entidades: [], status: true })
+      return statusNuvem()
+    }
+    // Depois da adoção local, preserve o protocolo e retome a recuperação na
+    // próxima tentativa. Restaurar apenas o contexto deixaria flags inconsistentes.
+    if ((contextoAnterior?.protocolo ?? 1) < 3 && protocoloNuvem() >= 3) {
+      salvar('erroNuvem', mensagemErro(e))
+      avisarDados({ origem: 'nuvem', entidades: [], status: true })
+      return statusNuvem()
+    }
     if (anterior) {
       for (const [chave, valor] of configuracoesAnteriores) {
         if (valor == null) run('DELETE FROM configuracoes WHERE chave=?', [chave])
@@ -516,14 +566,14 @@ export type Remoto = {
     excluido?: boolean
   }
 }
-async function baixarAlteracoes(inicio: number): Promise<Remoto[]> {
+async function baixarAlteracoes(inicio: number, protocolo = protocoloNuvem()): Promise<Remoto[]> {
   let cursor = inicio
   const todas: Remoto[] = []
   while (true) {
     const dados = (
-      protocoloNuvem() >= 2
+      protocolo >= 2
         ? await pedido(
-            `/rest/v1/rpc/${protocoloNuvem() >= 3 ? 'gdo_alteracoes_v3' : 'gdo_alteracoes_v2'}`,
+            `/rest/v1/rpc/${protocolo >= 3 ? 'gdo_alteracoes_v3' : 'gdo_alteracoes_v2'}`,
             { p_cursor: cursor, p_limite: 50 }
           )
         : await pedido(
@@ -667,16 +717,64 @@ export function sincronizarNuvem(completa = true): Promise<StatusNuvem> {
   })
   return sincronizacaoAtual
 }
+export async function finalizarAtualizacaoNumeracao(revisao: string): Promise<StatusNuvem> {
+  if (ocupado || conectando || sincronizacaoAtual)
+    throw new Error('Aguarde a conferência atual para atualizar a base.')
+  const pendente = config<AtualizacaoNumeracaoPendente>('atualizacaoNumeracaoPendente')
+  if (!pendente || pendente.revisao !== revisao)
+    throw new Error(
+      'A conferência das pendências mudou. Conecte novamente e revise os registros atuais.'
+    )
+  ocupado = true
+  try {
+    const contexto = (await pedido('/rest/v1/rpc/gdo_contexto_v3', {
+      p_criar: false
+    })) as ContextoNuvem
+    const empresa = config<string>('empresaNuvem') ?? config<string>('usuarioNuvem')
+    if (!empresa || contexto.empresaId !== empresa)
+      throw new Error('Esta conta pertence a outra empresa. A base local foi preservada.')
+    const remotos = await baixarAlteracoes(0, 3)
+    if (!remotos.some((e) => e.entidade === 'configuracoes:empresa' && e.payload.row))
+      throw new Error(
+        'A nuvem não contém uma base completa. A base local e suas pendências foram preservadas.'
+      )
+    const atual = analisarPendenciasAnteriores(remotos)
+    if (atual.revisao !== revisao) {
+      salvar('atualizacaoNumeracaoPendente', atual)
+      throw new Error(
+        'As pendências mudaram durante a conferência. Confira a lista novamente antes de atualizar.'
+      )
+    }
+    const backup = preservarPendenciasAnteriores(contexto.empresaId, contexto.usuarioId)
+    suspenderPendenciasAnteriores(revisao)
+    salvar('backupAtualizacaoNumeracao', backup)
+    await reconhecerEmpresa()
+    await pedido('/rest/v1/rpc/gdo_dispositivo_v3', {
+      p_dispositivo: computadorId(),
+      p_nome: hostname()
+    })
+  } finally {
+    ocupado = false
+    avisarDados({ origem: 'nuvem', entidades: [], status: true })
+  }
+  const status = await sincronizarNuvem()
+  if (!status.erro) ativarTempoReal()
+  return status
+}
 async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
   if (ocupado || conectando) return statusNuvem()
   ocupado = true
   try {
+    if (!completa && config<AtualizacaoNumeracaoPendente>('atualizacaoNumeracaoPendente'))
+      throw new Error(
+        'Conclua a atualização da base em Nuvem / Sincronização antes de enviar alterações.'
+      )
     // As próprias RPCs e o RLS validam o membro em cada acesso. A sessão/contexto
     // também são renovados a cada 30s; não acrescenta uma viagem HTTP a cada aviso.
     if (completa && protocoloNuvem() >= 2) await reconhecerEmpresa()
     if (protocoloNuvem() < 2 && get('SELECT 1 FROM conflitos_nuvem LIMIT 1'))
       throw new Error('Resolva os conflitos antes de sincronizar novas alterações.')
-    const pendencias = all('SELECT * FROM fila_nuvem ORDER BY rowid')
+    const pendencias = filaAnterior()
     const grupos =
       protocoloNuvem() < 2
         ? [pendencias]
@@ -721,7 +819,7 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
         run('INSERT OR REPLACE INTO conflitos_nuvem VALUES (?,?,?,?)', [
           op.id,
           op.entidade,
-          String(e).replace(/^Error:\s*/, ''),
+          mensagemErro(e),
           'null'
         ])
         return { ok: false, entidade: op.entidade, remoto: null }
@@ -789,7 +887,7 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
           const conhecido = Number(
             get('SELECT revisao FROM sincronizacao WHERE entidade=?', [e.entidade])?.revisao ?? 0
           )
-          const pendente = get('SELECT 1 FROM fila_nuvem WHERE entidade=?', [e.entidade])
+          const pendente = filaAnterior().some((l) => l.entidade === e.entidade)
           if (pendente && e.revisao > conhecido)
             if (protocoloNuvem() >= 2) continue
             else
@@ -930,7 +1028,7 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
     )
     avisarDados({ origem: 'nuvem', entidades: [], status: true })
   } catch (e) {
-    salvar('erroNuvem', String(e).replace(/^Error:\s*/, ''))
+    salvar('erroNuvem', mensagemErro(e))
   } finally {
     ocupado = false
   }
@@ -1143,12 +1241,7 @@ export function capturarCadastros(): void {
       if (!igual && anterior) {
         try {
           const conhecido = JSON.parse(anterior)
-          igual =
-            conhecido.tabela === t &&
-            conhecido.id === id &&
-            conhecido.row &&
-            Object.keys(conhecido.row).length === Object.keys(l).length &&
-            Object.keys(l).every((campo) => conhecido.row[campo] === l[campo])
+          igual = conteudoEquivalente(conhecido, payload)
         } catch {
           // Cache inválido não pode esconder uma mudança local real.
         }

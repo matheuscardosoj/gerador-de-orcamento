@@ -1,5 +1,6 @@
 import { registrarVersao } from './versoes'
 import { orcamentosRepo, relatoriosRepo } from './repositories'
+import { mensagemErro } from '@shared/erros'
 import { recibosRepo } from './recibos'
 import { capturarCadastros, sincronizarNuvem, statusNuvem, inicializarNuvem } from './nuvem'
 import { pararTempoReal } from './tempo-real'
@@ -117,7 +118,7 @@ if (temTrava)
     } catch (e) {
       dialog.showErrorBox(
         'Não foi possível atualizar o banco de dados',
-        `${String(e).replace(/^Error:\s*/, '')}\n\nNenhum dado novo foi gravado. O aplicativo será encerrado.`
+        `${mensagemErro(e)}\n\nO aplicativo será encerrado. Preserve o banco e o backup para conferir o problema antes de tentar novamente.`
       )
       app.quit()
       return

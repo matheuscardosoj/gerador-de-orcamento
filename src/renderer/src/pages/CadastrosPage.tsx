@@ -1,3 +1,4 @@
+import { mensagemErro } from '@shared/erros'
 import { ListaOrdenavel } from '../ui/ordenavel'
 import { validarCliente } from '@shared/clientes'
 import { useState } from 'react'
@@ -98,7 +99,7 @@ function SecaoClientes({
       setExcluir(null)
       reload()
     } catch (e) {
-      setErro(String(e).replace(/^Error:\s*/, ''))
+      setErro(mensagemErro(e))
     }
   }
 
@@ -316,7 +317,7 @@ function ClienteModal({
       else await api.clientes.create(form)
       onSaved()
     } catch (e) {
-      setErro(String(e))
+      setErro(mensagemErro(e))
     } finally {
       setSalvando(false)
     }
@@ -499,7 +500,7 @@ function SecaoServicos({
       await api.reordenarCadastro('servicos', ids)
       reload()
     } catch (e) {
-      setErroOrdem(String(e))
+      setErroOrdem(mensagemErro(e))
     } finally {
       setReordenando(false)
     }

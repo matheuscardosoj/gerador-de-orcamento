@@ -1,3 +1,4 @@
+import { mensagemErro } from '@shared/erros'
 import { RevisaoIA } from '../components/RevisaoIA'
 import { ColaboracaoDocumento } from '../components/ColaboracaoDocumento'
 import { useDocumentoRemoto, AvisoAtualizacao } from '../lib/atualizacao-remota'
@@ -153,8 +154,7 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
           setSnapshotSalvo(JSON.stringify(novo))
         }
       } catch (e) {
-        if (vivo)
-          setErro(`Não foi possível carregar o editor. ${String(e).replace(/^Error:\s*/, '')}`)
+        if (vivo) setErro(`Não foi possível carregar o editor. ${mensagemErro(e)}`)
       }
     })()
     return () => {
@@ -267,7 +267,7 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
       }
       return salvo
     } catch (e) {
-      setErro(String(e).replace(/^Error:\s*/, ''))
+      setErro(mensagemErro(e))
       return null
     }
   }
@@ -303,7 +303,7 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
             : await api.documentos.gerarDocx(salvo.id)
         if (r.caminho) setMensagem(`Documento gerado com sucesso: ${r.caminho}`)
       } catch (e) {
-        setErro(`Não foi possível gerar o documento. ${String(e).replace(/^Error:\s*/, '')}`)
+        setErro(`Não foi possível gerar o documento. ${mensagemErro(e)}`)
       }
     })
   }

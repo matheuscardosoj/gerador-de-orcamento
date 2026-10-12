@@ -1,4 +1,5 @@
 import { numeroHistoricoReconhecido } from './numeros'
+import { mensagemErro } from '../shared/erros'
 import { recibosRepo } from './recibos'
 import { revisarRecebimentos, conciliarRecebimentos } from './conciliacao-financeira'
 import {
@@ -36,6 +37,7 @@ import { exportarVersao, htmlVersao, gerarReciboPdf, gerarReciboDocx } from './d
 import { run, tx } from './db/sqlite'
 import {
   configuracaoNuvem,
+  finalizarAtualizacaoNumeracao,
   statusNuvem,
   conectarNuvem,
   sincronizarNuvem,
@@ -154,6 +156,7 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
   'nuvem.status': () => statusNuvem(),
   'nuvem.conectar': (c, s, m) => conectarNuvem(c as never, s as string, m as never),
   'nuvem.sincronizar': () => sincronizarNuvem(),
+  'nuvem.finalizarAtualizacao': (revisao) => finalizarAtualizacaoNumeracao(String(revisao)),
   'nuvem.copiarInstalacao': () => copiarInstalacaoNuvem(),
   'nuvem.dispositivos': () => dispositivosNuvem(),
   'nuvem.transferir': (t, id, d) => transferirDocumento(t as never, id as string, d as string),
@@ -236,76 +239,82 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
 export function registrarIpc(): void {
   for (const [canal, fn] of Object.entries(handlers)) {
     ipcMain.handle(canal, async (_evento, ...args) => {
-      const dominio = canal.split('.')[0]
-      if (
-        statusNuvem().atualizandoNumeracao &&
-        /\.(create|update|save|remove|alterarNumero|confirmar|cancelar)$/.test(canal)
-      )
-        throw new Error(
-          'Aguarde a atualização da numeração da base antes de salvar. Suas alterações no formulário continuam preservadas.'
-        )
-      if (canal.startsWith('documentos.gerar')) {
-        const t = canal.includes('Recibo')
-          ? 'recibo'
-          : canal.includes('Relatorio')
-            ? 'relatorio'
-            : 'orcamento'
-        await autorizarEmissao(t, String(args[0]))
-      }
-      if (canal === 'versoes.exportar') {
-        const v = obterVersao(String(args[0]))
-        const atual = (
-          v.tipo === 'orcamento'
-            ? orcamentosRepo
-            : v.tipo === 'relatorio'
-              ? relatoriosRepo
-              : recibosRepo
-        ).get(v.documentoId)
+      try {
+        const dominio = canal.split('.')[0]
         if (
-          atual &&
-          atual.numero !== v.documento.numero &&
-          !numeroHistoricoReconhecido(v.tipo, v.documentoId, v.documento.numero, atual.numero)
+          (statusNuvem().atualizandoNumeracao || statusNuvem().atualizacaoPendente) &&
+          /\.(create|update|save|remove|alterarNumero|confirmar|cancelar)$/.test(canal)
         )
           throw new Error(
-            'Esta versão tem um número anterior à correção do rascunho. Crie um novo documento a partir dela para emitir.'
+            'Aguarde a atualização da numeração da base antes de salvar. Suas alterações no formulário continuam preservadas.'
           )
-        if (atual && atual.numero === v.documento.numero)
-          await autorizarEmissao(v.tipo, v.documentoId)
-      }
-      const tipo = (
-        { orcamentos: 'orcamento', relatorios: 'relatorio', recibos: 'recibo' } as const
-      )[dominio as 'orcamentos' | 'relatorios' | 'recibos']
-      if (tipo && canal.endsWith('.numeracao'))
-        return numeracaoCompartilhada(
-          tipo,
-          (await fn(...args)) as import('@shared/api').InfoNumeracao
-        )
-      if (tipo && canal.endsWith('.definirProximoNumero') && protocoloNuvem() >= 2)
-        return definirNumeracaoCompartilhada(tipo, Number(args[0]))
-      if (tipo && /\.(update|remove|alterarNumero|confirmar|cancelar)$/.test(canal)) {
-        await autorizarGravacao(tipo, String(args[0]))
-        if (tipo === 'recibo') {
-          const r = recibosRepo.get(String(args[0]))
-          if (r?.origemTipo === 'relatorio' && r.origemId)
-            await autorizarGravacao('relatorio', r.origemId)
+        if (canal.startsWith('documentos.gerar')) {
+          const t = canal.includes('Recibo')
+            ? 'recibo'
+            : canal.includes('Relatorio')
+              ? 'relatorio'
+              : 'orcamento'
+          await autorizarEmissao(t, String(args[0]))
         }
-      }
-      if (/\.(create|update|save|remove)$/.test(canal))
-        return tx(() => {
-          const resultado = fn(...args)
-          const dominios: Record<string, string> = {
-            clientes: 'clientes',
-            servicos: 'servicos',
-            observacoes: 'observacoes_padrao',
-            pagamentos: 'pagamentos_padrao'
+        if (canal === 'versoes.exportar') {
+          const v = obterVersao(String(args[0]))
+          const atual = (
+            v.tipo === 'orcamento'
+              ? orcamentosRepo
+              : v.tipo === 'relatorio'
+                ? relatoriosRepo
+                : recibosRepo
+          ).get(v.documentoId)
+          if (
+            atual &&
+            atual.numero !== v.documento.numero &&
+            !numeroHistoricoReconhecido(v.tipo, v.documentoId, v.documento.numero, atual.numero)
+          )
+            throw new Error(
+              'Esta versão tem um número anterior à correção do rascunho. Crie um novo documento a partir dela para emitir.'
+            )
+          if (atual && atual.numero === v.documento.numero)
+            await autorizarEmissao(v.tipo, v.documentoId)
+        }
+        const tipo = (
+          { orcamentos: 'orcamento', relatorios: 'relatorio', recibos: 'recibo' } as const
+        )[dominio as 'orcamentos' | 'relatorios' | 'recibos']
+        if (tipo && canal.endsWith('.numeracao'))
+          return await numeracaoCompartilhada(
+            tipo,
+            (await fn(...args)) as import('@shared/api').InfoNumeracao
+          )
+        if (tipo && canal.endsWith('.definirProximoNumero') && protocoloNuvem() >= 2)
+          return await definirNumeracaoCompartilhada(tipo, Number(args[0]))
+        if (tipo && /\.(update|remove|alterarNumero|confirmar|cancelar)$/.test(canal)) {
+          await autorizarGravacao(tipo, String(args[0]))
+          if (tipo === 'recibo') {
+            const r = recibosRepo.get(String(args[0]))
+            if (r?.origemTipo === 'relatorio' && r.origemId)
+              await autorizarGravacao('relatorio', r.origemId)
           }
-          const tabela = dominios[canal.split('.')[0]]
-          if (tabela && canal.endsWith('.remove'))
-            enfileirar(`${tabela}:${String(args[0])}`, { tabela, id: args[0], row: null })
-          capturarCadastros()
-          return resultado
-        })
-      return await fn(...args)
+        }
+        if (/\.(create|update|save|remove)$/.test(canal))
+          return await tx(() => {
+            const resultado = fn(...args)
+            const dominios: Record<string, string> = {
+              clientes: 'clientes',
+              servicos: 'servicos',
+              observacoes: 'observacoes_padrao',
+              pagamentos: 'pagamentos_padrao'
+            }
+            const tabela = dominios[canal.split('.')[0]]
+            if (tabela && canal.endsWith('.remove'))
+              enfileirar(`${tabela}:${String(args[0])}`, { tabela, id: args[0], row: null })
+            capturarCadastros()
+            return resultado
+          })
+        return await fn(...args)
+      } catch (erro) {
+        // Não serializar argumentos, sessão ou SQL para o renderer.
+        // A causa original permanece no processo principal para diagnóstico.
+        throw new Error(mensagemErro(erro), { cause: erro })
+      }
     })
   }
 }

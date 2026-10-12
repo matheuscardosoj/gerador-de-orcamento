@@ -1,3 +1,4 @@
+import { mensagemErro } from '@shared/erros'
 import { randomUUID } from 'crypto'
 import { all, get, run, texto, tx } from './db/sqlite'
 import { pedidoNuvem, protocoloNuvem, sincronizarNuvem, statusNuvem } from './nuvem'
@@ -62,7 +63,7 @@ export async function definirNumeracaoCompartilhada(
     avisarDados({ origem: 'nuvem', entidades: [`numeracao:${tipo}`], status: true })
     return { ok: true }
   } catch (e) {
-    return { ok: false, erro: String(e).replace(/^Error:\s*/, '') }
+    return { ok: false, erro: mensagemErro(e) }
   }
 }
 const editoresAtivos = new Set<string>()

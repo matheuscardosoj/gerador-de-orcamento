@@ -1,3 +1,4 @@
+import { mensagemErro } from '@shared/erros'
 import { useEffect, useRef, useState } from 'react'
 import {
   ArrowRightLeft,
@@ -101,7 +102,7 @@ export function ColaboracaoDocumento({
     try {
       await tarefa()
     } catch (e) {
-      if (vivo.current) setErro(String(e).replace(/^Error:\s*/, ''))
+      if (vivo.current) setErro(mensagemErro(e))
     } finally {
       if (vivo.current) setOcupado(false)
     }

@@ -39,6 +39,7 @@ let reciboId = '',
   offline = false
 let reterControles: Promise<void> | null = null
 let renovacoes = 0
+let lotesPublicados = 0
 let rascunhos: typeof import('../rascunhos')
 async function perfil(nome: string) {
   sql.fecharBanco()
@@ -126,6 +127,7 @@ beforeAll(async () => {
         result = (await pg.query('SELECT id,nome FROM gdo_devices')).rows
       else {
         const fn = u.pathname.split('/').at(-1)!
+        if (fn === 'gdo_batch_v3') lotesPublicados++
         if (!endpoints.has(fn)) throw new Error('Endpoint desconhecido: ' + fn)
         const keys = Object.keys(body)
         if (keys.some((k) => !/^p_[a-z_]+$/.test(k))) throw new Error('Parâmetro inválido')
@@ -499,4 +501,140 @@ it('não reenfileira cadastros recebidos quando o JSON remoto muda a ordem das p
     sql.get('SELECT COUNT(*) AS n FROM fila_nuvem WHERE entidade=?', [`clientes:${c.id}`])?.n
   ).toBe(1)
   expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+})
+
+function simularContextoAnterior(): void {
+  const c = JSON.parse(
+    String(sql.get("SELECT valor FROM configuracoes WHERE chave='contextoNuvem'")?.valor)
+  )
+  c.protocolo = 2
+  sql.run("UPDATE configuracoes SET valor=? WHERE chave='contextoNuvem'", [JSON.stringify(c)])
+}
+async function repetirCliente(id: string, grupo = randomUUID(), nome?: string) {
+  const { enfileirar } = await import('../versoes')
+  const row = { ...sql.get('SELECT * FROM clientes WHERE id=?', [id])! }
+  if (nome) {
+    row.nome = nome
+    sql.run('UPDATE clientes SET nome=? WHERE id=?', [nome, id])
+  }
+  const json = JSON.parse(String(row.dados_json))
+  row.dados_json = JSON.stringify(Object.fromEntries(Object.entries(json).reverse()), null, 2)
+  enfileirar(`clientes:${id}`, { tabela: 'clientes', id, row })
+  sql.run('UPDATE fila_nuvem SET grupo=? WHERE entidade=?', [grupo, `clientes:${id}`])
+}
+it('recupera 37 pendências equivalentes do protocolo anterior sem republicar dados', async () => {
+  await perfil('a')
+  const ids = Array.from(
+    { length: 37 },
+    (_, i) =>
+      repos.clientesRepo.create({ nome: `Cliente replica ${i}`, tratamento: 'A', ativo: true }).id
+  )
+  nuvem.capturarCadastros()
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  await perfil('b')
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  for (const id of ids) await repetirCliente(id)
+  expect(sql.get('SELECT COUNT(*) AS n FROM fila_nuvem')?.n).toBe(37)
+  simularContextoAnterior()
+  const antes = lotesPublicados
+  const s = await nuvem.conectarNuvem({ ...config, email: 'b@example.com' }, 'teste', 'baixar')
+  expect(s.erro).toBeNull()
+  expect(s.protocolo).toBe(3)
+  expect(s.pendentes).toBe(0)
+  expect(lotesPublicados).toBe(antes)
+  const arquivo = sql.get(
+    "SELECT dados FROM auditoria_colaboracao WHERE acao='numeracao:pendencias-anteriores' ORDER BY criado_em DESC LIMIT 1"
+  )!
+  expect(JSON.parse(String(arquivo.dados)).fila).toHaveLength(37)
+  expect(s.backupAtualizacao).toBeTruthy()
+  nuvem.capturarCadastros()
+  expect(nuvem.statusNuvem().pendentes).toBe(0)
+})
+it('preserva pendência diferente na fila e no backup, sem publicar a alteração antiga', async () => {
+  const c = repos.clientesRepo.list()[0]
+  const original = c.nome
+  await repetirCliente(c.id, randomUUID(), 'Alteração local antiga preservada')
+  const operacao = sql.get('SELECT * FROM fila_nuvem')!
+  simularContextoAnterior()
+  const s = await nuvem.conectarNuvem({ ...config, email: 'b@example.com' }, 'teste', 'baixar')
+  expect(s.autenticada).toBe(true)
+  expect(s.atualizacaoPendente?.divergentes).toBe(1)
+  expect(sql.get('SELECT COUNT(*) AS n FROM fila_nuvem')?.n).toBe(1)
+  const antes = lotesPublicados
+  const atualizado = await nuvem.finalizarAtualizacaoNumeracao(s.atualizacaoPendente!.revisao)
+  expect(atualizado.erro).toBeNull()
+  expect(atualizado.pendentes).toBe(0)
+  expect(atualizado.pendenciasPreservadas).toBe(1)
+  expect(sql.get('SELECT * FROM fila_nuvem WHERE id=?', [operacao.id])).toEqual(operacao)
+  expect(repos.clientesRepo.get(c.id)?.nome).toBe(original)
+  expect(lotesPublicados).toBe(antes)
+  const { Database } = await import('node-sqlite3-wasm')
+  const backup = new Database(atualizado.backupAtualizacao!)
+  try {
+    const a = backup.all(
+      "SELECT dados FROM auditoria_colaboracao WHERE acao='numeracao:pendencias-anteriores'"
+    ) as Array<{ dados: string }>
+    expect(
+      a.some((l) => JSON.parse(l.dados).fila.some((p: { id: string }) => p.id === operacao.id))
+    ).toBe(true)
+    expect(backup.get("SELECT 1 FROM configuracoes WHERE chave='sessaoNuvem'")).toBeNull()
+  } finally {
+    backup.close()
+  }
+})
+it('não retira parte de grupo que contém documento e recusa decisão desatualizada', async () => {
+  const c = repos.clientesRepo.list()[1],
+    grupo = randomUUID()
+  await repetirCliente(c.id, grupo)
+  const { enfileirar, pacoteDocumento } = await import('../versoes')
+  const d = repos.orcamentosRepo.list()[0]
+  enfileirar(`orcamento:${d.id}`, pacoteDocumento('orcamento', d.id))
+  sql.run('UPDATE fila_nuvem SET grupo=? WHERE entidade=?', [grupo, `orcamento:${d.id}`])
+  simularContextoAnterior()
+  const s = await nuvem.conectarNuvem({ ...config, email: 'b@example.com' }, 'teste', 'baixar')
+  expect(s.atualizacaoPendente?.equivalentes).toBe(0)
+  const fila = sql.all('SELECT * FROM fila_nuvem ORDER BY rowid')
+  await expect(nuvem.finalizarAtualizacaoNumeracao('revisao-antiga')).rejects.toThrow('conferência')
+  await expect(nuvem.finalizarAtualizacaoNumeracao(s.atualizacaoPendente!.revisao)).rejects.toThrow(
+    'documentos ou pagamentos'
+  )
+  expect(sql.all('SELECT * FROM fila_nuvem ORDER BY rowid')).toEqual(fila)
+})
+it('equivalência aceita ordem de propriedades e preserva ordem de listas e tipos', async () => {
+  const { conteudoEquivalente } = await import('../pendencias-anteriores')
+  expect(
+    conteudoEquivalente({ dados_json: '{"a":1,"b":2}' }, { dados_json: '{ "b": 2, "a": 1 }' })
+  ).toBe(true)
+  expect(conteudoEquivalente({ valor: '[1,2]' }, { valor: '[2,1]' })).toBe(false)
+  expect(conteudoEquivalente({ nome: '1' }, { nome: 1 })).toBe(false)
+})
+it('falha de backup ou conta de outra empresa não remove a fila antiga', async () => {
+  await perfil('a')
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  const c = repos.clientesRepo.list()[0]
+  await repetirCliente(c.id)
+  simularContextoAnterior()
+  const fila = sql.all('SELECT * FROM fila_nuvem ORDER BY rowid')
+  const dados = await import('../dados')
+  const falha = vi.spyOn(dados, 'exportarDadosPara').mockImplementation(() => {
+    throw new Error('Não foi possível verificar o backup.')
+  })
+  try {
+    await expect(nuvem.conectarNuvem(config, 'teste', 'baixar')).rejects.toThrow('backup')
+    expect(sql.all('SELECT * FROM fila_nuvem ORDER BY rowid')).toEqual(fila)
+  } finally {
+    falha.mockRestore()
+  }
+  sql.run("UPDATE configuracoes SET valor=? WHERE chave='empresaNuvem'", [
+    JSON.stringify(randomUUID())
+  ])
+  try {
+    await expect(nuvem.conectarNuvem(config, 'teste', 'baixar')).rejects.toThrow('outra empresa')
+    expect(sql.all('SELECT * FROM fila_nuvem ORDER BY rowid')).toEqual(fila)
+  } finally {
+    sql.run("UPDATE configuracoes SET valor=? WHERE chave='empresaNuvem'", [
+      JSON.stringify(empresa)
+    ])
+  }
+  expect((await nuvem.conectarNuvem(config, 'teste', 'baixar')).erro).toBeNull()
 })
