@@ -8,9 +8,12 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "prebuild": "node scripts/gerar-schema-nuvem.mjs",
     "preview": "electron-vite preview",
     "start": "electron-vite preview",
     "test": "vitest run",
+    "pretest": "node scripts/gerar-schema-nuvem.mjs",
+    "schema:nuvem": "node scripts/gerar-schema-nuvem.mjs",
     "test:watch": "vitest",
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write .",

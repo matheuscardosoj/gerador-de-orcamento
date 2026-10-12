@@ -8,6 +8,62 @@ const usuario = randomUUID(),
   outro = randomUUID(),
   pc1 = randomUUID(),
   pc2 = randomUUID()
+function cadastro(id: string, nome: string): unknown {
+  return {
+    tabela: 'clientes',
+    id,
+    row: {
+      id,
+      nome,
+      tratamento: '',
+      contato: null,
+      observacao: null,
+      ativo: 1,
+      criado_em: '2026-10-12T00:00:00Z',
+      dados_json: '{}'
+    }
+  }
+}
+function documento(id: string, numero: number, pc: string): Record<string, unknown> {
+  return {
+    id,
+    tipo: 'orcamento',
+    excluido: false,
+    responsavel: pc,
+    rows: {
+      orcamentos: [
+        {
+          id,
+          numero,
+          data: '2026-10-12',
+          cliente_id: null,
+          destinatario: '',
+          formato: 'carta',
+          titulo: '',
+          introducao: null,
+          prazo_dias: null,
+          observacao_interna: null,
+          valor_total: 0,
+          status: 'rascunho',
+          criado_em: '2026-10-12T00:00:00Z',
+          atualizado_em: '2026-10-12T00:00:00Z'
+        }
+      ],
+      documento_meta: [
+        {
+          tipo: 'orcamento',
+          documento_id: id,
+          dados: JSON.stringify({ computadorResponsavel: pc })
+        }
+      ],
+      itens_servico: [],
+      materiais: [],
+      orcamento_textos: [],
+      anexos: [],
+      versoes: []
+    }
+  }
+}
 async function conta(id: string): Promise<void> {
   await pg.query("select set_config('request.jwt.claim.sub',$1,false)", [id])
 }
@@ -32,6 +88,8 @@ beforeAll(async () => {
   await pg.query('insert into auth.users values ($1),($2)', [usuario, outro])
   await pg.exec(readFileSync(resolve('supabase/schema.sql'), 'utf8'))
   await conta(usuario)
+  await pg.query('select gdo_device($1,$2)', [pc1, 'Primeiro computador'])
+  await pg.query('select gdo_device($1,$2)', [pc2, 'Segundo computador'])
 }, 30000)
 afterAll(async () => {
   await pg.close()
@@ -45,23 +103,31 @@ it('reserva faixas exclusivas de vinte números para dois computadores', async (
 it('é idempotente, rejeita revisão obsoleta e números de outro computador', async () => {
   const id = randomUUID(),
     entidade = `orcamento:${randomUUID()}`
-  const payload = { responsavel: pc1, tipo: 'orcamento', rows: { orcamentos: [{ numero: 1 }] } }
+  const payload = documento(entidade.slice('orcamento:'.length), 1, pc1)
   expect((await aplicar(entidade, 0, payload, pc1, id)).revisao).toBe(1)
   expect((await aplicar(entidade, 0, payload, pc1, id)).revisao).toBe(1)
   expect((await aplicar(entidade, 0, payload)).ok).toBe(false)
+  const outroDoc = randomUUID()
   await expect(
-    aplicar(`orcamento:${randomUUID()}`, 0, { ...payload, responsavel: pc2 }, pc2)
+    aplicar(`orcamento:${outroDoc}`, 0, documento(outroDoc, 1, pc2), pc2)
   ).rejects.toThrow('Numero nao reservado')
   await expect(aplicar(entidade, 1, { ...payload, responsavel: pc2 }, pc2)).rejects.toThrow(
     'outro computador'
   )
 })
 it('envia conjuntos de alterações atomicamente e preserva operações após reenvio', async () => {
-  const e = `clientes:${randomUUID()}`
-  await aplicar(e, 0, { nome: 'original' })
+  const clienteId = randomUUID(),
+    e = `clientes:${clienteId}`,
+    novoId = randomUUID()
+  await aplicar(e, 0, cadastro(clienteId, 'original'))
   const ops = [
-    { id: randomUUID(), entidade: `clientes:${randomUUID()}`, base: 0, payload: { nome: 'novo' } },
-    { id: randomUUID(), entidade: e, base: 0, payload: { nome: 'conflito' } }
+    {
+      id: randomUUID(),
+      entidade: `clientes:${novoId}`,
+      base: 0,
+      payload: cadastro(novoId, 'novo')
+    },
+    { id: randomUUID(), entidade: e, base: 0, payload: cadastro(clienteId, 'conflito') }
   ]
   const r = await pg.query<{ r: { ok: boolean } }>('select gdo_batch($1,$2) as r', [
     JSON.stringify(ops),
@@ -77,7 +143,10 @@ it('isola empresas e impede leitura e escrita direta anônima', async () => {
   await pg.exec('set role authenticated')
   expect((await pg.query('select * from gdo_entities')).rows).toHaveLength(0)
   await expect(
-    pg.query("insert into gdo_entities values ($1,'clientes:invasao',1,'{}',1)", [usuario])
+    pg.query(
+      "insert into clientes (empresa_id,id,nome,campos_presentes) values ($1,'invasao','Invasão','{}')",
+      [usuario]
+    )
   ).rejects.toThrow('permission denied')
   await pg.exec('reset role;set role anon')
   await expect(pg.query('select * from gdo_entities')).rejects.toThrow('permission denied')
@@ -86,17 +155,8 @@ it('isola empresas e impede leitura e escrita direta anônima', async () => {
 })
 it('transfere responsabilidade só na revisão sincronizada', async () => {
   const id = randomUUID(),
-    e = `orcamento:${id}`,
-    meta = {
-      tipo: 'orcamento',
-      documento_id: id,
-      dados: JSON.stringify({ computadorResponsavel: pc1 })
-    }
-  await aplicar(e, 0, {
-    responsavel: pc1,
-    tipo: 'orcamento',
-    rows: { orcamentos: [{ numero: 2 }], documento_meta: [meta] }
-  })
+    e = `orcamento:${id}`
+  await aplicar(e, 0, documento(id, 2, pc1))
   await pg.query('select gdo_device($1,$2)', [pc2, 'Segundo computador'])
   await expect(pg.query('select gdo_transfer($1,$2,$3,0)', [e, pc1, pc2])).rejects.toThrow(
     'Sincronize'
@@ -109,22 +169,6 @@ it('transfere responsabilidade só na revisão sincronizada', async () => {
     )
   ).rows[0].payload
   expect(novo.responsavel).toBe(pc2)
-  expect(
-    (
-      await aplicar(
-        e,
-        2,
-        { ...novo, tipo: 'orcamento', rows: { orcamentos: [{ numero: 2 }] } },
-        pc2
-      )
-    ).ok
-  ).toBe(true)
-  await expect(
-    aplicar(
-      e,
-      3,
-      { responsavel: pc1, tipo: 'orcamento', rows: { orcamentos: [{ numero: 2 }] } },
-      pc1
-    )
-  ).rejects.toThrow('outro computador')
+  expect((await aplicar(e, 2, documento(id, 2, pc2), pc2)).ok).toBe(true)
+  await expect(aplicar(e, 3, documento(id, 2, pc1), pc1)).rejects.toThrow('outro computador')
 })

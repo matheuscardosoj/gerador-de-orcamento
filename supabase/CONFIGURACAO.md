@@ -2,6 +2,38 @@
 
 Use um projeto Supabase por empresa e o mesmo usuário de e-mail e senha nos computadores que compartilharão os dados. Cada usuário autenticado acessa sua própria base. Preferências do computador e configuração da IA permanecem locais.
 
+## Atualizar uma nuvem que já está conectada
+
+O novo esquema organiza os registros em tabelas de domínio. Ele é compatível com a sincronização da **versão 1.4.0**; o banco SQLite local continua no esquema 8.
+
+1. Sincronize todos os computadores, resolva pendências/conflitos e exporte um backup atualizado em **Dados e backup**. Termine as edições e feche os aplicativos enquanto executar a mudança.
+2. Guarde também a exportação remota verificada e teste a migração dessa cópia. O script `scripts/verificar-migracao-relacional.mjs` exercita PostgreSQL isolado e compara conteúdo, revisões e sequências; não usa contas reais.
+3. Abra uma **nova consulta no SQL Editor** e execute o **novo `schema.sql` completo**, fornecido com esta atualização. Não use a cópia do esquema antigo que estava no instalador original. Não escolha publicar novamente nem apague tabelas manualmente.
+4. O script converte os registros existentes dentro de uma transação, valida os vínculos/pagamentos e compara todos os conteúdos. Uma falha cancela a mudança inteira. Depois da conferência, retira a tabela genérica anterior. Não renumera documentos nem modifica snapshots antigos. Executar novamente preserva os dados e as revisões.
+5. Reabra os aplicativos, sincronize e confira ausência de falhas/pendências. Compare novamente os registros locais/remotos e teste o download em um perfil separado.
+
+## Onde consultar os dados no painel
+
+Em **Table Editor → public**, abra a tabela pelo nome:
+
+| Tabela                                                                       | Conteúdo                                                                  |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `clientes`                                                                   | Nome, PF/PJ, CPF/CNPJ opcional, telefone, e-mail e endereço               |
+| `servicos`                                                                   | Catálogo de serviços e sua ordem                                          |
+| `orcamentos`, `itens_orcamento`, `materiais_orcamento`, `textos_orcamento`   | Propostas, valores, serviços, materiais e condições                       |
+| `relatorios`, `itens_relatorio`, `lancamentos_relatorio`, `textos_relatorio` | Serviços executados, adiantamentos, reembolsos e saldo                    |
+| `recibos`, `recebimentos`                                                    | Recibos/cobranças ativos e lançamentos financeiros, incluindo estornos    |
+| `imagens`, `anexos_orcamento`, `anexos_relatorio`                            | Base64 e vínculos de fotos, sem Storage                                   |
+| `documentos`, `versoes_documentos`, `imagens_versoes`                        | Responsável, dados congelados, histórico e referências às imagens antigas |
+| `observacoes_padrao`, `formas_pagamento_padrao`, `configuracoes_empresa`     | Padrões comerciais e configuração da empresa                              |
+| `computadores`, `reservas_numeros`                                           | Computadores conectados e números reservados/utilizados                   |
+
+O registro permanente em `documentos` preserva documentos excluídos; eles não reaparecem nas tabelas de documentos ativos. O vínculo de um pagamento com esse registro permanece válido mesmo após excluir/estornar o recibo.
+
+Os controles de sincronização ficam no schema **`sincronizacao`**. `gdo_entities` agora é uma **consulta compatível**, que monta os dados a partir das tabelas; não é uma segunda base. JSON continua sendo usado para cálculos, configurações e snapshots históricos, preservando campos opcionais.
+
+Faça as edições pelo aplicativo para registrar versões e manter números, pagamentos e sincronização consistentes. As conexões do aplicativo têm leitura por empresa; gravações passam pelas operações transacionais autorizadas.
+
 ## Você já usa uma versão antiga nesta máquina
 
 1. Abra a versão atual do aplicativo e vá a **Configurações → Dados e backup**. Exporte uma cópia de segurança e guarde esse arquivo em outra pasta ou dispositivo. Termine as edições abertas e feche o aplicativo.
