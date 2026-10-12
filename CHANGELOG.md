@@ -4,6 +4,9 @@ Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
 ## 1.4.1 — 2026-10-12
 
+- Cadastros de clientes e catálogo usando a largura, cabeçalho, tabelas, ações e espaçamentos dos históricos. Busca, filtros de clientes e arraste de serviços preservado por mouse/teclado, com rolagem horizontal em janelas menores.
+- Painel de numeração dos recibos nas configurações, com próximo número persistido no backup e bloqueio de números utilizados/excluídos. Os três painéis mostram as reservas reais e explicam a numeração protegida quando conectados à nuvem.
+- Validação com 158 testes e interface real entre 1.024 e 2.560 pixels, incluindo cadastro somente com nome, reordenação/cancelamento e numeração de recibos.
 - Nuvem organizada em tabelas de clientes, serviços, propostas e itens, relatórios e lançamentos, recibos, recebimentos, imagens e versões, com campos nativos e vínculos por empresa.
 - Migração transacional e reexecutável da estrutura genérica, conferindo todos os conteúdos antes de retirar o armazenamento anterior. A rota compatível de sincronização passa a reconstruir os pacotes a partir das tabelas, sem uma segunda cópia de imagens/documentos.
 - Proteções de integridade financeira, versões imutáveis, imagens por hash, referências históricas e isolamento por empresa. Preserva revisões, operações, reservas e identificadores amplos dos rascunhos offline.

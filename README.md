@@ -73,6 +73,8 @@ o app tenta o Ollama automaticamente.
 **Versão 1.4.1** — nuvem organizada em tabelas de domínio, migração transacional,
 integridade financeira e histórico preservado. Inclui o esquema atualizado e o
 guia para consultar os dados no Supabase; mantém compatibilidade com a 1.4.0.
+Cadastros usa as tabelas e ações dos históricos; a configuração de numeração
+inclui recibos e mostra os números reservados quando conectado à nuvem.
 
 **Versão 1.4.0** — históricos configuráveis, listas por arraste e revisão
 de textos com IA local, além de dados compartilhados e clientes com campos opcionais,
