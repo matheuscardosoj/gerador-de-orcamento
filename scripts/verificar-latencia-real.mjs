@@ -12,7 +12,8 @@ assert.ok(clienteTesteId, 'Informe o identificador do cliente de teste confirmad
 const apps = [],
   pages = [],
   medidas = []
-let cliente, ultimoNome
+let cliente, ultimoNome, falhaRestauracao
+let clienteDeTesteRestaurado = false
 async function aguardar(p, consulta, limite = 60000) {
   const inicio = Date.now()
   while (Date.now() - inicio < limite) {
@@ -86,11 +87,31 @@ try {
         cliente.id
       )
       .catch(() => null)
-    if (atual?.nome === ultimoNome || atual?.nome.startsWith('Teste de sincronização — medição ')) {
-      await pages[0].evaluate(async ({ id, nome }) => {
-        await window.api.clientes.update(id, { nome })
-        await window.api.nuvem.sincronizar()
-      }, cliente)
+    try {
+      if (
+        atual?.nome === ultimoNome ||
+        atual?.nome.startsWith('Teste de sincronização — medição ')
+      ) {
+        const s = await pages[0].evaluate(async ({ id, nome }) => {
+          await window.api.clientes.update(id, { nome })
+          return window.api.nuvem.sincronizar()
+        }, cliente)
+        assert.ok(
+          !s.erro && !s.pendentes,
+          'A restauração do cliente precisa ser confirmada pelo servidor.'
+        )
+      }
+      for (const page of pages) {
+        await page.evaluate(() => window.api.nuvem.sincronizar())
+        const nome = await page.evaluate(
+          async (id) => (await window.api.clientes.list()).find((c) => c.id === id)?.nome,
+          cliente.id
+        )
+        assert.equal(nome, cliente.nome, 'O nome original deve estar restaurado nos dois perfis.')
+      }
+      clienteDeTesteRestaurado = true
+    } catch (e) {
+      falhaRestauracao = e
     }
   }
   for (let i = 0; i < apps.length; i++) {
@@ -99,13 +120,14 @@ try {
     await apps[i].close()
   }
 }
+if (falhaRestauracao) throw falhaRestauracao
 const ordenadas = medidas.map((m) => m.milissegundos).sort((a, b) => a - b)
 const resultado = {
   pasta: raiz,
   projetoReal: true,
   perfisIsolados: true,
   doisComputadoresFisicos: false,
-  clienteDeTesteRestaurado: true,
+  clienteDeTesteRestaurado,
   medidas,
   mediana: ordenadas[Math.floor(ordenadas.length / 2)],
   p95: ordenadas[Math.ceil(ordenadas.length * 0.95) - 1],

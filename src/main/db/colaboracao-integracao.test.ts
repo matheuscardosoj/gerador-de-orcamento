@@ -486,3 +486,17 @@ it('confirma a referência do relatório criado offline antes da numeração da 
   expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
   expect(repos.relatoriosRepo.get(rel.id)?.origemOrcamento?.numero).toBe(confirmado.numero)
 })
+
+it('não reenfileira cadastros recebidos quando o JSON remoto muda a ordem das propriedades', async () => {
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  expect(sql.get('SELECT COUNT(*) AS n FROM fila_nuvem')?.n).toBe(0)
+  nuvem.capturarCadastros()
+  expect(sql.get('SELECT COUNT(*) AS n FROM fila_nuvem')?.n).toBe(0)
+  const c = repos.clientesRepo.list()[0]
+  sql.run('UPDATE clientes SET contato=? WHERE id=?', ['Contato alterado localmente', c.id])
+  nuvem.capturarCadastros()
+  expect(
+    sql.get('SELECT COUNT(*) AS n FROM fila_nuvem WHERE entidade=?', [`clientes:${c.id}`])?.n
+  ).toBe(1)
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+})

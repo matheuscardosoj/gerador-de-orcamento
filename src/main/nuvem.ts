@@ -1138,7 +1138,22 @@ export function capturarCadastros(): void {
       const chave = `estado:${t}:${id}`
       const payload = { tabela: t, id, row: l }
       const estado = JSON.stringify(payload)
-      if (config<string>(chave) !== estado) {
+      const anterior = config<string>(chave)
+      let igual = anterior === estado
+      if (!igual && anterior) {
+        try {
+          const conhecido = JSON.parse(anterior)
+          igual =
+            conhecido.tabela === t &&
+            conhecido.id === id &&
+            conhecido.row &&
+            Object.keys(conhecido.row).length === Object.keys(l).length &&
+            Object.keys(l).every((campo) => conhecido.row[campo] === l[campo])
+        } catch {
+          // Cache inválido não pode esconder uma mudança local real.
+        }
+      }
+      if (!igual) {
         enfileirar(`${t}:${id}`, payload)
         salvar(chave, estado)
       }
