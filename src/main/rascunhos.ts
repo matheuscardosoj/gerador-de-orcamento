@@ -159,7 +159,6 @@ export async function compararRascunho(
   const ultima = [...versoes].sort((a, b) => Number(b.numero) - Number(a.numero))[0]
   if (!ultima) throw new Error('A versão remota não contém um snapshot para comparação.')
   const remoto = JSON.parse(String(ultima.documento)) as Documento
-  remoto.idInterno = envelope.identificador?.id_interno ?? null
   const conteudoLocal = structuredClone(r.documento)
   // Conteúdo e financeiro têm fluxos diferentes. Uma comparação textual mantém
   // os lançamentos e estados atuais da empresa, inclusive se o rascunho é antigo.
@@ -267,8 +266,7 @@ export function copiarRascunho(id: string): Documento {
     status: 'rascunho',
     numero: undefined,
     computadorResponsavel: undefined,
-    versao: undefined,
-    idInterno: undefined
+    versao: undefined
   }
   if ('anexos' in dto) dto.anexos = dto.anexos.map((a) => ({ ...a, id: randomUUID() }))
   if (r.tipo === 'recibo') {

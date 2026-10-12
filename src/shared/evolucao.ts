@@ -10,7 +10,6 @@ export interface EnderecoCliente {
 }
 export type CampoCliente = 'documento' | 'endereco' | 'telefone' | 'email' | 'pessoaContato'
 export interface DocumentoMetadados {
-  idInterno?: number | null
   usuarioCriador?: string | null
   alteradoPor?: string | null
   autorNome?: string | null
@@ -66,6 +65,7 @@ export interface StatusNuvem {
   ultimaSincronizacao: string | null
   erro: string | null
   bytesBanco: number
+  atualizandoNumeracao?: boolean
   reservas: Record<TipoDocumento, number>
   empresaId?: string
   usuarioId?: string

@@ -350,8 +350,26 @@ const v9 = (d: Database): void => {
     d.run('UPDATE configuracoes SET valor=? WHERE chave=?', [JSON.stringify(p), l.chave])
   }
 }
-export const VERSAO_BANCO = 9
-const MIGRACOES: Array<(d: Database) => void> = [v1, v2, v3, v4, v5, v6, v7, v8, v9]
+const v10 = (d: Database): void => {
+  d.exec(`
+    CREATE TABLE numeros_atribuidos (tipo TEXT NOT NULL,numero INTEGER NOT NULL,PRIMARY KEY(tipo,numero));
+    CREATE TABLE autoria_documentos (tipo TEXT NOT NULL,documento_id TEXT NOT NULL,usuario_criador TEXT,alterado_por TEXT,PRIMARY KEY(tipo,documento_id));
+    INSERT INTO autoria_documentos SELECT tipo,documento_id,usuario_criador,alterado_por FROM identificadores_documento;
+    DROP TABLE identificadores_documento;
+    UPDATE reservas SET usado=1;
+  `)
+  for (const l of d.all(
+    "SELECT chave,valor FROM configuracoes WHERE chave LIKE 'historico:%'"
+  ) as Array<{ chave: string; valor: string }>) {
+    const p = JSON.parse(l.valor)
+    if (Array.isArray(p.colunas))
+      p.colunas = p.colunas.filter((c: string) => !['ordem', 'idInterno'].includes(c))
+    if (['ordem', 'idInterno'].includes(p.campo)) p.campo = 'numero'
+    d.run('UPDATE configuracoes SET valor=? WHERE chave=?', [JSON.stringify(p), l.chave])
+  }
+}
+export const VERSAO_BANCO = 10
+const MIGRACOES: Array<(d: Database) => void> = [v1, v2, v3, v4, v5, v6, v7, v8, v9, v10]
 
 export function aplicarMigracoes(d: Database, ate = MIGRACOES.length): void {
   const linha = d.get('PRAGMA user_version') as { user_version?: number } | null

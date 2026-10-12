@@ -332,9 +332,11 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
     <PageShell
       titulo={
         rascunhoId
-          ? `Rascunho do orçamento ${orc.numero}`
+          ? `Rascunho do orçamento ${orc.numero > 0 ? orc.numero : '— aguardando numeração'}`
           : orc.id
-            ? `Orçamento ${orc.numero}`
+            ? orc.numero > 0
+              ? `Orçamento ${orc.numero}`
+              : 'Orçamento — aguardando numeração'
             : 'Novo orçamento'
       }
       descricao={`Total: ${formatMoeda(total)}`}
@@ -506,7 +508,13 @@ function DadosGeraisCard({
       <SectionTitle title="Dados gerais" />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Field label="Número" hint="Sugerido automaticamente; pode ser ajustado">
-          <NumberField value={orc.numero} onChange={(v) => set({ numero: v })} min={1} step={1} />
+          {orc.numero <= 0 ? (
+            <p className="text-sm text-slate-500">
+              Aguardando numeração — o número será confirmado ao sincronizar.
+            </p>
+          ) : (
+            <NumberField value={orc.numero} onChange={(v) => set({ numero: v })} min={1} step={1} />
+          )}
         </Field>
         <Field label="Data" error={erroDoCampo('data')}>
           <Input

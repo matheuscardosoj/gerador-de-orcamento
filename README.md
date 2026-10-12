@@ -70,7 +70,7 @@ o app tenta o Ollama automaticamente.
 
 ## Status
 
-**Candidato 1.5.0-rc.1** — usuários vinculados à empresa, Supabase Broadcast privado,
+**Candidato 1.5.0-rc.2** — usuários vinculados à empresa, Supabase Broadcast privado,
 edição temporária e preparação offline, rascunhos com comparação de três versões,
 conciliação financeira separada, IDs internos permanentes e ordem visual. SQLite
 esquema 9 e protocolo de nuvem 2; todos os computadores devem ser atualizados após
@@ -200,3 +200,7 @@ por mouse/teclado e revisão de textos. `verificar-ia-local.mjs` executa o model
 real e verifica cancelamento durante a inicialização. `atualizar-backup-candidato.mjs`
 usa uma cópia do backup fornecido para migrar, exportar, comparar os dados e
 restaurar o resultado em um perfil separado.
+
+### Numeração sequencial (rc.2)
+
+Somente Nº do documento aparece nos históricos. A atribuição é transacional por empresa/tipo, sem faixas por computador. Documentos novos offline aguardam sincronização para receber número definitivo e emitir PDF/DOCX. A migração registra um mapa de números e versões novas; conserva os snapshots e o financeiro anterior. Gravações do protocolo 2 são bloqueadas depois da troca.

@@ -1,3 +1,4 @@
+import { tabelaNumerosUsados } from './numeros'
 import { registrarImagem, imagemDataUrl } from './imagens'
 import { randomUUID } from 'crypto'
 import { hostname } from 'os'
@@ -50,12 +51,12 @@ export function enfileirar(entidade: string, payload: unknown): void {
 export function lerMeta(tipo: TipoDocumento, id: string): DocumentoMetadados {
   const l = get('SELECT dados FROM documento_meta WHERE tipo=? AND documento_id=?', [tipo, id])
   const meta: DocumentoMetadados = l ? JSON.parse(texto(l.dados)) : {}
-  const identificador = get(
-    'SELECT * FROM identificadores_documento WHERE tipo=? AND documento_id=?',
-    [tipo, id]
-  )
+  delete (meta as unknown as Record<string, unknown>).idInterno
+  const identificador = get('SELECT * FROM autoria_documentos WHERE tipo=? AND documento_id=?', [
+    tipo,
+    id
+  ])
   if (identificador) {
-    meta.idInterno = identificador.id_interno == null ? null : Number(identificador.id_interno)
     meta.usuarioCriador = identificador.usuario_criador
       ? texto(identificador.usuario_criador)
       : null
@@ -236,7 +237,7 @@ export function registrarVersao(tipo: TipoDocumento, d: Documento, descricao = '
       })
     ]
   )
-  run('INSERT OR IGNORE INTO numeros_usados VALUES (?,?)', [tipo, d.numero])
+  run(`INSERT OR IGNORE INTO ${tabelaNumerosUsados()} VALUES (?,?)`, [tipo, d.numero])
   return hidratarDocumento(documento)
 }
 export function hidratarDocumento<T extends Documento>(d: T): T {
@@ -318,7 +319,10 @@ export function envolverDocumento<T extends object>(repo: T, tipo: TipoDocumento
   const ler = alvo.get
   alvo.get = (id) => {
     const d = ler(id) as Documento | null
-    return d ? { ...d, ...lerMeta(tipo, String(id)) } : null
+    if (!d) return null
+    const atual = { ...d, ...lerMeta(tipo, String(id)) }
+    delete (atual as unknown as Record<string, unknown>).idInterno
+    return atual
   }
   for (const nome of [
     'create',

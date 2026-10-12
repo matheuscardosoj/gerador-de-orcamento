@@ -109,10 +109,9 @@ it('inclui pagamentos, versões e imagens, retirando sessão, identidade e reser
     ...repos.relatoriosRepo.get(relId)!,
     introducao: 'Texto local preservado'
   })
-  sql.run('INSERT INTO identificadores_documento VALUES (?,?,?,?,?)', [
+  sql.run('INSERT INTO autoria_documentos VALUES (?,?,?,?)', [
     'relatorio',
     relId,
-    1,
     'usuario-teste',
     'usuario-teste'
   ])
@@ -141,11 +140,11 @@ it('inclui pagamentos, versões e imagens, retirando sessão, identidade e reser
   expect(copia.get('SELECT count(*) AS n FROM versoes')).toEqual({ n: numeroVersoes })
   expect(copia.get('SELECT count(*) AS n FROM edicoes_documento')).toEqual({ n: 0 })
   expect(
-    copia.get('SELECT id_interno FROM identificadores_documento WHERE tipo=? AND documento_id=?', [
+    copia.get('SELECT usuario_criador FROM autoria_documentos WHERE tipo=? AND documento_id=?', [
       'relatorio',
       relId
     ])
-  ).toEqual({ id_interno: 1 })
+  ).toEqual({ usuario_criador: 'usuario-teste' })
   expect(copia.get('SELECT id FROM rascunhos_compartilhados')).toEqual({ id: trabalho.id })
   expect(
     copia.get(
@@ -180,7 +179,7 @@ it('restaura em outro computador preservando o saldo e bloqueando autorização 
   expect(recibos.recibosRepo.get(reciboId)?.status).toBe('recebido')
   expect(sql.get('SELECT count(*) AS n FROM versoes')?.n).toBe(numeroVersoes)
   expect(sql.get('SELECT count(*) AS n FROM imagens')?.n).toBe(1)
-  expect(repos.relatoriosRepo.get(relId)?.idInterno).toBe(1)
+  expect(repos.relatoriosRepo.get(relId)?.usuarioCriador).toBe('usuario-teste')
   expect(rascunhos.listarRascunhos('relatorio', relId)[0].documento).toMatchObject({
     id: relId,
     introducao: 'Texto local preservado'

@@ -53,6 +53,8 @@ export interface InfoNumeracao {
   totalDocumentos: number
   /** A numeração oficial vem das reservas exclusivas do computador. */
   usaReservas?: boolean
+  atribuicaoServidor?: boolean
+  ultimoNumero?: number
   proximoBloco?: number
   minimoProximo?: number
 }

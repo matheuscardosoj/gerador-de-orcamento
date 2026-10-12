@@ -36,7 +36,7 @@ export function UsuariosSection({
     async () => {
       const s = await api.nuvem.status()
       setStatus(s)
-      return s.protocolo === 2 && s.autenticada ? await api.colaboracao.membros() : []
+      return (s.protocolo ?? 1) >= 2 && s.autenticada ? await api.colaboracao.membros() : []
     },
     [],
     ['membros']
@@ -79,7 +79,7 @@ export function UsuariosSection({
         title="Usuários da empresa"
         description="Cada pessoa usa seu login. Todos os membros ativos têm acesso completo; as alterações ficam identificadas no histórico."
       />
-      {status && (status.protocolo !== 2 || !status.autenticada) && (
+      {status && ((status.protocolo ?? 1) < 2 || !status?.autenticada) && (
         <Mensagem>
           Conecte à nuvem com a configuração de colaboração atualizada para gerenciar usuários. Os
           dados locais permanecem disponíveis.
@@ -104,7 +104,7 @@ export function UsuariosSection({
         <EmptyState
           title="Nenhum usuário encontrado"
           description={
-            status?.protocolo === 2
+            (status?.protocolo ?? 1) >= 2
               ? 'Vincule uma conta já criada em Authentication.'
               : 'Sua empresa será exibida após conectar à nuvem.'
           }
@@ -179,7 +179,7 @@ export function UsuariosSection({
             </Button>
             <Button
               icon={Save}
-              disabled={ocupado || status?.protocolo !== 2 || !status.autenticada}
+              disabled={ocupado || (status?.protocolo ?? 1) < 2 || !status?.autenticada}
               onClick={() => void salvar()}
             >
               {ocupado ? 'Salvando…' : 'Vincular usuário'}

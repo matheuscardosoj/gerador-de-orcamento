@@ -37,7 +37,7 @@ function preparar(tipo: TipoDocumento, id: string): Documento {
       const numero = numeroNuvem(tipo, () => 0, true)
       if (numero <= 0)
         throw new Error(
-          'Sem números reservados. Conecte e sincronize para liberar a emissão. O rascunho continua salvo.'
+          'Aguardando numeração. Conecte e sincronize para receber o número definitivo antes de emitir. O rascunho continua salvo.'
         )
       const novo = { ...d!, numero }
       if (tipo === 'recibo')
@@ -96,11 +96,12 @@ async function escolher(nome: string, ext: 'pdf' | 'docx'): Promise<string | nul
 async function exportar(
   tipo: TipoDocumento,
   d: Documento,
-  formato: 'pdf' | 'docx'
+  formato: 'pdf' | 'docx',
+  historico = false
 ): Promise<DocumentoResultado> {
   if (d.numero <= 0)
     throw new Error(
-      'Esta versão é um rascunho sem número reservado e não pode ser emitida. Sincronize e exporte a versão atual após reservar a numeração.'
+      'Esta versão ainda não tinha número definitivo. Sincronize e exporte a versão atual após a confirmação da numeração.'
     )
   const cliente = d.clienteSnapshot?.nome ?? d.destinatario
   const recibo = tipo === 'recibo' ? (d as Recibo) : null
@@ -170,10 +171,11 @@ async function exportar(
   const caminho = await escolher(nome, formato)
   if (!caminho) return { caminho: null }
   await writeFile(caminho, buffer!)
-  tx(() => {
-    registrarNumeroEmitido(tipo, d.id, d.numero)
-    enfileirar(`${tipo}:${d.id}`, pacoteDocumento(tipo, d.id))
-  })
+  if (!historico)
+    tx(() => {
+      registrarNumeroEmitido(tipo, d.id, d.numero)
+      enfileirar(`${tipo}:${d.id}`, pacoteDocumento(tipo, d.id))
+    })
   return { caminho }
 }
 export const gerarPdf = (id: string): Promise<DocumentoResultado> =>
@@ -190,7 +192,10 @@ export const gerarReciboDocx = (id: string): Promise<DocumentoResultado> =>
   exportar('recibo', preparar('recibo', id), 'docx')
 export function exportarVersao(id: string, formato: 'pdf' | 'docx'): Promise<DocumentoResultado> {
   const v = obterVersao(id)
-  return exportar(v.tipo, v.documento, formato)
+  const atual = (
+    v.tipo === 'orcamento' ? orcamentosRepo : v.tipo === 'relatorio' ? relatoriosRepo : recibosRepo
+  ).get(v.documentoId)
+  return exportar(v.tipo, v.documento, formato, !atual || atual.numero !== v.documento.numero)
 }
 export function htmlVersao(id: string): string {
   const v = obterVersao(id)

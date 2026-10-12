@@ -110,7 +110,7 @@ export function ColaboracaoDocumento({
     const s = await api.nuvem.status()
     if (!vivo.current) return
     setStatus(s)
-    if (s.protocolo === 2 && s.autenticada && documento.id) {
+    if ((s.protocolo ?? 1) >= 2 && s.autenticada && documento.id) {
       const c = await api.colaboracao.edicao(tipo, documento.id)
       if (vivo.current) setControle(c)
     }
@@ -123,7 +123,7 @@ export function ColaboracaoDocumento({
       const s = await api.nuvem.status()
       if (!ativo) return
       setStatus(s)
-      if (!documento.id || s.protocolo !== 2 || !s.autenticada) return
+      if (!documento.id || (s.protocolo ?? 1) < 2 || !s.autenticada) return
       const c = await api.colaboracao.edicao(tipo, documento.id)
       if (!ativo) return
       setControle(c)
@@ -147,7 +147,7 @@ export function ColaboracaoDocumento({
     }
   }, [tipo, documento.id, rascunhoId])
   // A liberação no encerramento é feita pelo main, após salvar/enviar pendências.
-  if (!documento.id || (!rascunhoId && status?.protocolo !== 2)) return null
+  if (!documento.id || (!rascunhoId && (status?.protocolo ?? 1) < 2)) return null
   const controlar = (acao: Parameters<typeof api.colaboracao.edicao>[2], pc?: string): void => {
     executarComConfirmacao(
       () =>
@@ -170,7 +170,7 @@ export function ColaboracaoDocumento({
       setRecebimentos(null)
       setConfirmarFinanceiro(null)
       setAberto(true)
-      if (status?.protocolo === 2) setComputadores(await api.nuvem.dispositivos())
+      if ((status?.protocolo ?? 1) >= 2) setComputadores(await api.nuvem.dispositivos())
     })
   }
   const guardar = (): void => {
@@ -490,7 +490,7 @@ export function ColaboracaoDocumento({
               </div>
             </div>
           )}
-          {status?.protocolo === 2 && (
+          {(status?.protocolo ?? 1) >= 2 && (
             <div className="space-y-4 border-t border-slate-200 pt-5">
               {(tipo === 'recibo' || tipo === 'relatorio') && (
                 <>
@@ -622,7 +622,7 @@ export function ColaboracaoDocumento({
                       <Select value={destino} onChange={(e) => setDestino(e.target.value)}>
                         <option value="">Escolha o computador</option>
                         {computadores
-                          .filter((c) => c.id !== status.computador)
+                          .filter((c) => c.id !== status?.computador)
                           .map((c) => (
                             <option value={c.id} key={c.id}>
                               {c.nome}

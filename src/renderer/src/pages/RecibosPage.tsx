@@ -203,7 +203,7 @@ export function RecibosPage({
     }
     if (r.id) {
       const atual = await api.recibos.get(r.id)
-      if (atual && atual.numero !== r.numero) {
+      if (atual && r.numero > 0 && atual.numero !== r.numero) {
         const resultado = await api.recibos.alterarNumero(r.id, r.numero)
         if (!resultado.ok) throw new Error(resultado.erro)
       }
@@ -371,17 +371,23 @@ export function RecibosPage({
                 <div className="md:col-span-2">
                   <Field
                     label="Número do documento"
-                    hint="Correção disponível somente para rascunhos. Ordem e ID interno são automáticos."
+                    hint="Correção disponível somente para rascunhos. A nuvem valida a disponibilidade do número."
                   >
-                    <NumberField
-                      value={r.numero}
-                      min={1}
-                      max={999999}
-                      step={1}
-                      disabled={r.status !== 'rascunho' || !!rascunhoId}
-                      onChange={(numero) => set({ numero })}
-                      className="max-w-xs"
-                    />
+                    {r.numero <= 0 ? (
+                      <p className="text-sm text-slate-500">
+                        Aguardando numeração — sincronize para receber o número definitivo.
+                      </p>
+                    ) : (
+                      <NumberField
+                        value={r.numero}
+                        min={1}
+                        max={999999}
+                        step={1}
+                        disabled={r.status !== 'rascunho' || !!rascunhoId}
+                        onChange={(numero) => set({ numero })}
+                        className="max-w-xs"
+                      />
+                    )}
                   </Field>
                 </div>
               )}

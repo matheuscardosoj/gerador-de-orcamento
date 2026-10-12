@@ -16,8 +16,12 @@ import { pastaDados } from './db/sqlite'
 import { avisarDados } from './eventos'
 import { iniciarTempoReal, pararTempoReal, avisarEstadoTempoReal } from './tempo-real'
 import { randomUUID } from 'crypto'
+import { tabelaNumerosUsados, confirmarNumero } from './numeros'
 
 let ocupado = false
+let sincronizacaoAtual: Promise<StatusNuvem> | null = null
+let repetirSincronizacao = false
+let repetirCompleta = false
 let conectando = false
 type ContextoNuvem = {
   protocolo: number
@@ -77,6 +81,7 @@ function gravarSessao(s: Sessao): void {
     throw new Error('A proteção de credenciais do Windows está indisponível.')
   salvar('sessaoNuvem', safeStorage.encryptString(JSON.stringify(s)).toString('base64'))
 }
+let renovacaoSessao: { chave: string; pedido: Promise<Sessao> } | null = null
 export async function pedidoNuvem(path: string, body?: unknown, login = false): Promise<unknown> {
   const c = configuracaoNuvem()
   let token = c.chavePublica
@@ -84,13 +89,29 @@ export async function pedidoNuvem(path: string, body?: unknown, login = false): 
     let s = sessao()
     if (!s) throw new Error('Entre na conta da empresa para sincronizar.')
     if (s.expires_at * 1000 < Date.now() + 60000) {
-      const atualizado = (await pedidoNuvem(
-        '/auth/v1/token?grant_type=refresh_token',
-        { refresh_token: s.refresh_token },
-        true
-      )) as Sessao
-      gravarSessao(atualizado)
-      s = atualizado
+      const chave = `${c.url}:${s.refresh_token}`
+      if (!renovacaoSessao || renovacaoSessao.chave !== chave) {
+        const tokenAnterior = s.refresh_token
+        const pedidoRenovacao = pedidoNuvem(
+          '/auth/v1/token?grant_type=refresh_token',
+          { refresh_token: tokenAnterior },
+          true
+        ).then((dados) => {
+          const atualizada = dados as Sessao
+          if (sessao()?.refresh_token !== tokenAnterior)
+            throw new Error('A conta conectada mudou durante a renovação. Tente novamente.')
+          gravarSessao(atualizada)
+          return atualizada
+        })
+        const entrada = { chave, pedido: pedidoRenovacao }
+        renovacaoSessao = entrada
+        void pedidoRenovacao
+          .finally(() => {
+            if (renovacaoSessao === entrada) renovacaoSessao = null
+          })
+          .catch(() => undefined)
+      }
+      s = await renovacaoSessao.pedido
     }
     token = s.access_token
   }
@@ -119,7 +140,12 @@ const pedido = pedidoNuvem
 async function reconhecerEmpresa(criar = false): Promise<ContextoNuvem> {
   let contexto: ContextoNuvem
   try {
-    contexto = (await pedido('/rest/v1/rpc/gdo_contexto_v2', { p_criar: criar })) as ContextoNuvem
+    contexto = (await pedido('/rest/v1/rpc/gdo_contexto_v3', { p_criar: criar }).catch(
+      async (e) => {
+        if ((e as { codigo?: string }).codigo !== 'PGRST202') throw e
+        return pedido('/rest/v1/rpc/gdo_contexto_v2', { p_criar: criar })
+      }
+    )) as ContextoNuvem
   } catch (e) {
     // Compatibilidade de transição com a nuvem 1.4: mantém suas regras antigas.
     // Após migrar, o servidor revoga as rotas de escrita antigas.
@@ -136,6 +162,22 @@ async function reconhecerEmpresa(criar = false): Promise<ContextoNuvem> {
   const anterior = config<string>('empresaNuvem') ?? config<string>('usuarioNuvem')
   if (anterior && anterior !== contexto.empresaId)
     throw new Error('Este perfil contém dados de outra empresa. Use um perfil separado.')
+  const anteriorContexto = config<ContextoNuvem>('contextoNuvem')
+  if (contexto.protocolo >= 3 && (anteriorContexto?.protocolo ?? 1) < 3) {
+    if (get('SELECT 1 FROM fila_nuvem LIMIT 1'))
+      throw new Error(
+        'Há operações da versão anterior. Preserve-as e revise antes de adotar a numeração reorganizada; elas não serão publicadas automaticamente.'
+      )
+    exportarDadosPara(join(pastaDados(), `antes-numeracao-v3-${Date.now()}.gdo-backup`))
+    tx(() => {
+      run('UPDATE reservas SET usado=1')
+      run('UPDATE sincronizacao SET revisao=0')
+      salvar('cursorNuvem', 0)
+      salvar('renumeracaoPendente', true)
+      salvar('numeracaoSequencial', true)
+      for (const chave of ['seqOrcamento', 'seqRelatorio', 'seqRecibo']) salvar(chave, 0)
+    })
+  }
   salvar('contextoNuvem', contexto)
   salvar('empresaNuvem', contexto.empresaId)
   return contexto
@@ -149,7 +191,8 @@ export function ativarTempoReal(): void {
         s = sessao()
       return contexto && s ? { empresa: contexto.empresaId, token: s.access_token } : null
     },
-    sincronizar: sincronizarNuvem,
+    sincronizar: () => sincronizarNuvem(false),
+    sincronizarCompleta: sincronizarNuvem,
     renovar: async () => {
       if (!sessao()) return
       await reconhecerEmpresa()
@@ -169,11 +212,13 @@ export async function inicializarNuvem(): Promise<void> {
   try {
     await reconhecerEmpresa()
     if (protocoloNuvem() >= 2) {
-      await pedido('/rest/v1/rpc/gdo_dispositivo_v2', {
-        p_dispositivo: computadorId(),
-        p_nome: hostname()
-      })
-      salvar('cursorNuvem', 0)
+      await pedido(
+        `/rest/v1/rpc/${protocoloNuvem() >= 3 ? 'gdo_dispositivo_v3' : 'gdo_dispositivo_v2'}`,
+        {
+          p_dispositivo: computadorId(),
+          p_nome: hostname()
+        }
+      )
       ativarTempoReal()
     } else await sincronizarNuvem()
   } catch (e) {
@@ -208,6 +253,7 @@ export function statusNuvem(): StatusNuvem {
     empresaId: config<ContextoNuvem>('contextoNuvem')?.empresaId,
     usuarioId: config<ContextoNuvem>('contextoNuvem')?.usuarioId,
     protocolo: protocoloNuvem(),
+    atualizandoNumeracao: config<boolean>('renumeracaoPendente') ?? false,
     tempoReal: estadoTempoReal,
     erroTempoReal
   }
@@ -279,25 +325,29 @@ export async function conectarNuvem(
       salvar('cursorNuvem', 0)
     }
     salvar('usuarioNuvem', s.user.id)
-    await pedido(`/rest/v1/rpc/${contexto.protocolo >= 2 ? 'gdo_dispositivo_v2' : 'gdo_device'}`, {
-      p_dispositivo: computadorId(),
-      p_nome: hostname()
-    })
+    await pedido(
+      `/rest/v1/rpc/${contexto.protocolo >= 3 ? 'gdo_dispositivo_v3' : contexto.protocolo >= 2 ? 'gdo_dispositivo_v2' : 'gdo_device'}`,
+      {
+        p_dispositivo: computadorId(),
+        p_nome: hostname()
+      }
+    )
     if (!anterior) {
-      const existentes = (await pedido(
-        '/rest/v1/gdo_entities?select=entidade&limit=1'
-      )) as unknown[]
+      const existentes = (await (contexto.protocolo >= 3
+        ? pedido('/rest/v1/rpc/gdo_alteracoes_v3', { p_cursor: 0, p_limite: 1 })
+        : pedido('/rest/v1/gdo_entities?select=entidade&limit=1'))) as unknown[]
       if (modo === 'publicar' && existentes.length)
         throw new Error('A nuvem já contém dados. Use baixar a base para conectar este computador.')
       exportarDadosPara(join(pastaDados(), `antes-nuvem-${Date.now()}.gdo-backup`))
       if (modo === 'publicar') {
-        await pedido(
-          `/rest/v1/rpc/${contexto.protocolo >= 2 ? 'gdo_bootstrap_v2' : 'gdo_bootstrap_numbers'}`,
-          {
-            p_dispositivo: computadorId(),
-            p_numeros: all('SELECT tipo,numero FROM numeros_usados WHERE numero>0')
-          }
-        )
+        if (contexto.protocolo < 3)
+          await pedido(
+            `/rest/v1/rpc/${contexto.protocolo >= 2 ? 'gdo_bootstrap_v2' : 'gdo_bootstrap_numbers'}`,
+            {
+              p_dispositivo: computadorId(),
+              p_numeros: all(`SELECT tipo,numero FROM ${tabelaNumerosUsados()} WHERE numero>0`)
+            }
+          )
         tx(() => {
           for (const t of tabelas)
             for (const l of all(`SELECT * FROM ${t}`)) {
@@ -366,11 +416,11 @@ export async function conectarNuvem(
               'documento_meta',
               'imagens',
               'reservas',
-              'numeros_usados',
+              `${tabelaNumerosUsados()}`,
               'fila_nuvem',
               'sincronizacao',
               'conflitos_nuvem',
-              'identificadores_documento',
+              'autoria_documentos',
               'edicoes_documento',
               'rascunhos_compartilhados',
               'auditoria_colaboracao'
@@ -441,6 +491,12 @@ export type Remoto = {
     offline: boolean
     revisao: number
   } | null
+  autoria?: {
+    tipo: TipoDocumento
+    documento_id: string
+    usuario_criador: string | null
+    alterado_por: string | null
+  } | null
   identificador?: {
     tipo: TipoDocumento
     documento_id: string
@@ -466,7 +522,10 @@ async function baixarAlteracoes(inicio: number): Promise<Remoto[]> {
   while (true) {
     const dados = (
       protocoloNuvem() >= 2
-        ? await pedido('/rest/v1/rpc/gdo_alteracoes_v2', { p_cursor: cursor, p_limite: 50 })
+        ? await pedido(
+            `/rest/v1/rpc/${protocoloNuvem() >= 3 ? 'gdo_alteracoes_v3' : 'gdo_alteracoes_v2'}`,
+            { p_cursor: cursor, p_limite: 50 }
+          )
         : await pedido(
             `/rest/v1/gdo_entities?select=*&sequencia=gt.${cursor}&order=sequencia.asc&limit=50`
           )
@@ -530,8 +589,17 @@ function aplicar(e: Remoto): void {
       )
       for (const filho of tabelasFilhos[p.tipo])
         for (const row of p.rows[filho] ?? []) upsert(filho, row)
-      if (Number(pai.numero) > 0)
-        run('INSERT OR IGNORE INTO numeros_usados VALUES (?,?)', [p.tipo, pai.numero])
+      if (Number(pai.numero) > 0) {
+        run(`INSERT OR IGNORE INTO ${tabelaNumerosUsados()} VALUES (?,?)`, [p.tipo, pai.numero])
+        if (protocoloNuvem() >= 3) {
+          const chave = {
+            orcamento: 'seqOrcamento',
+            relatorio: 'seqRelatorio',
+            recibo: 'seqRecibo'
+          }[p.tipo]
+          salvar(chave, Math.max(config<number>(chave) ?? 0, Number(pai.numero)))
+        }
+      }
     }
     for (const nome of [
       'documento_meta',
@@ -543,8 +611,8 @@ function aplicar(e: Remoto): void {
         if (nome === 'versoes') {
           // Uma exclusão pode chegar antes de o outro PC ter recebido o documento.
           const numero = Number(JSON.parse(String(row.documento)).numero)
-          if (Number.isSafeInteger(numero) && numero > 0)
-            run('INSERT OR IGNORE INTO numeros_usados VALUES (?,?)', [p.tipo, numero])
+          if (protocoloNuvem() < 3 && Number.isSafeInteger(numero) && numero > 0)
+            run(`INSERT OR IGNORE INTO ${tabelaNumerosUsados()} VALUES (?,?)`, [p.tipo, numero])
         }
       }
   } else throw new Error('Pacote remoto inválido.')
@@ -559,10 +627,13 @@ export async function consultarDocumentoRemoto(
 ): Promise<Remoto | null> {
   if (protocoloNuvem() < 2)
     throw new Error('A conciliação compartilhada exige o protocolo 2 da nuvem.')
-  return (await pedido('/rest/v1/rpc/gdo_documento_v2', {
-    p_tipo: tipo,
-    p_id: id
-  })) as Remoto | null
+  return (await pedido(
+    `/rest/v1/rpc/${protocoloNuvem() >= 3 ? 'gdo_documento_v3' : 'gdo_documento_v2'}`,
+    {
+      p_tipo: tipo,
+      p_id: id
+    }
+  )) as Remoto | null
 }
 export function adotarDocumentoRemoto(e: Remoto): void {
   if (!e.payload.tipo) throw new Error('Documento remoto inválido.')
@@ -576,11 +647,33 @@ export function adotarDocumentoRemoto(e: Remoto): void {
   )
   avisarDados({ origem: 'nuvem', entidades: [e.entidade], status: true })
 }
-export async function sincronizarNuvem(): Promise<StatusNuvem> {
+export function sincronizarNuvem(completa = true): Promise<StatusNuvem> {
+  if (sincronizacaoAtual) {
+    repetirSincronizacao = true
+    repetirCompleta ||= completa
+    return sincronizacaoAtual
+  }
+  sincronizacaoAtual = (async () => {
+    let resultado: StatusNuvem
+    do {
+      repetirSincronizacao = false
+      resultado = await executarSincronizacao(completa)
+      completa = repetirCompleta
+      repetirCompleta = false
+    } while (repetirSincronizacao)
+    return resultado
+  })().finally(() => {
+    sincronizacaoAtual = null
+  })
+  return sincronizacaoAtual
+}
+async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
   if (ocupado || conectando) return statusNuvem()
   ocupado = true
   try {
-    if (protocoloNuvem() >= 2) await reconhecerEmpresa()
+    // As próprias RPCs e o RLS validam o membro em cada acesso. A sessão/contexto
+    // também são renovados a cada 30s; não acrescenta uma viagem HTTP a cada aviso.
+    if (completa && protocoloNuvem() >= 2) await reconhecerEmpresa()
     if (protocoloNuvem() < 2 && get('SELECT 1 FROM conflitos_nuvem LIMIT 1'))
       throw new Error('Resolva os conflitos antes de sincronizar novas alterações.')
     const pendencias = all('SELECT * FROM fila_nuvem ORDER BY rowid')
@@ -600,13 +693,15 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
       )
         continue
       const result = (await pedido(
-        `/rest/v1/rpc/${protocoloNuvem() >= 2 ? 'gdo_batch_v2' : 'gdo_batch'}`,
+        `/rest/v1/rpc/${protocoloNuvem() >= 2 ? (protocoloNuvem() >= 3 ? 'gdo_batch_v3' : 'gdo_batch_v2') : 'gdo_batch'}`,
         {
           p_operacoes: fila.map((l) => ({
             id: l.id,
             entidade: l.entidade,
             base: l.base,
-            payload: JSON.parse(texto(l.payload)),
+            payload: JSON.parse(
+              texto(get('SELECT payload FROM fila_nuvem WHERE id=?', [l.id])?.payload ?? l.payload)
+            ),
             geracao: l.geracao
           })),
           p_dispositivo: computadorId()
@@ -632,6 +727,7 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
         return { ok: false, entidade: op.entidade, remoto: null }
       })) as {
         ok: boolean
+        numeros?: Array<{ tipo: TipoDocumento; documentoId: string; numero: number }>
         resultados?: Array<{ entidade: string; revisao: number }>
         entidade?: string
         remoto?: Remoto
@@ -658,12 +754,64 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
             [r.entidade, r.revisao]
           )
         for (const l of fila) run('DELETE FROM fila_nuvem WHERE id=?', [l.id])
+        for (const n of result.numeros ?? []) confirmarNumero(n.tipo, n.documentoId, n.numero)
       })
     }
     let cursor = config<number>('cursorNuvem') ?? 0
+    const auxiliares =
+      protocoloNuvem() >= 2
+        ? Promise.all([
+            pedido('/rest/v1/edicoes_documento?select=*'),
+            pedido('/rest/v1/pedidos_edicao?select=*'),
+            pedido(
+              `/rest/v1/rpc/${protocoloNuvem() >= 3 ? 'gdo_membros_v3' : 'gdo_membros_v2'}`,
+              {}
+            ),
+            ...(protocoloNuvem() >= 3
+              ? [pedido('/rest/v1/mapa_numeracao?select=tipo,documento_id,anterior,novo')]
+              : [])
+          ]).then(
+            (dados) => ({ dados, erro: null }),
+            (erro) => ({ dados: null, erro })
+          )
+        : null
     const alteracoes = await baixarAlteracoes(cursor)
+    cursor = Math.max(cursor, ...alteracoes.map((e) => e.sequencia))
+    ordenarDependencias(alteracoes)
+    semRastreamento(() =>
+      tx(() => {
+        if (config<boolean>('renumeracaoPendente')) {
+          for (const t of ['orcamentos', 'relatorios', 'recibos'])
+            run(`UPDATE ${t} SET numero=-1000000000000000-numero`)
+        }
+        for (const e of alteracoes) {
+          aplicarIdentificador(e)
+          const conhecido = Number(
+            get('SELECT revisao FROM sincronizacao WHERE entidade=?', [e.entidade])?.revisao ?? 0
+          )
+          const pendente = get('SELECT 1 FROM fila_nuvem WHERE entidade=?', [e.entidade])
+          if (pendente && e.revisao > conhecido)
+            if (protocoloNuvem() >= 2) continue
+            else
+              throw new Error(
+                'Há edições locais novas; sincronize novamente antes de baixar alterações.'
+              )
+          if (e.revisao > conhecido) aplicar(e)
+        }
+        salvar('cursorNuvem', cursor)
+        if (config<boolean>('renumeracaoPendente')) salvar('renumeracaoPendente', false)
+      })
+    )
+    // O conteúdo confirmado já pode aparecer. Controles, membros e consumo não
+    // devem atrasar a tela nem a publicação da próxima operação local.
+    if (alteracoes.length)
+      avisarDados({ origem: 'nuvem', entidades: alteracoes.map((e) => e.entidade), status: true })
     if (protocoloNuvem() >= 2) {
-      const controles = (await pedido('/rest/v1/edicoes_documento?select=*')) as Array<{
+      const extra = await auxiliares!
+      if (extra.erro) throw extra.erro
+      const [dadosControles, dadosPedidos, membros, mapaNumeracao] = extra.dados!
+      if (mapaNumeracao) salvar('mapaNumeracaoCache', mapaNumeracao)
+      const controles = dadosControles as Array<{
         tipo: TipoDocumento
         documento_id: string
         usuario_id: string
@@ -700,7 +848,7 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
         }
       })
       if (mudancas.length) avisarDados({ origem: 'nuvem', entidades: mudancas, status: true })
-      const pedidos = (await pedido('/rest/v1/pedidos_edicao?select=*')) as Array<{
+      const pedidos = dadosPedidos as Array<{
         tipo: TipoDocumento
         documento_id: string
       }>
@@ -715,34 +863,12 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
           status: true
         })
       }
-      const membros = await pedido('/rest/v1/rpc/gdo_membros_v2', {})
       if (JSON.stringify(membros) !== JSON.stringify(config('membrosCache'))) {
         salvar('membrosCache', membros)
         avisarDados({ origem: 'nuvem', entidades: ['membros'], status: true })
       }
     }
-    cursor = Math.max(cursor, ...alteracoes.map((e) => e.sequencia))
-    ordenarDependencias(alteracoes)
-    semRastreamento(() =>
-      tx(() => {
-        for (const e of alteracoes) {
-          aplicarIdentificador(e)
-          const conhecido = Number(
-            get('SELECT revisao FROM sincronizacao WHERE entidade=?', [e.entidade])?.revisao ?? 0
-          )
-          const pendente = get('SELECT 1 FROM fila_nuvem WHERE entidade=?', [e.entidade])
-          if (pendente && e.revisao > conhecido)
-            if (protocoloNuvem() >= 2) continue
-            else
-              throw new Error(
-                'Há edições locais novas; sincronize novamente antes de baixar alterações.'
-              )
-          if (e.revisao > conhecido) aplicar(e)
-        }
-        salvar('cursorNuvem', cursor)
-      })
-    )
-    if (protocoloNuvem() >= 2) {
+    if (completa && protocoloNuvem() === 2) {
       const reservasRemotas = (await pedido(
         `/rest/v1/reservas_numeros?select=tipo,numero,documento&dispositivo=eq.${computadorId()}`
       )) as Array<{ tipo: TipoDocumento; numero: number; documento: string | null }>
@@ -763,9 +889,9 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
       })
     }
     for (const tipo of tipos)
-      if (statusNuvem().reservas[tipo] <= 5) {
+      if (protocoloNuvem() === 1 && statusNuvem().reservas[tipo] <= 5) {
         const minimo = Number(
-          get('SELECT MAX(numero) AS n FROM numeros_usados WHERE tipo=?', [tipo])?.n ?? 0
+          get(`SELECT MAX(numero) AS n FROM ${tabelaNumerosUsados()} WHERE tipo=?`, [tipo])?.n ?? 0
         )
         const numeros = (await pedido(
           `/rest/v1/rpc/${protocoloNuvem() >= 2 ? 'gdo_reserve_v2' : 'gdo_reserve'}`,
@@ -794,7 +920,7 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
           run('DELETE FROM configuracoes WHERE chave=?', [l.chave])
         })
     }
-    salvar('bytesNuvem', await pedido('/rest/v1/rpc/gdo_usage', {}))
+    if (completa) salvar('bytesNuvem', await pedido('/rest/v1/rpc/gdo_usage', {}))
     salvar('ultimaNuvem', new Date().toISOString())
     salvar(
       'erroNuvem',
@@ -802,8 +928,7 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
         ? 'Há alterações em conflito preservadas para conciliação. Os demais dados continuam sincronizando.'
         : null
     )
-    if (alteracoes.length)
-      avisarDados({ origem: 'nuvem', entidades: alteracoes.map((e) => e.entidade), status: true })
+    avisarDados({ origem: 'nuvem', entidades: [], status: true })
   } catch (e) {
     salvar('erroNuvem', String(e).replace(/^Error:\s*/, ''))
   } finally {
@@ -819,12 +944,10 @@ function aplicarIdentificador(e: Remoto): void {
       e.emissao.numero <= 0
     )
       throw new Error('Numeração de emissão remota inválida.')
-    run('INSERT OR IGNORE INTO numeros_emitidos VALUES (?,?,?,?)', [
-      e.emissao.tipo,
-      e.emissao.documento_id,
-      e.emissao.numero,
-      e.emissao.criado_em
-    ])
+    run(
+      'INSERT INTO numeros_emitidos VALUES (?,?,?,?) ON CONFLICT(tipo,documento_id) DO UPDATE SET numero=excluded.numero,criado_em=excluded.criado_em',
+      [e.emissao.tipo, e.emissao.documento_id, e.emissao.numero, e.emissao.criado_em]
+    )
   }
   if (
     e.payload.tipo &&
@@ -865,18 +988,13 @@ function aplicarIdentificador(e: Remoto): void {
       ]
     )
   }
-  const i = e.identificador
+  const i = e.autoria ?? e.identificador
   if (!i) return
-  if (
-    !Number.isSafeInteger(i.id_interno) ||
-    i.id_interno < 1 ||
-    i.documento_id !== e.payload.id ||
-    i.tipo !== e.payload.tipo
-  )
-    throw new Error('Identificador interno remoto inválido.')
+  if (i.documento_id !== e.payload.id || i.tipo !== e.payload.tipo)
+    throw new Error('Autoria remota inválida.')
   run(
-    'INSERT INTO identificadores_documento VALUES (?,?,?,?,?) ON CONFLICT(tipo,documento_id) DO UPDATE SET id_interno=excluded.id_interno,usuario_criador=excluded.usuario_criador,alterado_por=excluded.alterado_por',
-    [i.tipo, i.documento_id, i.id_interno, i.usuario_criador, i.alterado_por]
+    'INSERT INTO autoria_documentos VALUES (?,?,?,?) ON CONFLICT(tipo,documento_id) DO UPDATE SET usuario_criador=excluded.usuario_criador,alterado_por=excluded.alterado_por',
+    [i.tipo, i.documento_id, i.usuario_criador, i.alterado_por]
   )
 }
 export async function dispositivosNuvem(): Promise<Array<{ id: string; nome: string }>> {

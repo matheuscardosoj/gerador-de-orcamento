@@ -49,7 +49,7 @@ beforeAll(async () => {
     const u = new URL(url),
       body = options.body ? JSON.parse(String(options.body)) : {}
     let result: unknown
-    if (u.pathname === '/rest/v1/rpc/gdo_contexto_v2')
+    if (['/rest/v1/rpc/gdo_contexto_v2', '/rest/v1/rpc/gdo_contexto_v3'].includes(u.pathname))
       return new Response(
         JSON.stringify({ code: 'PGRST202', message: 'Esquema legado do teste' }),
         { status: 404 }

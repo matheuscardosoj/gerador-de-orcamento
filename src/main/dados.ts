@@ -102,13 +102,14 @@ function validar(caminho: string): void {
       )
     if (versao >= 9)
       obrigatorias.push(
-        'identificadores_documento',
+        versao >= 10 ? 'autoria_documentos' : 'identificadores_documento',
         'numeros_emitidos',
         'bases_documento',
         'edicoes_documento',
         'rascunhos_compartilhados',
         'auditoria_colaboracao'
       )
+    if (versao >= 10) obrigatorias.push('numeros_atribuidos')
     const faltantes = obrigatorias.filter(
       (nome) =>
         !fonte.get("SELECT 1 AS existe FROM sqlite_master WHERE type = 'table' AND name = ?", [
@@ -927,21 +928,17 @@ function mesclar(fonte: Database): Resumo {
         ])
     }
   }
-  if (mesmaOrigem && temTabela(fonte, 'identificadores_documento')) {
-    for (const x of linhas(fonte, 'SELECT * FROM identificadores_documento')) {
+  if (mesmaOrigem && temTabela(fonte, 'autoria_documentos')) {
+    for (const x of linhas(fonte, 'SELECT * FROM autoria_documentos')) {
       const destino = destinoDocumento(String(x.tipo), String(x.documento_id))
       if (destino !== x.documento_id) continue
       if (
-        get('SELECT 1 FROM identificadores_documento WHERE tipo=? AND documento_id=?', [
-          x.tipo,
-          destino
-        ])
+        get('SELECT 1 FROM autoria_documentos WHERE tipo=? AND documento_id=?', [x.tipo, destino])
       )
         continue
-      run('INSERT INTO identificadores_documento VALUES (?,?,?,?,?)', [
+      run('INSERT INTO autoria_documentos VALUES (?,?,?,?)', [
         x.tipo,
         destino,
-        x.id_interno,
         x.usuario_criador,
         x.alterado_por
       ])

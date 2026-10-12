@@ -1,3 +1,4 @@
+import { numeroHistoricoReconhecido } from './numeros'
 import { recibosRepo } from './recibos'
 import { revisarRecebimentos, conciliarRecebimentos } from './conciliacao-financeira'
 import {
@@ -236,6 +237,13 @@ export function registrarIpc(): void {
   for (const [canal, fn] of Object.entries(handlers)) {
     ipcMain.handle(canal, async (_evento, ...args) => {
       const dominio = canal.split('.')[0]
+      if (
+        statusNuvem().atualizandoNumeracao &&
+        /\.(create|update|save|remove|alterarNumero|confirmar|cancelar)$/.test(canal)
+      )
+        throw new Error(
+          'Aguarde a atualização da numeração da base antes de salvar. Suas alterações no formulário continuam preservadas.'
+        )
       if (canal.startsWith('documentos.gerar')) {
         const t = canal.includes('Recibo')
           ? 'recibo'
@@ -253,11 +261,16 @@ export function registrarIpc(): void {
               ? relatoriosRepo
               : recibosRepo
         ).get(v.documentoId)
-        if (atual && atual.numero !== v.documento.numero)
+        if (
+          atual &&
+          atual.numero !== v.documento.numero &&
+          !numeroHistoricoReconhecido(v.tipo, v.documentoId, v.documento.numero, atual.numero)
+        )
           throw new Error(
             'Esta versão tem um número anterior à correção do rascunho. Crie um novo documento a partir dela para emitir.'
           )
-        await autorizarEmissao(v.tipo, v.documentoId)
+        if (atual && atual.numero === v.documento.numero)
+          await autorizarEmissao(v.tipo, v.documentoId)
       }
       const tipo = (
         { orcamentos: 'orcamento', relatorios: 'relatorio', recibos: 'recibo' } as const

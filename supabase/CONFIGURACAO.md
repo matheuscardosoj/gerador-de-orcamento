@@ -54,10 +54,11 @@ Detalhes do transporte ficam no schema **sincronizacao**. **gdo_entities** é um
 
 ## Identificação
 
-- **Ordem:** posição na consulta do histórico; acompanha filtros, ordenação e paginação.
-- **ID interno:** atribuído pelo servidor por empresa e tipo. Permanente, não editável, não reutilizado. Exclusões futuras podem deixar lacunas. Um documento offline fica pendente até sincronizar.
-- **Nº do documento:** identificação entregue ao cliente. **Numeração dos documentos** controla faixas futuras; correção de rascunho usa reserva do próprio computador. Números emitidos ficam protegidos mesmo ao voltar ao estado de rascunho.
-- **Chave técnica:** mantém os vínculos e fica oculta.
+- **Nº do documento:** único identificador visível, com sequência independente por empresa e tipo. O servidor confirma o número ao aceitar o primeiro salvamento.
+- **Chave técnica:** oculta e permanente; mantém os vínculos entre documentos, imagens, pagamentos e versões.
+- **Numeração dos documentos:** mostra último número atribuído e próximo previsto. Avançar a sequência cria um salto intencional. Rascunhos podem receber correções validadas; números emitidos ficam protegidos.
+- Documentos novos offline ficam **Aguardando numeração**. Podem ser editados e salvos como rascunhos; a emissão oficial aguarda a sincronização.
+- A migração para protocolo 3 organiza os documentos atuais de 1 em diante por tipo, cria novas versões e conserva as versões anteriores com os números originais. Depois da migração, exclusões não renumeram os demais documentos.
 
 Números abandonados e reservas distribuídas não são reutilizados. Alterar a sequência futura não modifica documentos existentes.
 
@@ -69,7 +70,7 @@ Históricos/cadastros atualizam preservando preferências. Documento aberto sem 
 
 O bloqueio online dura 120 segundos e renova a cada 30 enquanto o editor está aberto. Use **solicitar edição**, **liberar**, **transferir** ou **recuperar controle**. Outra pessoa pode guardar uma cópia de trabalho sem sobrescrever o documento da empresa.
 
-Antes de perder a internet, use **Preparar offline**. Sincroniza conteúdo, fotos e dependências, guarda a revisão de partida e reserva autorização exclusiva de usuário/computador para emissão e operações financeiras. Relatório e recibos relacionados são protegidos em conjunto. Cada computador recebe blocos de 20 números por tipo, repondo quando restam cinco.
+Antes de perder a internet, use **Preparar offline**. Sincroniza conteúdo, fotos e dependências, guarda a revisão de partida e reserva autorização exclusiva de usuário/computador para emissão e operações financeiras. Relatório e recibos relacionados são protegidos em conjunto. A autorização offline continua exclusiva; documentos novos recebem o número definitivo somente ao sincronizar.
 
 Recuperar controle revoga a geração anterior no servidor. Um computador desconectado descobre a revogação ao reconectar; seu trabalho fica como rascunho para comparar ou copiar. Reservas não voltam a ficar disponíveis.
 

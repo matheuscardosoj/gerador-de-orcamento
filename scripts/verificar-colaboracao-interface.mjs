@@ -97,7 +97,7 @@ try {
     'Conteúdo comercial alterado pela migração.'
   )
   const migrada = new Database(join(pasta, 'base-migrada.gdo-backup'))
-  assert.equal(migrada.get('PRAGMA user_version').user_version, 9)
+  assert.equal(migrada.get('PRAGMA user_version').user_version, 10)
   migrada.close()
   for (const largura of [1024, 1440, 2560]) {
     await app.evaluate(({ BrowserWindow }, l) => {
@@ -172,7 +172,7 @@ try {
     ipcMain.removeHandler('nuvem.status')
     ipcMain.handle('nuvem.status', () => ({
       ...s,
-      protocolo: 2,
+      protocolo: 3,
       autenticada: true,
       tempoReal: 'conectado',
       usuarioId: 'usuario-ui',
@@ -277,7 +277,7 @@ try {
   const resultado = {
     pasta,
     interfaceComApiSimulada: true,
-    migracaoSchema: 9,
+    migracaoSchema: 10,
     tabelasPreservadas: tabelas.length,
     contagens: {
       orcamentos: inicial.orcamentos.length,

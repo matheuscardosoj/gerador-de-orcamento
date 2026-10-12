@@ -14,8 +14,6 @@ export interface PreferenciasHistorico {
 }
 export const colunasHistorico: Record<TipoDocumento, string[]> = {
   orcamento: [
-    'ordem',
-    'idInterno',
     'data',
     'destinatario',
     'valor',
@@ -27,8 +25,6 @@ export const colunasHistorico: Record<TipoDocumento, string[]> = {
     'versao'
   ],
   relatorio: [
-    'ordem',
-    'idInterno',
     'data',
     'destinatario',
     'origem',
@@ -42,8 +38,6 @@ export const colunasHistorico: Record<TipoDocumento, string[]> = {
     'versao'
   ],
   recibo: [
-    'ordem',
-    'idInterno',
     'data',
     'destinatario',
     'valor',
@@ -71,19 +65,10 @@ export function preferenciasPadrao(tipo: TipoDocumento): PreferenciasHistorico {
     origem: '',
     colunas:
       tipo === 'relatorio'
-        ? [
-            'ordem',
-            'idInterno',
-            'data',
-            'destinatario',
-            'origem',
-            'servicosValor',
-            'valor',
-            'status'
-          ]
+        ? ['data', 'destinatario', 'origem', 'servicosValor', 'valor', 'status']
         : tipo === 'recibo'
-          ? ['ordem', 'idInterno', 'data', 'destinatario', 'valor', 'status']
-          : ['ordem', 'idInterno', 'data', 'destinatario', 'valor', 'status']
+          ? ['data', 'destinatario', 'valor', 'status']
+          : ['data', 'destinatario', 'valor', 'status']
   }
 }
 export function normalizarPreferencias(

@@ -38,6 +38,7 @@ interface Opcoes {
   configuracao: () => ConfigNuvem
   identidade: () => { empresa: string; token: string } | null
   sincronizar: () => Promise<unknown>
+  sincronizarCompleta?: () => Promise<unknown>
   estado: (estado: EstadoTempoReal, erro: string | null) => void
   renovar: () => Promise<void>
   criarCliente?: (config: ConfigNuvem, opcoes: SupabaseClientOptions<'public'>) => SupabaseClient
@@ -55,6 +56,7 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
     encerrado = false
   let repeticao: ReturnType<typeof setTimeout> | null = null
   let tentativas = 0
+  let completarProxima = false
   const repetir = (): void => {
     if (encerrado || repeticao || tentativas >= 5) return
     const espera = [1000, 3000, 10000, 30000, 30000][tentativas++]
@@ -65,7 +67,11 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
   }
   const agendador = new AgendadorSincronizacao(async () => {
     try {
-      const resultado = await opcoes.sincronizar()
+      const completa = completarProxima
+      completarProxima = false
+      const resultado = await (completa && opcoes.sincronizarCompleta
+        ? opcoes.sincronizarCompleta()
+        : opcoes.sincronizar())
       const erro = (resultado as { erro?: string } | null)?.erro
       if (erro && !/conflito|concilia/i.test(erro)) repetir()
       else {
@@ -79,7 +85,8 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
       throw e
     }
   })
-  const solicitar = (): void => {
+  const solicitar = (completa = false): void => {
+    completarProxima ||= completa
     void agendador.solicitar().catch(() => undefined)
   }
   const conectar = async (): Promise<void> => {
@@ -122,7 +129,15 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
     opcoes.estado('conectando', null)
     cliente
       .channel(`empresa:${identidade.empresa}`, { config: { private: true } })
-      .on('broadcast', { event: 'alteracao' }, solicitar)
+      .on('broadcast', { event: 'alteracao' }, (evento) => {
+        solicitar()
+        const entidade = evento.payload?.entidade
+        if (
+          typeof entidade === 'string' &&
+          /^numeracao:(orcamento|relatorio|recibo)$/.test(entidade)
+        )
+          avisarDados({ origem: 'nuvem', entidades: [entidade], status: true })
+      })
       .subscribe((estado) => {
         if (encerrado) return
         if (estado === 'SUBSCRIBED') {
@@ -151,7 +166,7 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
         )
       })
   }, 30000)
-  const seguranca = setInterval(solicitar, 5 * 60 * 1000)
+  const seguranca = setInterval(() => solicitar(true), 5 * 60 * 1000)
   pararAtual = () => {
     encerrado = true
     if (repeticao) clearTimeout(repeticao)
@@ -163,7 +178,7 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
     opcoes.estado('desconectado', null)
   }
   void conectar()
-    .then(solicitar)
+    .then(() => solicitar())
     .catch(() => opcoes.estado('indisponivel', 'A conexão em tempo real não iniciou.'))
 }
 

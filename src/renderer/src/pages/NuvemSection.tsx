@@ -107,7 +107,7 @@ export function NuvemSection(): JSX.Element {
             Faça a primeira sincronização online. No editor, use os controles de edição para
             solicitar, liberar ou transferir. Antes de se desconectar, use “Preparar offline” para
             baixar as dependências e reservar a autorização de emissão. Os números oficiais já
-            utilizados são preservados; o ID interno é atribuído pelo servidor.
+            utilizados são preservados; documentos novos recebem o número definitivo ao sincronizar.
           </li>
         </ol>
         <Button
@@ -212,7 +212,7 @@ export function NuvemSection(): JSX.Element {
           {s.autenticada && (
             <p>
               Tempo real:{' '}
-              {s.protocolo !== 2
+              {(s.protocolo ?? 1) < 2
                 ? 'atualize a configuração SQL para habilitar a colaboração'
                 : s.tempoReal === 'conectado'
                   ? 'conectado — alterações confirmadas chegam automaticamente'
@@ -239,8 +239,9 @@ export function NuvemSection(): JSX.Element {
                 : ''}
           </p>
           <p>
-            Números disponíveis offline: propostas {s.reservas.orcamento}, relatórios{' '}
-            {s.reservas.relatorio}, recibos {s.reservas.recibo}.
+            {(s.protocolo ?? 1) >= 3
+              ? 'Documentos novos offline ficam aguardando numeração. Sincronize para emitir o PDF ou DOCX oficial.'
+              : `Atualize a configuração da nuvem para substituir as reservas antecipadas.`}
           </p>
           <p className="text-xs text-slate-500">Identificação deste computador: {s.computador}</p>
           {s.conflitos.map((x) => (

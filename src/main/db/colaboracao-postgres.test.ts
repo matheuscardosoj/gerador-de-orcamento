@@ -98,7 +98,7 @@ beforeAll(async () => {
       JSON.stringify(pacote(id, n)),
       pcA
     ])
-  await pg.exec(readFileSync('supabase/schema-colaboracao.sql', 'utf8'))
+  await pg.exec(readFileSync('supabase/migrations/002_colaboracao_v2.sql', 'utf8'))
   await pg.query('SELECT gdo_dispositivo_v2($1,$2)', [pcA, 'PC A'])
   await pg.exec('SET ROLE authenticated')
 })

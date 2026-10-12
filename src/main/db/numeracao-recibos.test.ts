@@ -112,3 +112,24 @@ it('restaura o próximo número escolhido e preserva os números usados no backu
   expect(recibos.recibosRepo.definirProximoNumero(1).ok).toBe(false)
   expect(criar().numero).toBe(50)
 })
+
+it('preserva o registro antigo sem deixar que ele avance a sequência reorganizada no backup', () => {
+  sql.run("INSERT INTO numeros_usados VALUES ('recibo',6)")
+  sql.run("INSERT INTO configuracoes VALUES ('numeracaoSequencial','true'),('seqRecibo','3')")
+  for (const n of [1, 2, 3]) sql.run("INSERT INTO numeros_atribuidos VALUES ('recibo',?)", [n])
+  expect(recibos.recibosRepo.numeracao().proximoNumero).toBe(4)
+  const arquivo = join(raiz, 'sequencial.gdo-backup')
+  dados.exportarDadosPara(arquivo)
+  dados.importarDadosDe(arquivo, 'restaurar')
+  expect(sql.get("SELECT numero FROM numeros_usados WHERE tipo='recibo'")?.numero).toBe(6)
+  expect(criar().numero).toBe(4)
+  expect(recibos.recibosRepo.definirProximoNumero(2).ok).toBe(false)
+})
+
+it('não usa reserva antiga para documento novo no protocolo 3', () => {
+  sql.run("INSERT INTO configuracoes VALUES ('nuvem','{}'),('contextoNuvem','{\"protocolo\":3}')")
+  sql.run("INSERT INTO reservas VALUES ('recibo',80,0)")
+  expect(criar().numero).toBeLessThan(0)
+  expect(sql.get("SELECT usado FROM reservas WHERE tipo='recibo' AND numero=80")?.usado).toBe(0)
+  expect(sql.get('SELECT count(*) n FROM numeros_emitidos')?.n).toBe(0)
+})

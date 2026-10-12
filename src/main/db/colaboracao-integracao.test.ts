@@ -37,6 +37,8 @@ const config = {
 }
 let reciboId = '',
   offline = false
+let reterControles: Promise<void> | null = null
+let renovacoes = 0
 let rascunhos: typeof import('../rascunhos')
 async function perfil(nome: string) {
   sql.fecharBanco()
@@ -53,6 +55,14 @@ beforeAll(async () => {
   await pg.exec('SET ROLE authenticated')
   const endpoints = new Set([
     'gdo_contexto_v2',
+    'gdo_contexto_v3',
+    'gdo_dispositivo_v3',
+    'gdo_membros_v3',
+    'gdo_edicao_v3',
+    'gdo_batch_v3',
+    'gdo_alteracoes_v3',
+    'gdo_documento_v3',
+    'gdo_numeracao_v3',
     'gdo_dispositivo_v2',
     'gdo_bootstrap_v2',
     'gdo_reserve_v2',
@@ -69,7 +79,11 @@ beforeAll(async () => {
     const u = new URL(url),
       body = options.body ? JSON.parse(String(options.body)) : {}
     try {
-      if (u.pathname === '/auth/v1/token')
+      if (u.pathname === '/auth/v1/token') {
+        if (u.searchParams.get('grant_type') === 'refresh_token') {
+          renovacoes++
+          await new Promise((r) => setTimeout(r, 20))
+        }
         return new Response(
           JSON.stringify({
             access_token: body.email === 'b@example.com' ? segundo : empresa,
@@ -78,6 +92,7 @@ beforeAll(async () => {
             user: { id: body.email === 'b@example.com' ? segundo : empresa }
           })
         )
+      }
       const token = new Headers(options.headers).get('Authorization')?.replace('Bearer ', '')
       await pg.query("SELECT set_config('request.jwt.claim.sub',$1,false)", [token])
       let result: unknown
@@ -87,8 +102,11 @@ beforeAll(async () => {
             'SELECT * FROM gdo_entities WHERE usuario=gdo_empresa() ORDER BY sequencia LIMIT 1'
           )
         ).rows
-      else if (u.pathname === '/rest/v1/edicoes_documento')
+      else if (u.pathname === '/rest/v1/edicoes_documento') {
         result = (await pg.query('SELECT * FROM edicoes_documento')).rows
+        if (reterControles) await reterControles
+      } else if (u.pathname === '/rest/v1/mapa_numeracao')
+        result = (await pg.query('SELECT tipo,documento_id,anterior,novo FROM mapa_numeracao')).rows
       else if (u.pathname === '/rest/v1/pedidos_edicao')
         result = (await pg.query('SELECT * FROM pedidos_edicao')).rows
       else if (u.pathname === '/rest/v1/recibos')
@@ -120,7 +138,7 @@ beforeAll(async () => {
             )
           )
         ).rows
-        result = ['gdo_alteracoes_v2', 'gdo_reserve_v2'].includes(fn)
+        result = ['gdo_alteracoes_v2', 'gdo_alteracoes_v3', 'gdo_reserve_v2'].includes(fn)
           ? rows.map((r) => r.r)
           : rows[0]?.r
       }
@@ -149,7 +167,7 @@ afterAll(async () => {
   await pg.close()
   rmSync(raiz, { recursive: true, force: true })
 })
-it('publica, atribui ID no servidor e baixa a mesma empresa em outro login', async () => {
+it('publica, atribui número no servidor e baixa a mesma empresa em outro login', async () => {
   expect((await nuvem.conectarNuvem(config, 'teste', 'publicar')).erro).toBeNull()
   const r = recibos.recibosRepo.create({
     data: '2026-10-12',
@@ -170,7 +188,7 @@ it('publica, atribui ID no servidor e baixa a mesma empresa em outro login', asy
     versao: r.versao
   })
   expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
-  expect(recibos.recibosRepo.get(r.id)?.idInterno).toBe(1)
+  expect(recibos.recibosRepo.get(r.id)?.numero).toBe(1)
   expect(recibos.recibosRepo.get(r.id)?.observacao).toBe('Edição inicial antes de sincronizar')
   await colaboracao.vincularMembro('b@example.com', 'Pessoa B')
   await perfil('b')
@@ -179,7 +197,6 @@ it('publica, atribui ID no servidor e baixa a mesma empresa em outro login', asy
   expect(s.empresaId).toBe(empresa)
   expect(s.usuarioId).toBe(segundo)
   expect(recibos.recibosRepo.get(r.id)).toMatchObject({
-    idInterno: 1,
     valor: 100,
     descricao: 'Serviço original'
   })
@@ -196,7 +213,6 @@ it('coordena edição entre os logins e preserva a revisão recebida', async () 
   await perfil('a')
   expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
   expect(recibos.recibosRepo.get(reciboId)).toMatchObject({
-    idInterno: 1,
     alteradoPor: segundo,
     observacao: 'Revisado pela pessoa B',
     valor: 100,
@@ -239,7 +255,6 @@ it('compara o trabalho offline com a base de partida e aplica só após liberar 
   await perfil('b')
   const aplicado = await rascunhos.aplicarRascunho(r.id, comparacao.revisaoRemota, {})
   expect(aplicado).toMatchObject({
-    idInterno: 1,
     numero: 1,
     valor: 100,
     descricao: 'Serviço original',
@@ -382,4 +397,92 @@ it('preserva um recebimento divergente e arquiva só pendências locais com revi
     "SELECT dados FROM auditoria_colaboracao WHERE acao='recebimentos:arquivar'"
   )!
   expect(JSON.parse(String(auditoria.dados)).recebimentosOriginais[0].valor).toBe(150)
+})
+
+it('aplica os dados antes de aguardar consultas auxiliares demoradas', async () => {
+  await perfil('a')
+  const c = repos.clientesRepo.create({ nome: 'Teste de latência', tratamento: '', ativo: true })
+  nuvem.capturarCadastros()
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  await perfil('b')
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  repos.clientesRepo.update(c.id, { nome: 'Alteração confirmada pela pessoa B' })
+  nuvem.capturarCadastros()
+  expect((await nuvem.sincronizarNuvem(false)).erro).toBeNull()
+  await perfil('a')
+  let liberar!: () => void
+  reterControles = new Promise<void>((r) => {
+    liberar = r
+  })
+  let concluiu = false
+  const sincronizando = nuvem.sincronizarNuvem(false).then((s) => {
+    concluiu = true
+    return s
+  })
+  try {
+    await expect
+      .poll(() => repos.clientesRepo.get(c.id)?.nome)
+      .toBe('Alteração confirmada pela pessoa B')
+    expect(concluiu).toBe(false)
+  } finally {
+    reterControles = null
+    liberar()
+    expect((await sincronizando).erro).toBeNull()
+  }
+})
+it('renova uma sessão expirada uma única vez para consultas concorrentes', async () => {
+  const l = sql.get("SELECT valor FROM configuracoes WHERE chave='sessaoNuvem'")!
+  const s = JSON.parse(Buffer.from(JSON.parse(String(l.valor)), 'base64').toString())
+  s.expires_at = 0
+  sql.run("UPDATE configuracoes SET valor=? WHERE chave='sessaoNuvem'", [
+    JSON.stringify(Buffer.from(JSON.stringify(s)).toString('base64'))
+  ])
+  const antes = renovacoes
+  await Promise.all([
+    nuvem.pedidoNuvem('/rest/v1/rpc/gdo_contexto_v3', { p_criar: false }),
+    nuvem.pedidoNuvem('/rest/v1/rpc/gdo_membros_v3', {}),
+    nuvem.pedidoNuvem('/rest/v1/edicoes_documento?select=*')
+  ])
+  expect(renovacoes - antes).toBe(1)
+})
+
+it('confirma a referência do relatório criado offline antes da numeração da proposta', async () => {
+  await perfil('a')
+  offline = true
+  const p = repos.orcamentosRepo.create({
+    data: '2026-10-12',
+    destinatario: 'Origem offline',
+    formato: 'carta',
+    titulo: 'Proposta',
+    itensServico: [],
+    materiais: [],
+    observacoes: [],
+    pagamentos: [],
+    anexos: [],
+    valorTotal: 0,
+    status: 'rascunho'
+  })
+  const rel = repos.relatoriosRepo.criarDeOrcamento(p.id)!
+  expect(p.numero).toBeLessThan(0)
+  expect(rel.origemOrcamento?.numero).toBe(p.numero)
+  offline = false
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  const confirmado = repos.orcamentosRepo.get(p.id)!
+  expect(confirmado.numero).toBeGreaterThan(0)
+  expect(repos.relatoriosRepo.get(rel.id)?.origemOrcamento?.numero).toBe(confirmado.numero)
+  const local = JSON.parse(
+    String(
+      sql.get(
+        "SELECT documento FROM versoes WHERE tipo='relatorio' AND documento_id=? ORDER BY numero DESC LIMIT 1",
+        [rel.id]
+      )?.documento
+    )
+  )
+  expect(local.origemOrcamento.numero).toBe(confirmado.numero)
+  await colaboracao.autorizarGravacao('relatorio', rel.id)
+  repos.relatoriosRepo.update(rel.id, { introducao: 'Atualização posterior à numeração' })
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  await perfil('b')
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  expect(repos.relatoriosRepo.get(rel.id)?.origemOrcamento?.numero).toBe(confirmado.numero)
 })

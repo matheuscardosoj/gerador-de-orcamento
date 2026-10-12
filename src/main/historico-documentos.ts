@@ -17,7 +17,6 @@ export function restaurarVersao(id: string, copiar: boolean): Documento {
       numero: undefined,
       computadorResponsavel: undefined,
       versao: undefined,
-      idInterno: undefined,
       usuarioCriador: undefined,
       alteradoPor: undefined,
       autorNome: undefined

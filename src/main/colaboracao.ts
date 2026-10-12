@@ -12,9 +12,12 @@ export async function numeracaoCompartilhada(
 ): Promise<InfoNumeracao> {
   if (protocoloNuvem() < 2) return local
   const chave = `numeracaoNuvem:${tipo}`
-  let dados: { proximoNumero: number; minimo: number } | null = null
+  let dados: { proximoNumero: number; minimo: number; ultimoNumero?: number } | null = null
   try {
-    dados = (await pedidoNuvem('/rest/v1/rpc/gdo_numeracao_v2', { p_tipo: tipo })) as typeof dados
+    dados = (await pedidoNuvem(
+      `/rest/v1/rpc/${protocoloNuvem() >= 3 ? 'gdo_numeracao_v3' : 'gdo_numeracao_v2'}`,
+      { p_tipo: tipo }
+    )) as typeof dados
     run(
       'INSERT INTO configuracoes VALUES (?,?) ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor',
       [chave, JSON.stringify(dados)]
@@ -24,7 +27,16 @@ export async function numeracaoCompartilhada(
     if (cache) dados = JSON.parse(texto(cache.valor))
   }
   return dados
-    ? { ...local, proximoBloco: dados.proximoNumero, minimoProximo: dados.minimo }
+    ? protocoloNuvem() >= 3
+      ? {
+          ...local,
+          proximoNumero: dados.proximoNumero,
+          menorLivre: dados.proximoNumero,
+          minimoProximo: dados.minimo,
+          ultimoNumero: dados.ultimoNumero,
+          atribuicaoServidor: true
+        }
+      : { ...local, proximoBloco: dados.proximoNumero, minimoProximo: dados.minimo }
     : local
 }
 export async function definirNumeracaoCompartilhada(
@@ -35,7 +47,18 @@ export async function definirNumeracaoCompartilhada(
   try {
     if (!Number.isSafeInteger(numero) || numero < 1 || numero > 999999)
       throw new Error('Informe um número inteiro entre 1 e 999999.')
-    await pedidoNuvem('/rest/v1/rpc/gdo_numeracao_v2', { p_tipo: tipo, p_proximo: numero })
+    await pedidoNuvem(
+      `/rest/v1/rpc/${protocoloNuvem() >= 3 ? 'gdo_numeracao_v3' : 'gdo_numeracao_v2'}`,
+      { p_tipo: tipo, p_proximo: numero }
+    )
+    if (protocoloNuvem() >= 3)
+      run(
+        'INSERT INTO configuracoes VALUES (?,?) ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor',
+        [
+          { orcamento: 'seqOrcamento', relatorio: 'seqRelatorio', recibo: 'seqRecibo' }[tipo],
+          JSON.stringify(numero - 1)
+        ]
+      )
     avisarDados({ origem: 'nuvem', entidades: [`numeracao:${tipo}`], status: true })
     return { ok: true }
   } catch (e) {
@@ -78,22 +101,31 @@ function exigirProtocolo(): void {
 }
 export async function membrosEmpresa(): Promise<MembroEmpresa[]> {
   exigirProtocolo()
-  return (await pedidoNuvem('/rest/v1/rpc/gdo_membros_v2', {})) as MembroEmpresa[]
+  return (await pedidoNuvem(
+    `/rest/v1/rpc/${protocoloNuvem() >= 3 ? 'gdo_membros_v3' : 'gdo_membros_v2'}`,
+    {}
+  )) as MembroEmpresa[]
 }
 export async function vincularMembro(email: string, nome: string): Promise<MembroEmpresa[]> {
   exigirProtocolo()
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) throw new Error('Informe um e-mail válido.')
-  return (await pedidoNuvem('/rest/v1/rpc/gdo_membros_v2', {
-    p_email: email.trim(),
-    p_nome: nome.trim()
-  })) as MembroEmpresa[]
+  return (await pedidoNuvem(
+    `/rest/v1/rpc/${protocoloNuvem() >= 3 ? 'gdo_membros_v3' : 'gdo_membros_v2'}`,
+    {
+      p_email: email.trim(),
+      p_nome: nome.trim()
+    }
+  )) as MembroEmpresa[]
 }
 export async function ativarMembro(usuario: string, ativo: boolean): Promise<MembroEmpresa[]> {
   exigirProtocolo()
-  return (await pedidoNuvem('/rest/v1/rpc/gdo_membros_v2', {
-    p_usuario: usuario,
-    p_ativo: ativo
-  })) as MembroEmpresa[]
+  return (await pedidoNuvem(
+    `/rest/v1/rpc/${protocoloNuvem() >= 3 ? 'gdo_membros_v3' : 'gdo_membros_v2'}`,
+    {
+      p_usuario: usuario,
+      p_ativo: ativo
+    }
+  )) as MembroEmpresa[]
 }
 export async function controlarEdicao(
   tipo: TipoDocumento,
@@ -157,14 +189,17 @@ export async function controlarEdicao(
       }
     }
   }
-  const controle = (await pedidoNuvem('/rest/v1/rpc/gdo_edicao_v2', {
-    p_tipo: tipo,
-    p_id: id,
-    p_dispositivo: computadorId(),
-    p_acao: acao,
-    p_geracao: atual?.geracao ?? null,
-    p_destino: destino ?? null
-  })) as ControleEdicao | null
+  const controle = (await pedidoNuvem(
+    `/rest/v1/rpc/${protocoloNuvem() >= 3 ? 'gdo_edicao_v3' : 'gdo_edicao_v2'}`,
+    {
+      p_tipo: tipo,
+      p_id: id,
+      p_dispositivo: computadorId(),
+      p_acao: acao,
+      p_geracao: atual?.geracao ?? null,
+      p_destino: destino ?? null
+    }
+  )) as ControleEdicao | null
   tx(() => {
     if (controle)
       run(

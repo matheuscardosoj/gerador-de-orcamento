@@ -1,4 +1,10 @@
-import { numeroNuvem, numeracaoNuvem, validarTrocaNumero, consumirTrocaNumero } from './numeros'
+import {
+  tabelaNumerosUsados,
+  numeroNuvem,
+  numeracaoNuvem,
+  validarTrocaNumero,
+  consumirTrocaNumero
+} from './numeros'
 import { envolverDocumento, nuvemConfigurada } from './versoes'
 // Repositórios sobre SQLite. As assinaturas públicas são as mesmas de quando a
 // persistência era JSON — o IPC, o preload e o renderer não conhecem o banco.
@@ -451,7 +457,6 @@ function paraOrcamento(l: Linha, filhos: boolean, comMiniaturas = filhos): Orcam
 
 function listarResumosOrcamento(): ResumoOrcamento[] {
   const versoes = versoesResumo('orcamento')
-  const identificadores = idsResumo('orcamento')
   const servicosPorOrcamento = new Map<string, string[]>()
   for (const linha of all('SELECT orcamento_id, descricao FROM itens_servico ORDER BY ordem')) {
     const id = texto(linha.orcamento_id)
@@ -469,7 +474,6 @@ function listarResumosOrcamento(): ResumoOrcamento[] {
     return {
       id,
       versao: versoes.get(id),
-      idInterno: identificadores.get(id) ?? null,
       numero: numero(linha.numero),
       data: normalizarDataCivil(texto(linha.data)),
       destinatario: normalizarDestinatario(texto(linha.destinatario_resumo)),
@@ -620,7 +624,7 @@ function numeroLivreAPartirDe(de: number): number {
   while (
     n <= NUMERO_MAXIMO &&
     (donoDoNumero(n) ||
-      get("SELECT 1 FROM numeros_usados WHERE tipo='orcamento' AND numero=?", [n]))
+      get(`SELECT 1 FROM ${tabelaNumerosUsados()} WHERE tipo='orcamento' AND numero=?`, [n]))
   )
     n++
   return n
@@ -637,7 +641,7 @@ function validarNumero(numero: number, ignorarId?: string): ResultadoNumeracao |
   }
   if (
     !donoDoNumero(numero) &&
-    get("SELECT 1 FROM numeros_usados WHERE tipo='orcamento' AND numero=?", [numero])
+    get(`SELECT 1 FROM ${tabelaNumerosUsados()} WHERE tipo='orcamento' AND numero=?`, [numero])
   )
     return { ok: false, erro: 'Este número já foi utilizado e não pode ser reutilizado.' }
   const dono = donoDoNumero(numero, ignorarId)
@@ -966,7 +970,6 @@ function paraRelatorio(l: Linha, filhos: boolean, comMiniaturas = filhos): Relat
 }
 
 function listarResumosRelatorio(): ResumoRelatorio[] {
-  const identificadores = idsResumo('relatorio')
   const versoes = versoesResumo('relatorio')
   const servicos = new Map<string, string[]>()
   for (const r of all(
@@ -986,7 +989,6 @@ function listarResumosRelatorio(): ResumoRelatorio[] {
     return {
       id: texto(linha.id),
       versao: versoes.get(texto(linha.id)),
-      idInterno: identificadores.get(texto(linha.id)) ?? null,
       servicosBusca: servicos.get(texto(linha.id)) ?? [],
       numero: numero(linha.numero),
       data: normalizarDataCivil(texto(linha.data)),
@@ -1014,13 +1016,6 @@ function listarResumosRelatorio(): ResumoRelatorio[] {
   })
 }
 
-function idsResumo(tipo: string): Map<string, number | null> {
-  return new Map(
-    all('SELECT documento_id,id_interno FROM identificadores_documento WHERE tipo=?', [tipo]).map(
-      (l) => [texto(l.documento_id), l.id_interno == null ? null : Number(l.id_interno)]
-    )
-  )
-}
 function versoesResumo(tipo: string): Map<string, number> {
   return new Map(
     all(
@@ -1144,7 +1139,7 @@ function numeroRelatorioLivreAPartirDe(de: number): number {
   while (
     n <= NUMERO_MAXIMO &&
     (donoDoNumeroRelatorio(n) ||
-      get("SELECT 1 FROM numeros_usados WHERE tipo='relatorio' AND numero=?", [n]))
+      get(`SELECT 1 FROM ${tabelaNumerosUsados()} WHERE tipo='relatorio' AND numero=?`, [n]))
   )
     n++
   return n
@@ -1160,7 +1155,7 @@ function validarNumeroRelatorio(n: number, ignorarId?: string): ResultadoNumerac
   }
   if (
     !donoDoNumeroRelatorio(n) &&
-    get("SELECT 1 FROM numeros_usados WHERE tipo='relatorio' AND numero=?", [n])
+    get(`SELECT 1 FROM ${tabelaNumerosUsados()} WHERE tipo='relatorio' AND numero=?`, [n])
   )
     return { ok: false, erro: 'Este número já foi utilizado e não pode ser reutilizado.' }
   const dono = donoDoNumeroRelatorio(n, ignorarId)

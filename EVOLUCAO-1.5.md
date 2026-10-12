@@ -238,3 +238,21 @@ main nem versão final antes da revisão e autorização desta nova entrega.
 - Usuário informou que a segunda máquina já conectou e mostra Tempo real conectado. Conferência remota somente de leitura confirmou dois usuários e dispositivos distintos. O notebook também tem um registro anterior da conta inicial; a identidade do novo login permanece separada.
 - A base em uso agora tem 18 orçamentos, 4 relatórios e 3 recibos. O roteiro foi ajustado para comparar as quantidades atuais, preservando a referência original da migração.
 - Primeiro computador sem pendências, conflitos ou erro. Solicitado teste com cliente temporário nos dois sentidos, sem recarregar a tela. Resultado humano de atualização, controle de edição e reconexão ainda pendente; não declarar a validação física completa.
+
+### Numeração única — candidato 1.5.0-rc.2
+
+- Plano aprovado: remover Ordem/ID interno e renumerar documentos atuais por tipo, preservando chaves e versões anteriores. Protocolo 3 e SQLite 10; autoria separada do contador.
+- Auditoria atualizada de 75 entidades: 11 clientes, 17 orçamentos, 4 relatórios, 3 recibos, 55 versões, 15 imagens, 4 recebimentos; zero diferenças, pendências e conflitos antes do ensaio. Originais preservados em output/migracao-numeracao-20261012.
+- Ensaio PostgreSQL: 24 documentos de 1 em diante; próximos 18/5/4, 24 novas versões, todas as 55 antigas e o financeiro preservados. Reexecução idempotente. Sufixos automáticos de recibos atualizados somente com chave de origem comprovada.
+- Reservas antigas auditadas; IDs e contadores anteriores arquivados em esquema privado, retirados do modelo ativo. Registros locais de números usados preservados separadamente da sequência atual.
+- Otimização: publicação do conteúdo antes das consultas auxiliares, consultas paralelas, renovação de sessão compartilhada e passagem adicional para eventos que chegam durante sincronização manual. Sem reiniciar cursor em toda abertura.
+- Teste autorizado no cliente temporário Teste, restrito ao seu UUID: oito alterações no projeto real entre dois perfis isolados, 868–1890 ms, mediana 1391 ms; nome restaurado. Não equivale ao teste em duas máquinas físicas. Evidência output/playwright/latencia-real-1791836261577.
+- Dois computadores físicos confirmados fechados e sincronizados pelo usuário. Restam conferência final do pacote, migração real, atualização local, backup compatível e repetição física da latência. Main e versão final seguem pendentes de revisão/autorização.
+
+### Validação do candidato 1.5.0-rc.2 antes da migração real
+
+- Verificação completa: 198 testes em 33 arquivos, lint, formatação, tipos e compilação aprovados. Criação concorrente, reenvio idempotente, reversão transacional, rascunhos offline e origem provisória do relatório conferidos.
+- Executável empacotado: configurações em 1024/1440/2560, atualização automática e proteção de formulário, cadastro só com nome, arraste por mouse/teclado/cancelamento, numeração dos recibos e exportações PDF/DOCX aprovados. Logos, assinatura e paginação dos recibos conferidas; zero erros de interface.
+- Cópia atualizada da nuvem às 21:28 UTC: 75 entidades, 17 propostas, 4 relatórios, 3 recibos, 55 versões, 15 imagens, 4 recebimentos, 258 reservas antigas; zero diferenças, pendências ou conflitos. Originais e backup verificado em output/migracao-numeracao-20261012-final/antes, fora do Git.
+- Ensaio repetido nessa cópia: 24 documentos renumerados, 55 versões anteriores integralmente preservadas e 24 novas; imagens, recebimentos e demais conteúdos preservados. Reexecução segura. Evidência output/playwright/migracao-numeracao-1791840501033.
+- Instalador candidato SHA-256: BC6909869CCF2A982F9C3A3AE6B1DF363331018F902634D89C37480AD364EB4B. Migração real e teste físico posterior ainda pendentes neste registro.

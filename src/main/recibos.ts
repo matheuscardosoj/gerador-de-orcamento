@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import { all, get, run, texto, tx } from './db/sqlite'
 import { envolverDocumento, exigirResponsavel, nuvemConfigurada } from './versoes'
 import {
+  tabelaNumerosUsados,
   numeroNuvem,
   numeracaoNuvem,
   validarTrocaNumero,
@@ -20,7 +21,7 @@ function numeroLivre(de: number): number {
   while (
     n <= NUMERO_MAXIMO &&
     (get('SELECT 1 FROM recibos WHERE numero=?', [n]) ||
-      get("SELECT 1 FROM numeros_usados WHERE tipo='recibo' AND numero=?", [n]))
+      get(`SELECT 1 FROM ${tabelaNumerosUsados()} WHERE tipo='recibo' AND numero=?`, [n]))
   )
     n++
   return n
@@ -28,7 +29,9 @@ function numeroLivre(de: number): number {
 function sequenciaRecibo(): number {
   const config = get("SELECT valor FROM configuracoes WHERE chave='seqRecibo'")
   if (config) return Number(config.valor)
-  return Number(get("SELECT MAX(numero) AS n FROM numeros_usados WHERE tipo='recibo'")?.n ?? 0)
+  return Number(
+    get(`SELECT MAX(numero) AS n FROM ${tabelaNumerosUsados()} WHERE tipo='recibo'`)?.n ?? 0
+  )
 }
 function gravarSequencia(n: number): void {
   run(
@@ -67,7 +70,7 @@ export const recibosRepo = {
       if (!Number.isSafeInteger(n) || n < 1 || n > NUMERO_MAXIMO)
         return { ok: false, erro: 'Informe um número inteiro entre 1 e 999999.' }
       if (
-        get("SELECT 1 FROM numeros_usados WHERE tipo='recibo' AND numero=?", [n]) ||
+        get(`SELECT 1 FROM ${tabelaNumerosUsados()} WHERE tipo='recibo' AND numero=?`, [n]) ||
         get('SELECT 1 FROM recibos WHERE numero=?', [n])
       )
         return { ok: false, erro: 'Este número já foi usado e não pode ser reutilizado.' }
@@ -96,7 +99,7 @@ export const recibosRepo = {
       return { ok: false, erro: `O número deve ser um inteiro entre 1 e ${NUMERO_MAXIMO}.` }
     if (
       get('SELECT 1 FROM recibos WHERE numero=?', [n]) ||
-      get("SELECT 1 FROM numeros_usados WHERE tipo='recibo' AND numero=?", [n])
+      get(`SELECT 1 FROM ${tabelaNumerosUsados()} WHERE tipo='recibo' AND numero=?`, [n])
     )
       return {
         ok: false,
@@ -107,11 +110,6 @@ export const recibosRepo = {
     return { ok: true }
   },
   list: (): Recibo[] => {
-    const identificadores = new Map(
-      all("SELECT documento_id,id_interno FROM identificadores_documento WHERE tipo='recibo'").map(
-        (l) => [texto(l.documento_id), l.id_interno == null ? null : Number(l.id_interno)]
-      )
-    )
     const metas = new Map(
       all("SELECT documento_id,dados FROM documento_meta WHERE tipo='recibo'").map((l) => [
         texto(l.documento_id),
@@ -120,8 +118,7 @@ export const recibosRepo = {
     )
     return all('SELECT id,dados FROM recibos ORDER BY numero DESC').map((l) => ({
       ...JSON.parse(texto(l.dados)),
-      ...metas.get(texto(l.id)),
-      idInterno: identificadores.get(texto(l.id)) ?? null
+      ...metas.get(texto(l.id))
     }))
   },
   get: (id: string): Recibo | null => {
@@ -171,7 +168,12 @@ export const recibosRepo = {
       exigirResponsavel('recibo', id)
       if (r.status === 'recebido') return r
       if (r.status === 'cancelado') throw new Error('Este recibo foi cancelado.')
-      if (r.numero <= 0) {
+      if (
+        r.numero <= 0 &&
+        (JSON.parse(
+          texto(get("SELECT valor FROM configuracoes WHERE chave='contextoNuvem'")?.valor ?? '{}')
+        ).protocolo ?? 1) < 3
+      ) {
         const numero = numeroNuvem('recibo', () => 0, true)
         if (numero <= 0)
           throw new Error(
@@ -181,7 +183,7 @@ export const recibosRepo = {
         run('UPDATE recibos SET numero=?,dados=? WHERE id=?', [numero, JSON.stringify(r), id])
       }
       const novo = { ...r, status: 'recebido' as const, atualizadoEm: new Date().toISOString() }
-      registrarNumeroEmitido('recibo', id, r.numero)
+      if (r.numero > 0) registrarNumeroEmitido('recibo', id, r.numero)
       validar(novo)
       if (r.origemTipo === 'relatorio' && r.origemId) {
         exigirResponsavel('relatorio', r.origemId)

@@ -228,7 +228,42 @@ writeFileSync(
 )
 console.log(`Esquema gerado: ${nomes.length} tabelas de domínio.`)
 const colaboracao = readFileSync('supabase/colaboracao.sql', 'utf8')
+const legado = `-- Protocolo 2: fixture de regressão.\n${sql.replace(/COMMIT;\s*$/, '')}\n${colaboracao}\nCOMMIT;\n`
+writeFileSync('supabase/migrations/002_colaboracao_v2.sql', legado)
+const extrair = (fonte, nome) => {
+  const inicio = fonte.indexOf(`CREATE OR REPLACE FUNCTION ${nome}(`)
+  const fim = fonte.indexOf('END $$;', inicio)
+  if (inicio < 0 || fim < 0) throw new Error(`Contrato SQL ausente: ${nome}`)
+  return fonte.slice(inicio, fim + 7)
+}
+let validador = extrair(colaboracao, 'public.gdo_batch_v2')
+  .replace('public.gdo_batch_v2', 'sincronizacao.batch_colaboracao_v3')
+  .replace("set_config('gdo.protocolo','2'", "set_config('gdo.protocolo','3'")
+  .replaceAll('identificadores_documento', 'autoria_documentos')
+validador = validador.replace(
+  / {8}INSERT INTO sincronizacao.contadores_internos[\s\S]*?INSERT INTO autoria_documentos VALUES\(e,t,id_doc,n,auth.uid\(\),auth.uid\(\)\);/,
+  '        INSERT INTO autoria_documentos VALUES(e,t,id_doc,auth.uid(),auth.uid());'
+)
+if (validador.includes('contadores_internos'))
+  throw new Error('Validador ainda contém contador interno')
+let apply = extrair(sql, 'public.gdo_apply').replaceAll('auth.uid()', 'public.gdo_empresa()')
+apply = apply.replace(
+  "IF dono IS NOT NULL AND dono<>p_dispositivo THEN RAISE EXCEPTION 'Documento pertence a outro computador'; END IF;",
+  ''
+)
+apply = apply.replace(
+  /IF n>0 THEN UPDATE reservas_numeros[\s\S]*?END IF; END IF;/,
+  "IF n<=0 OR NOT EXISTS(SELECT 1 FROM numeros_documentos WHERE empresa_id=u AND tipo=t AND numero=n AND documento_id=doc) THEN RAISE EXCEPTION 'Número definitivo inválido'; END IF;"
+)
+if (apply.includes('UPDATE reservas_numeros')) throw new Error('Apply ainda usa reservas')
+apply = apply.replace(
+  'BEGIN\n',
+  "BEGIN\n  IF current_setting('gdo.protocolo',true) IS DISTINCT FROM '3' THEN RAISE EXCEPTION 'Atualize o aplicativo para o protocolo 3'; END IF;\n"
+)
+const sequencial = readFileSync('supabase/numeracao-sequencial.sql', 'utf8')
+  .replace('__VALIDADOR_V3__', () => validador)
+  .replace('__APPLY_V3__', () => apply)
 writeFileSync(
   'supabase/schema-colaboracao.sql',
-  `-- Instalação/migração 1.5, protocolo 2. Execute inteiro.\n${sql.replace(/COMMIT;\s*$/, '')}\n${colaboracao}\nCOMMIT;\n`
+  `-- Instalação/migração 1.5, protocolo 3. Execute inteiro.\n${sql.replace(/COMMIT;\s*$/, '')}\n${colaboracao}\n${sequencial}\nCOMMIT;\n`
 )

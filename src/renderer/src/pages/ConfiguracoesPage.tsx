@@ -736,109 +736,102 @@ function PainelNumeracao({
   carregar: () => Promise<InfoNumeracao>
   definirNumero: (numero: number) => Promise<{ ok: boolean; erro?: string }>
 }): JSX.Element {
-  const { data, error: erroCarga, reload } = useAsync(carregar, [])
+  const {
+    data,
+    error: erroCarga,
+    reload
+  } = useAsync(carregar, [], ['numeracao', 'orcamento', 'relatorio', 'recibo'])
   const [proximo, setProximo] = useState<number | null>(null)
+  const [editado, setEditado] = useState(false)
   const { operacao, ocupado, erro, executar, limparErro } = useMutacao<'salvar'>()
   const [ok, setOk] = useState(false)
-
   useEffect(() => {
-    if (data) setProximo(data.proximoBloco ?? data.proximoNumero)
-  }, [data])
-
+    if (data && !editado) setProximo(data.proximoNumero)
+  }, [data, editado])
   if (!data || proximo === null)
     return (
       <p className={erroCarga ? 'text-sm text-red-700' : 'text-sm text-slate-500'}>
         {erroCarga ? `Não foi possível carregar a numeração. ${erroCarga}` : 'Carregando…'}
       </p>
     )
-
-  const definir = (v: number): void => {
-    setProximo(v)
-    setOk(false)
-    limparErro()
-  }
-
+  const legado = data.usaReservas && !data.atribuicaoServidor
   const salvar = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
     const salvo = await executar('salvar', async () => {
-      const resultado = await definirNumero(proximo)
-      if (!resultado.ok)
-        throw new Error(resultado.erro ?? 'Não foi possível definir o próximo número.')
+      const r = await definirNumero(proximo)
+      if (!r.ok) throw new Error(r.erro ?? 'Não foi possível definir o próximo número.')
+      setEditado(false)
       reload()
     })
-    if (salvo) {
-      setOk(true)
-    }
+    if (salvo) setOk(true)
   }
-
   return (
     <form onSubmit={salvar}>
       <Card className="p-6">
         <SectionTitle
           title={titulo}
           description={
-            data.usaReservas
-              ? data.proximoBloco !== undefined
-                ? 'Ajusta o início das próximas faixas da empresa. Números já distribuídos continuam válidos; Ordem e ID interno são automáticos.'
-                : 'Números vêm de faixas exclusivas. Conecte com o protocolo atualizado para ajustar faixas futuras.'
-              : `Define o número que o próximo ${documento} vai receber. Números já utilizados não são reutilizados.`
+            data.atribuicaoServidor
+              ? 'Sequência compartilhada pela empresa. O servidor confirma o número ao aceitar um documento novo.'
+              : `Define o próximo ${documento}. Números atribuídos não são reutilizados.`
           }
         />
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field
-            label={
-              data.proximoBloco !== undefined
-                ? 'Início da próxima faixa da empresa'
-                : 'Próximo número'
-            }
-            hint={
-              data.usaReservas
-                ? data.proximoNumero > 0
-                  ? `Próximo número deste computador: ${data.proximoNumero}. ${data.minimoProximo ? `Novo início deve ser pelo menos ${data.minimoProximo}.` : ''}`
-                  : 'Sincronize para reservar novos números. Você ainda pode salvar rascunhos.'
-                : `Números já usados são recusados para não haver dois ${documento}s com o mesmo número.`
-            }
-          >
-            <NumberField
-              value={proximo}
-              onChange={definir}
-              min={data.minimoProximo ?? 1}
-              max={999999}
-              step={1}
-              disabled={ocupado || (data.usaReservas && data.proximoBloco === undefined)}
-            />
-          </Field>
-          <div className="space-y-2 self-start md:pt-7">
-            <p className="text-sm text-slate-500">
-              Maior número em uso:{' '}
-              <strong className="text-slate-700">{data.maiorEmUso || '—'}</strong> · Menor número{' '}
-              {data.usaReservas ? 'reservado' : 'livre'}:{' '}
-              <strong className="text-slate-700">{data.menorLivre || '—'}</strong> ·{' '}
-              {data.totalDocumentos} {documento}
-              {data.totalDocumentos === 1 ? '' : 's'}
-            </p>
-            {!data.usaReservas && proximo !== data.menorLivre && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => definir(data.menorLivre)}
+        <dl className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div>
+            <dt className="text-sm text-slate-500">Último número atribuído</dt>
+            <dd className="mt-1 text-lg font-semibold text-slate-800">
+              {data.ultimoNumero ?? data.maiorEmUso}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-sm text-slate-500">Próximo número previsto</dt>
+            <dd className="mt-1 text-lg font-semibold text-slate-800">
+              {data.proximoNumero || 'Aguardando sincronização'}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-sm text-slate-500">Documentos cadastrados</dt>
+            <dd className="mt-1 text-lg font-semibold text-slate-800">{data.totalDocumentos}</dd>
+          </div>
+        </dl>
+        {legado ? (
+          <Mensagem>
+            Atualize a configuração da nuvem para usar a sequência compartilhada, sem reservas por
+            computador.
+          </Mensagem>
+        ) : (
+          <>
+            <Field
+              label="Próximo número"
+              hint={
+                data.atribuicaoServidor
+                  ? 'Avançar a sequência deixa um salto intencional. Outro usuário pode consumir o número previsto antes do seu próximo salvamento.'
+                  : 'Escolha um número ainda não utilizado.'
+              }
+            >
+              <NumberField
+                value={proximo}
+                onChange={(n) => {
+                  setProximo(n)
+                  setEditado(true)
+                  setOk(false)
+                  limparErro()
+                }}
+                min={data.minimoProximo ?? 1}
+                max={999999}
+                step={1}
                 disabled={ocupado}
-              >
-                Usar o menor número livre ({data.menorLivre})
-              </Button>
+              />
+            </Field>
+            {erro && (
+              <Mensagem className="mt-4">
+                Não foi possível definir o próximo número. {erro}
+              </Mensagem>
             )}
-          </div>
-        </div>
-
-        {erro && (
-          <Mensagem className="mt-4">Não foi possível definir o próximo número. {erro}</Mensagem>
-        )}
-
-        {(!data.usaReservas || data.proximoBloco !== undefined) && (
-          <div className="mt-5 flex justify-end">
-            <BotaoSalvar salvando={operacao === 'salvar'} ok={ok} disabled={ocupado} />
-          </div>
+            <div className="mt-5 flex justify-end">
+              <BotaoSalvar salvando={operacao === 'salvar'} ok={ok} disabled={ocupado} />
+            </div>
+          </>
         )}
       </Card>
     </form>

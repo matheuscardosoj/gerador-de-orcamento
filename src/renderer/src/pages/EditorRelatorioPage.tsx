@@ -329,9 +329,11 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
     <PageShell
       titulo={
         rascunhoId
-          ? `Rascunho do relatório ${rel.numero}`
+          ? `Rascunho do relatório ${rel.numero > 0 ? rel.numero : '— aguardando numeração'}`
           : rel.id
-            ? `Relatório Nº ${rel.numero}`
+            ? rel.numero > 0
+              ? `Relatório Nº ${rel.numero}`
+              : 'Relatório — aguardando numeração'
             : 'Novo relatório'
       }
       descricao="Serviços prestados, adiantamentos e reembolsos"
@@ -351,7 +353,9 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
       )}
       {rel.origemOrcamento && (
         <Mensagem tom="info" className="mb-4">
-          Gerado da proposta Nº {rel.origemOrcamento.numero}. Alterações aqui não mudam a proposta.
+          Gerado da proposta Nº{' '}
+          {rel.origemOrcamento.numero > 0 ? rel.origemOrcamento.numero : 'aguardando numeração'}.
+          Alterações aqui não mudam a proposta.
         </Mensagem>
       )}
       <div className="mb-5 space-y-5">
@@ -373,12 +377,18 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
         <SectionTitle title="Dados do relatório" />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Field label="Número">
-            <NumberField
-              value={rel.numero}
-              min={1}
-              step={1}
-              onChange={(numero) => set({ numero })}
-            />
+            {rel.numero <= 0 ? (
+              <p className="text-sm text-slate-500">
+                Aguardando numeração — o número será confirmado ao sincronizar.
+              </p>
+            ) : (
+              <NumberField
+                value={rel.numero}
+                min={1}
+                step={1}
+                onChange={(numero) => set({ numero })}
+              />
+            )}
           </Field>
           <Field label="Data" error={erroDoCampo('data')}>
             <Input

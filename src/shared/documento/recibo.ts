@@ -99,5 +99,7 @@ export function resumoServicoRecibo(
       : itens.length > 2
         ? ` e outros ${itens.length - 1} serviços`
         : ''
+  if (numero <= 0)
+    return `${primeiro}${outros}, conforme ${tipo === 'relatorio' ? 'relatório vinculado' : 'proposta vinculada'}.`
   return `${primeiro}${outros}, conforme ${tipo === 'relatorio' ? 'relatório' : 'proposta'} Nº ${String(numero).padStart(6, '0')}.`
 }
