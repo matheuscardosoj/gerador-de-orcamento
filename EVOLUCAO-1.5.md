@@ -80,3 +80,37 @@ da validação final, sem usar o backup anterior como se fosse a base atual.
 - Pacote deve incluir e copiar `schema-colaboracao.sql`, não o schema antigo. Protocolos
   antigos ficam sem escrita após migração. Adaptar simulador REST dos testes ao v2,
   mantendo testes antigos de domínio como regressão da migração v1.
+
+### Integração em andamento (após 1d2700c)
+
+- Serviço SDK `tempo-real.ts` criado, canal privado, reconexão pela biblioteca,
+  consulta de segurança 5 min e agendador serial que não perde avisos durante a consulta.
+  Dois testes próprios passaram. `index.ts` inicia negociação e encerra o canal no quit.
+- `nuvem.ts` negocia `gdo_contexto_v2`, guarda empresa/login separados, aceita outros
+  logins da mesma empresa e associa computador por usuário; mantém transição v1 apenas
+  quando servidor responde PGRST202 (servidor v2 revoga as escritas v1). Teste legado
+  simula corretamente esse erro; não usa o v2 novo ainda.
+- Rotas v2 de envio, leitura, dispositivo, reserva e bootstrap ligadas ao cliente.
+  Cache de IDs aplicado mesmo para revisões já conhecidas. `geracao` e `grupo` capturados
+  na fila no salvamento, não obtidos da autorização atual no envio.
+- `colaboracao.ts` expõe membros e controle de edição, guarda controles/auditoria no
+  SQLite. IPC autoriza antes de update/remove/número/confirmar/cancelar, incluindo relatório
+  relacionado. Renovação cada 30s. `exigirResponsavel` usa controles v2 quando negociados.
+- Configuração de outra empresa continua recusada; troca de usuário com fila pendente
+  recusada. Falha de login restaura configuração anterior. Backup retira controles de edição
+  e contexto/sessão/identidade novos, preserva rascunhos e IDs.
+- Históricos de propostas/relatórios e cadastros inscritos nos eventos; faltam recibos,
+  editores com proteção de formulários e status da nuvem/usuários/edição na interface.
+- Verificação completa passou com 169 testes antes dos últimos ajustes de autoria/backup;
+  depois passaram 31 testes direcionados e tipos. Novas versões carregam ator/nome; comparação
+  de conteúdo ignora metadados de autoria/ID/PC para não gerar versões idênticas.
+
+Pontos críticos restantes: testar cliente v2 com dois usuários/perfis usando as rotas reais;
+separar envio por grupo (hoje batch único, embora grupo já esteja na fila), manter recuperação
+de outros documentos quando existe conflito (hoje trava global ainda antiga); manter gerações
+novas retornadas após primeiro save; reservas por usuário/PC não podem herdar blocos da conta
+anterior no mesmo perfil; edição offline e rascunhos/merge de três versões ainda incompletos;
+autorizar exportação e proteger números já exportados no servidor; SDK não foi testado com
+WebSocket real. UI Configurações precisa padronizar as seções e incluir usuários/controle.
+Pacote ainda 1.4.1, não foi gerado candidato novo nem tocada base real. Atualizar para rc.1
+somente quando componentes estiverem integrados. Guia/extraResources/cópiaSQL devem usar v2.

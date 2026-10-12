@@ -7,7 +7,7 @@ import { Button } from '../ui/primitives'
 import { HistoricoDocumentos, registroRelatorio } from '../components/HistoricoDocumentos'
 export function HistoricoRelatoriosPage(): JSX.Element {
   const { navegar } = useNav()
-  const { data, loading, error, reload } = useAsync(() => api.relatorios.list(), [])
+  const { data, loading, error, reload } = useAsync(() => api.relatorios.list(), [], ['relatorio'])
   return (
     <PageShell
       largura="full"

@@ -1,7 +1,8 @@
 import { registrarVersao } from './versoes'
 import { orcamentosRepo, relatoriosRepo } from './repositories'
 import { recibosRepo } from './recibos'
-import { capturarCadastros, sincronizarNuvem, statusNuvem } from './nuvem'
+import { capturarCadastros, sincronizarNuvem, statusNuvem, inicializarNuvem } from './nuvem'
+import { pararTempoReal } from './tempo-real'
 import { observarDados } from './eventos'
 import { app, shell, dialog, BrowserWindow } from 'electron'
 import { join } from 'path'
@@ -130,11 +131,12 @@ if (temTrava)
     app.once('before-quit', pararEventos)
     capturarCadastros()
     const sincronizarQuandoConectado = (): void => {
-      if (statusNuvem().autenticada) void sincronizarNuvem()
+      if (statusNuvem().autenticada && (statusNuvem().protocolo ?? 1) < 2) void sincronizarNuvem()
     }
-    sincronizarQuandoConectado()
+    void inicializarNuvem()
     const intervaloNuvem = setInterval(sincronizarQuandoConectado, 30000)
     app.once('before-quit', () => clearInterval(intervaloNuvem))
+    app.once('before-quit', pararTempoReal)
 
     app.on('browser-window-created', (_, window) => {
       optimizer.watchWindowShortcuts(window)

@@ -290,6 +290,8 @@ const v8 = (d: Database): void => {
 }
 const v9 = (d: Database): void => {
   d.exec(`
+    ALTER TABLE fila_nuvem ADD COLUMN geracao INTEGER;
+    ALTER TABLE fila_nuvem ADD COLUMN grupo TEXT NOT NULL DEFAULT '';
     CREATE TABLE identificadores_documento (
       tipo TEXT NOT NULL, documento_id TEXT NOT NULL, id_interno INTEGER,
       usuario_criador TEXT, alterado_por TEXT,

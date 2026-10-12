@@ -184,12 +184,13 @@ function limparAutorizacoesDaCopia(destino: string): void {
   const copia = new Database(destino)
   try {
     copia.exec(
-      "DELETE FROM configuracoes WHERE chave IN ('computadorId','sessaoNuvem','nuvem','usuarioNuvem','cursorNuvem','ultimaNuvem','erroNuvem','bytesNuvem') OR chave LIKE 'estado:%' OR chave LIKE 'transferencia:%';"
+      "DELETE FROM configuracoes WHERE chave IN ('computadorId','sessaoNuvem','nuvem','usuarioNuvem','contextoNuvem','empresaNuvem','cursorNuvem','ultimaNuvem','erroNuvem','bytesNuvem') OR chave LIKE 'estado:%' OR chave LIKE 'transferencia:%' OR chave LIKE 'computadorUsuario:%';"
     )
     if (temTabela(copia, 'reservas'))
       copia.exec(
         'DELETE FROM reservas;DELETE FROM fila_nuvem;DELETE FROM sincronizacao;DELETE FROM conflitos_nuvem;'
       )
+    if (temTabela(copia, 'edicoes_documento')) copia.exec('DELETE FROM edicoes_documento')
     copia.run("INSERT OR REPLACE INTO configuracoes VALUES ('restauracaoLocal','true')")
   } finally {
     copia.close()

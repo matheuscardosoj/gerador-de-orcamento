@@ -1,4 +1,11 @@
 import { recibosRepo } from './recibos'
+import {
+  membrosEmpresa,
+  vincularMembro,
+  ativarMembro,
+  controlarEdicao,
+  autorizarGravacao
+} from './colaboracao'
 import { lerPreferencias, salvarPreferencias, reordenarCadastro } from './preferencias'
 import { copiarInstalacaoNuvem } from './nuvem-configuracao'
 import {
@@ -77,6 +84,16 @@ async function selecionarLogo(): Promise<string | null> {
 // Mapa canal -> função. Registrado em loop via ipcMain.handle.
 // A geração de documentos (documentos.*) é registrada na Fase 5.
 const handlers: Record<string, (...args: unknown[]) => unknown> = {
+  'colaboracao.membros': () => membrosEmpresa(),
+  'colaboracao.vincularMembro': (email, nome) => vincularMembro(String(email), String(nome)),
+  'colaboracao.ativarMembro': (usuario, ativo) => ativarMembro(String(usuario), ativo === true),
+  'colaboracao.edicao': (tipo, id, acao, destino) =>
+    controlarEdicao(
+      tipo as never,
+      String(id),
+      acao ? String(acao) : 'obter',
+      destino ? String(destino) : undefined
+    ),
   'preferencias.historico': (tipo) => lerPreferencias(String(tipo)),
   'preferencias.salvarHistorico': (tipo, dados) => salvarPreferencias(String(tipo), dados),
   'cadastros.reordenar': (tipo, ids) => reordenarCadastro(String(tipo), ids as string[]),
@@ -186,6 +203,18 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
 export function registrarIpc(): void {
   for (const [canal, fn] of Object.entries(handlers)) {
     ipcMain.handle(canal, async (_evento, ...args) => {
+      const dominio = canal.split('.')[0]
+      const tipo = (
+        { orcamentos: 'orcamento', relatorios: 'relatorio', recibos: 'recibo' } as const
+      )[dominio as 'orcamentos' | 'relatorios' | 'recibos']
+      if (tipo && /\.(update|remove|alterarNumero|confirmar|cancelar)$/.test(canal)) {
+        await autorizarGravacao(tipo, String(args[0]))
+        if (tipo === 'recibo') {
+          const r = recibosRepo.get(String(args[0]))
+          if (r?.origemTipo === 'relatorio' && r.origemId)
+            await autorizarGravacao('relatorio', r.origemId)
+        }
+      }
       if (/\.(create|update|save|remove)$/.test(canal))
         return tx(() => {
           const resultado = fn(...args)

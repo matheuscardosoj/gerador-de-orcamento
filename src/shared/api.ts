@@ -73,6 +73,18 @@ export interface ResultadoImportacaoDados {
 }
 
 export interface AppApi {
+  colaboracao: {
+    membros(): Promise<import('./evolucao').MembroEmpresa[]>
+    vincularMembro(email: string, nome: string): Promise<import('./evolucao').MembroEmpresa[]>
+    ativarMembro(usuarioId: string, ativo: boolean): Promise<import('./evolucao').MembroEmpresa[]>
+    edicao(
+      tipo: import('./evolucao').TipoDocumento,
+      id: string,
+      acao?:
+        'obter' | 'adquirir' | 'offline' | 'liberar' | 'transferir' | 'recuperar' | 'solicitar',
+      destino?: string
+    ): Promise<import('./evolucao').ControleEdicao | null>
+  }
   eventos: {
     observarDados(callback: (evento: import('./evolucao').EventoDados) => void): () => void
   }

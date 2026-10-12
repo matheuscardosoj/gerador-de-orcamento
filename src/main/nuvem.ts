@@ -13,9 +13,23 @@ import type { ConfigNuvem, StatusNuvem, TipoDocumento } from '@shared/types'
 import { exportarDadosPara } from './dados'
 import { join } from 'path'
 import { pastaDados } from './db/sqlite'
+import { avisarDados } from './eventos'
+import { iniciarTempoReal, pararTempoReal, avisarEstadoTempoReal } from './tempo-real'
+import { randomUUID } from 'crypto'
 
 let ocupado = false
 let conectando = false
+type ContextoNuvem = {
+  protocolo: number
+  empresaId: string
+  usuarioId: string
+  usuarioNome: string
+}
+let estadoTempoReal: NonNullable<StatusNuvem['tempoReal']> = 'desconectado'
+let erroTempoReal: string | null = null
+export function protocoloNuvem(): number {
+  return config<ContextoNuvem>('contextoNuvem')?.protocolo ?? 1
+}
 const tipos: TipoDocumento[] = ['orcamento', 'relatorio', 'recibo']
 const tabelas = [
   'clientes',
@@ -63,14 +77,14 @@ function gravarSessao(s: Sessao): void {
     throw new Error('A proteção de credenciais do Windows está indisponível.')
   salvar('sessaoNuvem', safeStorage.encryptString(JSON.stringify(s)).toString('base64'))
 }
-async function pedido(path: string, body?: unknown, login = false): Promise<unknown> {
+export async function pedidoNuvem(path: string, body?: unknown, login = false): Promise<unknown> {
   const c = configuracaoNuvem()
   let token = c.chavePublica
   if (!login) {
     let s = sessao()
     if (!s) throw new Error('Entre na conta da empresa para sincronizar.')
     if (s.expires_at * 1000 < Date.now() + 60000) {
-      const atualizado = (await pedido(
+      const atualizado = (await pedidoNuvem(
         '/auth/v1/token?grant_type=refresh_token',
         { refresh_token: s.refresh_token },
         true
@@ -91,9 +105,81 @@ async function pedido(path: string, body?: unknown, login = false): Promise<unkn
     signal: AbortSignal.timeout(30000)
   })
   const dados = await resposta.json().catch(() => null)
-  if (!resposta.ok)
-    throw new Error(dados?.msg ?? dados?.message ?? `Falha na nuvem (${resposta.status}).`)
+  if (!resposta.ok) {
+    const erro = new Error(
+      dados?.msg ?? dados?.message ?? `Falha na nuvem (${resposta.status}).`
+    ) as Error & { codigo?: string; status?: number }
+    erro.codigo = dados?.code
+    erro.status = resposta.status
+    throw erro
+  }
   return dados
+}
+const pedido = pedidoNuvem
+async function reconhecerEmpresa(criar = false): Promise<ContextoNuvem> {
+  let contexto: ContextoNuvem
+  try {
+    contexto = (await pedido('/rest/v1/rpc/gdo_contexto_v2', { p_criar: criar })) as ContextoNuvem
+  } catch (e) {
+    // Compatibilidade de transição com a nuvem 1.4: mantém suas regras antigas.
+    // Após migrar, o servidor revoga as rotas de escrita antigas.
+    if ((e as { codigo?: string }).codigo !== 'PGRST202') throw e
+    const s = sessao()
+    if (!s) throw e
+    contexto = {
+      protocolo: 1,
+      empresaId: s.user.id,
+      usuarioId: s.user.id,
+      usuarioNome: configuracaoNuvem().email
+    }
+  }
+  const anterior = config<string>('empresaNuvem') ?? config<string>('usuarioNuvem')
+  if (anterior && anterior !== contexto.empresaId)
+    throw new Error('Este perfil contém dados de outra empresa. Use um perfil separado.')
+  salvar('contextoNuvem', contexto)
+  salvar('empresaNuvem', contexto.empresaId)
+  return contexto
+}
+export function ativarTempoReal(): void {
+  iniciarTempoReal({
+    configuracao: configuracaoNuvem,
+    identidade: () => {
+      if (protocoloNuvem() < 2) return null
+      const contexto = config<ContextoNuvem>('contextoNuvem'),
+        s = sessao()
+      return contexto && s ? { empresa: contexto.empresaId, token: s.access_token } : null
+    },
+    sincronizar: sincronizarNuvem,
+    renovar: async () => {
+      if (!sessao()) return
+      await reconhecerEmpresa()
+      const { renovarEdicoes } = await import('./colaboracao')
+      await renovarEdicoes()
+    },
+    estado: (estado, erro) => {
+      if (estadoTempoReal === estado && erroTempoReal === erro) return
+      estadoTempoReal = estado
+      erroTempoReal = erro
+      avisarEstadoTempoReal()
+    }
+  })
+}
+export async function inicializarNuvem(): Promise<void> {
+  if (!sessao()) return
+  try {
+    await reconhecerEmpresa()
+    if (protocoloNuvem() >= 2) {
+      await pedido('/rest/v1/rpc/gdo_dispositivo_v2', {
+        p_dispositivo: computadorId(),
+        p_nome: hostname()
+      })
+      salvar('cursorNuvem', 0)
+      ativarTempoReal()
+    } else await sincronizarNuvem()
+  } catch (e) {
+    salvar('erroNuvem', String(e).replace(/^Error:\s*/, ''))
+    avisarDados({ origem: 'nuvem', entidades: [], status: true })
+  }
 }
 export function statusNuvem(): StatusNuvem {
   const reservas = Object.fromEntries(
@@ -118,7 +204,12 @@ export function statusNuvem(): StatusNuvem {
       config<number>('bytesNuvem') ??
       Number(get('PRAGMA page_count')?.page_count ?? 0) *
         Number(get('PRAGMA page_size')?.page_size ?? 0),
-    reservas
+    reservas,
+    empresaId: config<ContextoNuvem>('contextoNuvem')?.empresaId,
+    usuarioId: config<ContextoNuvem>('contextoNuvem')?.usuarioId,
+    protocolo: protocoloNuvem(),
+    tempoReal: estadoTempoReal,
+    erroTempoReal
   }
 }
 export async function conectarNuvem(
@@ -146,6 +237,22 @@ export async function conectarNuvem(
       'Use um perfil separado para conectar outra empresa. Este perfil já está vinculado a um projeto.'
     )
   const anterior = config<ConfigNuvem>('nuvem')
+  const configuracoesAnteriores = new Map(
+    [
+      'nuvem',
+      'sessaoNuvem',
+      'contextoNuvem',
+      'usuarioNuvem',
+      'empresaNuvem',
+      'computadorId',
+      'cursorNuvem'
+    ].map((chave) => [
+      chave,
+      get('SELECT valor FROM configuracoes WHERE chave=?', [chave])?.valor ?? null
+    ])
+  )
+  const sessaoAnterior = config<string>('sessaoNuvem')
+  const contextoAnterior = config<ContextoNuvem>('contextoNuvem')
   conectando = true
   salvar('nuvem', { ...c, url: c.url.replace(/\/$/, '') })
   try {
@@ -155,11 +262,26 @@ export async function conectarNuvem(
       true
     )) as Sessao
     const dono = config<string>('usuarioNuvem')
-    if (dono && dono !== s.user.id)
-      throw new Error('Este perfil pertence a outra conta. Use a mesma conta da empresa.')
+    if (dono && dono !== s.user.id && get('SELECT 1 FROM fila_nuvem LIMIT 1'))
+      throw new Error(
+        'Conclua a sincronização ou preserve as alterações em rascunhos antes de trocar de usuário.'
+      )
     gravarSessao(s)
+    const contexto = await reconhecerEmpresa(!anterior && modo === 'publicar')
+    if (dono && dono !== s.user.id && contexto.protocolo < 2)
+      throw new Error('Atualize a configuração do banco para usar logins individuais da empresa.')
+    if (contexto.protocolo >= 2) {
+      const chave = `computadorUsuario:${s.user.id}`
+      if (dono && dono !== s.user.id && !config<string>(chave)) salvar(chave, randomUUID())
+      if (!config<string>(chave)) salvar(chave, computadorId())
+      salvar('computadorId', config<string>(chave))
+      salvar('cursorNuvem', 0)
+    }
     salvar('usuarioNuvem', s.user.id)
-    await pedido('/rest/v1/rpc/gdo_device', { p_dispositivo: computadorId(), p_nome: hostname() })
+    await pedido(`/rest/v1/rpc/${contexto.protocolo >= 2 ? 'gdo_dispositivo_v2' : 'gdo_device'}`, {
+      p_dispositivo: computadorId(),
+      p_nome: hostname()
+    })
     if (!anterior) {
       const existentes = (await pedido(
         '/rest/v1/gdo_entities?select=entidade&limit=1'
@@ -168,10 +290,13 @@ export async function conectarNuvem(
         throw new Error('A nuvem já contém dados. Use baixar a base para conectar este computador.')
       exportarDadosPara(join(pastaDados(), `antes-nuvem-${Date.now()}.gdo-backup`))
       if (modo === 'publicar') {
-        await pedido('/rest/v1/rpc/gdo_bootstrap_numbers', {
-          p_dispositivo: computadorId(),
-          p_numeros: all('SELECT tipo,numero FROM numeros_usados WHERE numero>0')
-        })
+        await pedido(
+          `/rest/v1/rpc/${contexto.protocolo >= 2 ? 'gdo_bootstrap_v2' : 'gdo_bootstrap_numbers'}`,
+          {
+            p_dispositivo: computadorId(),
+            p_numeros: all('SELECT tipo,numero FROM numeros_usados WHERE numero>0')
+          }
+        )
         tx(() => {
           for (const t of tabelas)
             for (const l of all(`SELECT * FROM ${t}`)) {
@@ -243,7 +368,11 @@ export async function conectarNuvem(
               'numeros_usados',
               'fila_nuvem',
               'sincronizacao',
-              'conflitos_nuvem'
+              'conflitos_nuvem',
+              'identificadores_documento',
+              'edicoes_documento',
+              'rascunhos_compartilhados',
+              'auditoria_colaboracao'
             ])
               run(`DELETE FROM ${t}`)
             for (const e of ordenarDependencias(base)) aplicar(e)
@@ -253,8 +382,23 @@ export async function conectarNuvem(
       }
     }
     conectando = false
-    return await sincronizarNuvem()
+    const status = await sincronizarNuvem()
+    if (protocoloNuvem() >= 2) ativarTempoReal()
+    return status
   } catch (e) {
+    if (anterior) {
+      for (const [chave, valor] of configuracoesAnteriores) {
+        if (valor == null) run('DELETE FROM configuracoes WHERE chave=?', [chave])
+        else
+          run(
+            'INSERT INTO configuracoes VALUES (?,?) ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor',
+            [chave, valor]
+          )
+      }
+    }
+    if (sessaoAnterior) salvar('sessaoNuvem', sessaoAnterior)
+    else run("DELETE FROM configuracoes WHERE chave='sessaoNuvem'")
+    if (contextoAnterior) salvar('contextoNuvem', contextoAnterior)
     if (!anterior && !get('SELECT 1 FROM fila_nuvem LIMIT 1') && !config<number>('cursorNuvem')) {
       run("DELETE FROM configuracoes WHERE chave IN ('nuvem','sessaoNuvem','usuarioNuvem')")
     }
@@ -285,6 +429,13 @@ function upsert(t: string, row: Record<string, unknown>): void {
   }
 }
 type Remoto = {
+  identificador?: {
+    tipo: TipoDocumento
+    documento_id: string
+    id_interno: number
+    usuario_criador: string | null
+    alterado_por: string | null
+  } | null
   entidade: string
   revisao: number
   sequencia: number
@@ -301,9 +452,13 @@ async function baixarAlteracoes(inicio: number): Promise<Remoto[]> {
   let cursor = inicio
   const todas: Remoto[] = []
   while (true) {
-    const dados = (await pedido(
-      `/rest/v1/gdo_entities?select=*&sequencia=gt.${cursor}&order=sequencia.asc&limit=50`
-    )) as Remoto[]
+    const dados = (
+      protocoloNuvem() >= 2
+        ? await pedido('/rest/v1/rpc/gdo_alteracoes_v2', { p_cursor: cursor, p_limite: 50 })
+        : await pedido(
+            `/rest/v1/gdo_entities?select=*&sequencia=gt.${cursor}&order=sequencia.asc&limit=50`
+          )
+    ) as Remoto[]
     if (!dados.length) return todas
     todas.push(...dados)
     cursor = Math.max(cursor, ...dados.map((e) => e.sequencia))
@@ -321,6 +476,7 @@ function ordenarDependencias(dados: Remoto[]): Remoto[] {
   return dados.sort((a, b) => ordem(a) - ordem(b) || a.sequencia - b.sequencia)
 }
 function aplicar(e: Remoto): void {
+  aplicarIdentificador(e)
   const p = e.payload
   if (p.tabela) {
     if (!tabelas.includes(p.tabela)) throw new Error('Entidade remota inválida.')
@@ -393,15 +549,19 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
       throw new Error('Resolva os conflitos antes de sincronizar novas alterações.')
     const fila = all('SELECT * FROM fila_nuvem ORDER BY rowid')
     if (fila.length) {
-      const result = (await pedido('/rest/v1/rpc/gdo_batch', {
-        p_operacoes: fila.map((l) => ({
-          id: l.id,
-          entidade: l.entidade,
-          base: l.base,
-          payload: JSON.parse(texto(l.payload))
-        })),
-        p_dispositivo: computadorId()
-      })) as {
+      const result = (await pedido(
+        `/rest/v1/rpc/${protocoloNuvem() >= 2 ? 'gdo_batch_v2' : 'gdo_batch'}`,
+        {
+          p_operacoes: fila.map((l) => ({
+            id: l.id,
+            entidade: l.entidade,
+            base: l.base,
+            payload: JSON.parse(texto(l.payload)),
+            geracao: l.geracao
+          })),
+          p_dispositivo: computadorId()
+        }
+      )) as {
         ok: boolean
         resultados?: Array<{ entidade: string; revisao: number }>
         entidade?: string
@@ -433,6 +593,7 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
     semRastreamento(() =>
       tx(() => {
         for (const e of alteracoes) {
+          aplicarIdentificador(e)
           const conhecido = Number(
             get('SELECT revisao FROM sincronizacao WHERE entidade=?', [e.entidade])?.revisao ?? 0
           )
@@ -451,11 +612,14 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
         const minimo = Number(
           get('SELECT MAX(numero) AS n FROM numeros_usados WHERE tipo=?', [tipo])?.n ?? 0
         )
-        const numeros = (await pedido('/rest/v1/rpc/gdo_reserve', {
-          p_tipo: tipo,
-          p_dispositivo: computadorId(),
-          p_minimo: minimo
-        })) as number[]
+        const numeros = (await pedido(
+          `/rest/v1/rpc/${protocoloNuvem() >= 2 ? 'gdo_reserve_v2' : 'gdo_reserve'}`,
+          {
+            p_tipo: tipo,
+            p_dispositivo: computadorId(),
+            p_minimo: minimo
+          }
+        )) as number[]
         tx(() => {
           for (const n of numeros) run('INSERT OR IGNORE INTO reservas VALUES (?,?,0)', [tipo, n])
         })
@@ -478,12 +642,29 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
     salvar('bytesNuvem', await pedido('/rest/v1/rpc/gdo_usage', {}))
     salvar('ultimaNuvem', new Date().toISOString())
     salvar('erroNuvem', null)
+    if (alteracoes.length)
+      avisarDados({ origem: 'nuvem', entidades: alteracoes.map((e) => e.entidade), status: true })
   } catch (e) {
     salvar('erroNuvem', String(e).replace(/^Error:\s*/, ''))
   } finally {
     ocupado = false
   }
   return statusNuvem()
+}
+function aplicarIdentificador(e: Remoto): void {
+  const i = e.identificador
+  if (!i) return
+  if (
+    !Number.isSafeInteger(i.id_interno) ||
+    i.id_interno < 1 ||
+    i.documento_id !== e.payload.id ||
+    i.tipo !== e.payload.tipo
+  )
+    throw new Error('Identificador interno remoto inválido.')
+  run(
+    'INSERT INTO identificadores_documento VALUES (?,?,?,?,?) ON CONFLICT(tipo,documento_id) DO UPDATE SET id_interno=excluded.id_interno,usuario_criador=excluded.usuario_criador,alterado_por=excluded.alterado_por',
+    [i.tipo, i.documento_id, i.id_interno, i.usuario_criador, i.alterado_por]
+  )
 }
 export async function dispositivosNuvem(): Promise<Array<{ id: string; nome: string }>> {
   return (await pedido('/rest/v1/gdo_devices?select=id,nome')) as Array<{
@@ -523,6 +704,7 @@ export async function transferirDocumento(
     throw falha
 }
 export function sairNuvem(): void {
+  pararTempoReal()
   run("DELETE FROM configuracoes WHERE chave='sessaoNuvem'")
 }
 export async function aplicarConflito(id: string): Promise<void> {

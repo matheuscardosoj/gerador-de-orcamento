@@ -13,6 +13,7 @@ export interface DocumentoMetadados {
   idInterno?: number | null
   usuarioCriador?: string | null
   alteradoPor?: string | null
+  autorNome?: string | null
   versao?: number
   clienteSnapshot?: Cliente | null
   empresaSnapshot?: EmpresaConfig

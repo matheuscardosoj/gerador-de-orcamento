@@ -2,7 +2,7 @@ import { registrarImagem, imagemDataUrl } from './imagens'
 import { randomUUID } from 'crypto'
 import { hostname } from 'os'
 import { avisarDados } from './eventos'
-import { all, get, run, texto, tx } from './db/sqlite'
+import { all, get, run, texto, tx, grupoTransacao } from './db/sqlite'
 import type { Documento, DocumentoMetadados, TipoDocumento, VersaoDocumento } from '@shared/types'
 
 let suspenso = 0
@@ -32,12 +32,19 @@ export function enfileirar(entidade: string, payload: unknown): void {
   )
   const ultimo = get('SELECT MAX(base) AS base FROM fila_nuvem WHERE entidade=?', [entidade])?.base
   const base = ultimo == null ? remoto : Math.max(remoto, Number(ultimo) + 1)
-  run('INSERT INTO fila_nuvem VALUES (?,?,?,?,?)', [
+  const [tipo, id] = entidade.split(':')
+  const controle = get('SELECT geracao FROM edicoes_documento WHERE tipo=? AND documento_id=?', [
+    tipo,
+    id
+  ])
+  run('INSERT INTO fila_nuvem VALUES (?,?,?,?,?,?,?)', [
     randomUUID(),
     entidade,
     base,
     JSON.stringify(payload),
-    new Date().toISOString()
+    new Date().toISOString(),
+    controle?.geracao ?? null,
+    grupoTransacao() ?? randomUUID()
   ])
 }
 export function lerMeta(tipo: TipoDocumento, id: string): DocumentoMetadados {
@@ -62,6 +69,20 @@ export function lerMeta(tipo: TipoDocumento, id: string): DocumentoMetadados {
   return meta
 }
 export function exigirResponsavel(tipo: TipoDocumento, id: string): void {
+  const contextoLinha = get("SELECT valor FROM configuracoes WHERE chave='contextoNuvem'")
+  const contexto = contextoLinha ? JSON.parse(texto(contextoLinha.valor)) : null
+  if (contexto?.protocolo >= 2 && !suspenso) {
+    const c = get('SELECT * FROM edicoes_documento WHERE tipo=? AND documento_id=?', [tipo, id])
+    if (
+      c?.usuario !== contexto.usuarioId ||
+      c?.computador !== computadorId() ||
+      (!Number(c.offline) && (!c.expira_em || Date.parse(texto(c.expira_em)) <= Date.now()))
+    )
+      throw new Error(
+        'Solicite a edição online ou prepare este documento offline antes de alterar ou emitir. Seu rascunho pode ser preservado.'
+      )
+    return
+  }
   if (
     (!nuvemConfigurada() && !get("SELECT 1 FROM configuracoes WHERE chave='restauracaoLocal'")) ||
     suspenso
@@ -82,6 +103,14 @@ function normalizado(d: Documento): string {
   const dados = copia as unknown as Record<string, unknown>
   delete dados.atualizadoEm
   delete dados.versao
+  for (const chave of [
+    'idInterno',
+    'usuarioCriador',
+    'alteradoPor',
+    'autorNome',
+    'computadorResponsavel'
+  ])
+    delete dados[chave]
   if ('anexos' in copia)
     copia.anexos = copia.anexos.map((a) => {
       const c = { ...a }
@@ -97,6 +126,8 @@ function normalizado(d: Documento): string {
   return JSON.stringify(copia)
 }
 export function registrarVersao(tipo: TipoDocumento, d: Documento, descricao = ''): Documento {
+  const contextoLinha = get("SELECT valor FROM configuracoes WHERE chave='contextoNuvem'")
+  const contexto = contextoLinha ? JSON.parse(texto(contextoLinha.valor)) : null
   const anterior = get(
     'SELECT * FROM versoes WHERE tipo=? AND documento_id=? ORDER BY numero DESC LIMIT 1',
     [tipo, d.id]
@@ -121,6 +152,13 @@ export function registrarVersao(tipo: TipoDocumento, d: Documento, descricao = '
   const empresa = get("SELECT valor FROM configuracoes WHERE chave='empresa'")
   const documento = {
     ...d,
+    ...(contexto?.protocolo >= 2
+      ? {
+          alteradoPor: contexto.usuarioId,
+          autorNome: contexto.usuarioNome,
+          usuarioCriador: meta.usuarioCriador ?? contexto.usuarioId
+        }
+      : {}),
     clienteSnapshot,
     empresaSnapshot:
       d.empresaSnapshot ??
@@ -137,7 +175,10 @@ export function registrarVersao(tipo: TipoDocumento, d: Documento, descricao = '
               'documento'
             ])
       })(),
-    computadorResponsavel: d.computadorResponsavel ?? meta.computadorResponsavel ?? computadorId()
+    computadorResponsavel:
+      contexto?.protocolo >= 2
+        ? computadorId()
+        : (d.computadorResponsavel ?? meta.computadorResponsavel ?? computadorId())
   }
   if (antigo && normalizado(antigo) === normalizado(documento))
     return { ...documento, versao: Number(anterior?.numero) }

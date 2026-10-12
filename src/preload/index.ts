@@ -15,6 +15,13 @@ function crud<T, C>(dominio: string): CrudApi<T, C> {
 }
 
 const api: AppApi = {
+  colaboracao: {
+    membros: () => invoke('colaboracao.membros') as never,
+    vincularMembro: (email, nome) => invoke('colaboracao.vincularMembro', email, nome) as never,
+    ativarMembro: (usuario, ativo) => invoke('colaboracao.ativarMembro', usuario, ativo) as never,
+    edicao: (tipo, id, acao, destino) =>
+      invoke('colaboracao.edicao', tipo, id, acao, destino) as never
+  },
   eventos: {
     observarDados: (callback) => {
       const listener = (_evento: unknown, dados: import('../shared/evolucao').EventoDados): void =>

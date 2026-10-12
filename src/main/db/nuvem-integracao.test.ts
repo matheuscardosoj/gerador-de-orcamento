@@ -49,6 +49,11 @@ beforeAll(async () => {
     const u = new URL(url),
       body = options.body ? JSON.parse(String(options.body)) : {}
     let result: unknown
+    if (u.pathname === '/rest/v1/rpc/gdo_contexto_v2')
+      return new Response(
+        JSON.stringify({ code: 'PGRST202', message: 'Esquema legado do teste' }),
+        { status: 404 }
+      )
     if (u.pathname === '/auth/v1/token')
       result = {
         access_token: 'teste',

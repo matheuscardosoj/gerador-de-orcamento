@@ -1,6 +1,7 @@
 // Conexão SQLite (node-sqlite3-wasm: WebAssembly com acesso real ao arquivo,
 // sem nenhuma dependência nativa/node-gyp — ver memória `ambiente-build-windows`).
 import { app } from 'electron'
+import { randomUUID } from 'crypto'
 import {
   existsSync,
   mkdirSync,
@@ -18,6 +19,10 @@ import { prepararMigracao, verificarBanco } from './pre-migracao'
 export type Linha = Record<string, string | number | Uint8Array | null>
 
 let conexao: Database | null = null
+let grupoAtual: string | null = null
+export function grupoTransacao(): string | null {
+  return grupoAtual
+}
 let trava: { caminho: string; fd: number } | null = null
 
 /** Pasta `userData/data`, onde ficam o banco e os backups. */
@@ -132,6 +137,7 @@ export function tx<T>(fn: () => T): T {
   const d = db()
   // Transações não aninham: se já estamos dentro de uma, apenas executa.
   if (d.inTransaction) return fn()
+  grupoAtual = randomUUID()
   d.run('BEGIN')
   try {
     const resultado = fn()
@@ -140,6 +146,8 @@ export function tx<T>(fn: () => T): T {
   } catch (e) {
     d.run('ROLLBACK')
     throw e
+  } finally {
+    grupoAtual = null
   }
 }
 

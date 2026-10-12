@@ -177,6 +177,16 @@ export function criarMockApi(): AppApi {
 
   return {
     eventos: { observarDados: () => () => {} },
+    colaboracao: {
+      membros: async () => [],
+      vincularMembro: async () => {
+        throw new Error('Disponível no aplicativo conectado à nuvem.')
+      },
+      ativarMembro: async () => {
+        throw new Error('Disponível no aplicativo conectado à nuvem.')
+      },
+      edicao: async () => null
+    },
     preferencias: {
       historico: async (tipo) => {
         return normalizarPreferencias(
