@@ -147,6 +147,22 @@ export const recibosRepo = {
         ])
       return gravar(novo)
     }),
+  remove: (id: string, estornar = false): void =>
+    tx(() => {
+      const r = recibosRepo.get(id)
+      if (!r) return
+      if (r.status === 'recebido') {
+        if (!estornar)
+          throw new Error(
+            'Este recibo confirma um pagamento. Confirme excluir e estornar para continuar.'
+          )
+        recibosRepo.cancelar(id)
+      }
+      if (get('SELECT 1 FROM recebimentos WHERE recibo_id=? AND estornado=0', [id]))
+        throw new Error('O pagamento precisa estar estornado antes de excluir o recibo.')
+      // Mantém números utilizados, snapshots de versões e lançamentos financeiros.
+      run('DELETE FROM recibos WHERE id=?', [id])
+    }),
   cancelar: (id: string): Recibo =>
     tx(() => {
       const r = recibosRepo.get(id)

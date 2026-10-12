@@ -367,7 +367,15 @@ function aplicar(e: Remoto): void {
       'versoes',
       ...(p.tipo === 'recibo' ? ['recebimentos'] : [])
     ])
-      for (const row of p.rows[nome] ?? []) upsert(nome, row)
+      for (const row of p.rows[nome] ?? []) {
+        upsert(nome, row)
+        if (nome === 'versoes') {
+          // Uma exclusão pode chegar antes de o outro PC ter recebido o documento.
+          const numero = Number(JSON.parse(String(row.documento)).numero)
+          if (Number.isSafeInteger(numero) && numero > 0)
+            run('INSERT OR IGNORE INTO numeros_usados VALUES (?,?)', [p.tipo, numero])
+        }
+      }
   } else throw new Error('Pacote remoto inválido.')
   run(
     'INSERT INTO sincronizacao VALUES (?,?) ON CONFLICT(entidade) DO UPDATE SET revisao=excluded.revisao',

@@ -93,6 +93,7 @@ export interface AppApi {
     ): Promise<import('./types').Recibo | null>
     confirmar(id: string): Promise<import('./types').Recibo>
     cancelar(id: string): Promise<import('./types').Recibo>
+    remove(id: string, estornar?: boolean): Promise<void>
   }
   versoes: {
     html(id: string): Promise<string>

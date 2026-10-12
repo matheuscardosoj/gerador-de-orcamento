@@ -160,6 +160,88 @@ it('falha de validação não registra pagamentos nem versões de recebimento', 
   expect(sql.get('SELECT COUNT(*) AS n FROM recebimentos WHERE recibo_id=?', [r.id])?.n).toBe(0)
   expect(versoes.listarVersoes('recibo', r.id)).toHaveLength(antes)
 })
+it('exclui rascunhos e cobranças preservando versões e sem reutilizar números', () => {
+  for (const status of ['rascunho', 'pendente'] as const) {
+    const r = novoRecibo()
+    recibos.recibosRepo.update(r.id, { status })
+    const versoesAntes = versoes.listarVersoes('recibo', r.id)
+    recibos.recibosRepo.remove(r.id)
+    recibos.recibosRepo.remove(r.id)
+    expect(recibos.recibosRepo.get(r.id)).toBeNull()
+    expect(versoes.listarVersoes('recibo', r.id)).toEqual(versoesAntes)
+    expect(
+      sql.get('SELECT 1 FROM numeros_usados WHERE tipo=? AND numero=?', ['recibo', r.numero])
+    ).toBeTruthy()
+    expect(novoRecibo().numero).toBeGreaterThan(r.numero)
+  }
+})
+it('exige estorno explícito e exclui pagamento confirmado atomicamente', () => {
+  const rel = repos.relatoriosRepo.criarDeOrcamento(proposta().id)!
+  const r = novoRecibo(rel.id)
+  recibos.recibosRepo.confirmar(r.id)
+  expect(() => recibos.recibosRepo.remove(r.id)).toThrow('excluir e estornar')
+  expect(recibos.recibosRepo.get(r.id)?.status).toBe('recebido')
+  expect(repos.relatoriosRepo.get(rel.id)?.totais.saldo).toBe(800)
+  recibos.recibosRepo.remove(r.id, true)
+  recibos.recibosRepo.remove(r.id, true)
+  expect(recibos.recibosRepo.get(r.id)).toBeNull()
+  expect(repos.relatoriosRepo.get(rel.id)?.totais.saldo).toBe(1000)
+  expect(sql.get('SELECT estornado FROM recebimentos WHERE recibo_id=?', [r.id])?.estornado).toBe(1)
+  const estados = versoes.listarVersoes('recibo', r.id).map((v) => (v.documento as Recibo).status)
+  expect(estados).toContain('recebido')
+  expect(estados[0]).toBe('cancelado')
+})
+it('exclusão não desfaz adiantamentos preexistentes e conserva pagamentos já estornados', () => {
+  const rel = repos.relatoriosRepo.criarDeOrcamento(proposta().id)!
+  repos.relatoriosRepo.update(rel.id, {
+    adiantamentos: [{ id: 'anterior', descricao: 'Anterior', valor: 200 }]
+  })
+  const r = novoRecibo(rel.id, 'anterior')
+  recibos.recibosRepo.confirmar(r.id)
+  recibos.recibosRepo.remove(r.id, true)
+  expect(repos.relatoriosRepo.get(rel.id)?.totais.saldo).toBe(800)
+  expect(repos.relatoriosRepo.get(rel.id)?.adiantamentos).toHaveLength(1)
+  const avulso = novoRecibo()
+  recibos.recibosRepo.confirmar(avulso.id)
+  recibos.recibosRepo.cancelar(avulso.id)
+  recibos.recibosRepo.remove(avulso.id)
+  expect(
+    sql.get('SELECT estornado FROM recebimentos WHERE recibo_id=?', [avulso.id])?.estornado
+  ).toBe(1)
+})
+it('falha na autorização do relatório reverte toda a exclusão e o estorno', () => {
+  const rel = repos.relatoriosRepo.criarDeOrcamento(proposta().id)!
+  const r = novoRecibo(rel.id)
+  recibos.recibosRepo.confirmar(r.id)
+  const meta = sql.get('SELECT dados FROM documento_meta WHERE tipo=? AND documento_id=?', [
+    'relatorio',
+    rel.id
+  ])!
+  sql.run("INSERT OR REPLACE INTO configuracoes VALUES ('restauracaoLocal','true')")
+  sql.run('UPDATE documento_meta SET dados=? WHERE tipo=? AND documento_id=?', [
+    JSON.stringify({
+      ...JSON.parse(String(meta.dados)),
+      computadorResponsavel: 'outro-computador'
+    }),
+    'relatorio',
+    rel.id
+  ])
+  try {
+    expect(() => recibos.recibosRepo.remove(r.id, true)).toThrow('outro computador')
+    expect(recibos.recibosRepo.get(r.id)?.status).toBe('recebido')
+    expect(repos.relatoriosRepo.get(rel.id)?.totais.saldo).toBe(800)
+    expect(sql.get('SELECT estornado FROM recebimentos WHERE recibo_id=?', [r.id])?.estornado).toBe(
+      0
+    )
+  } finally {
+    sql.run("DELETE FROM configuracoes WHERE chave='restauracaoLocal'")
+    sql.run('UPDATE documento_meta SET dados=? WHERE tipo=? AND documento_id=?', [
+      meta.dados,
+      'relatorio',
+      rel.id
+    ])
+  }
+})
 it('cria outra proposta a partir de uma versão com foto sem duplicar o ativo', async () => {
   const p = proposta()
   repos.orcamentosRepo.update(p.id, {

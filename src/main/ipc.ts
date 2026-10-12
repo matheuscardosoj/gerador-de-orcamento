@@ -94,6 +94,7 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
   'recibos.update': (id, p) => recibosRepo.update(id as string, p as never),
   'recibos.confirmar': (id) => recibosRepo.confirmar(id as string),
   'recibos.cancelar': (id) => recibosRepo.cancelar(id as string),
+  'recibos.remove': (id, estornar) => recibosRepo.remove(id as string, estornar === true),
   'versoes.list': (t, id) => listarVersoes(t as never, id as string),
   'versoes.restaurar': (id, c) => restaurarVersao(id as string, c as boolean),
   'versoes.exportar': (id, f) => exportarVersao(id as string, f as never),

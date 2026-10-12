@@ -169,3 +169,28 @@ it('mescla em um perfil independente sem duplicar pagamentos ao repetir a import
   expect(sql.get('SELECT count(*) AS n FROM imagens')?.n).toBe(1)
   expect(versoes.listarVersoes('relatorio', rel.id).length).toBeGreaterThan(1)
 })
+
+it('restaura estornos, versões e números de recibos excluídos sem ressuscitar o documento', () => {
+  const r = recibos.recibosRepo.create({
+    data: '2026-10-11',
+    destinatario: 'Cliente da exclusão',
+    descricao: 'Serviço',
+    valor: 125.5,
+    local: 'Rio Verde',
+    formaPagamento: 'Pix',
+    status: 'pendente',
+    quitacao: 'parcial',
+    observacao: ''
+  })
+  recibos.recibosRepo.confirmar(r.id)
+  recibos.recibosRepo.remove(r.id, true)
+  const arquivo = join(raiz, 'exclusao.gdo-backup')
+  dados.exportarDadosPara(arquivo)
+  dados.importarDadosDe(arquivo, 'restaurar')
+  expect(recibos.recibosRepo.get(r.id)).toBeNull()
+  expect(sql.get('SELECT estornado FROM recebimentos WHERE recibo_id=?', [r.id])?.estornado).toBe(1)
+  expect(versoes.listarVersoes('recibo', r.id)).toHaveLength(3)
+  expect(
+    sql.get('SELECT 1 FROM numeros_usados WHERE tipo=? AND numero=?', ['recibo', r.numero])
+  ).toBeTruthy()
+})

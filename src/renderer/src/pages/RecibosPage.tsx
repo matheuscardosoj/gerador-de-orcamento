@@ -1,7 +1,7 @@
 import { RevisaoIA } from '../components/RevisaoIA'
 import { HistoricoDocumentos, registroRecibo } from '../components/HistoricoDocumentos'
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Eye, FileDown, Save, Plus, HandCoins, Undo2 } from 'lucide-react'
+import { ArrowLeft, Eye, FileDown, Save, Plus, HandCoins, Undo2, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useNav, useBloqueioEdicao } from '../lib/nav'
 import { PageShell } from '../ui/layout'
@@ -29,6 +29,7 @@ import type {
 import { dataCivilHoje, formatMoeda } from '@shared/format'
 import { gerarHtmlRecibo } from '@shared/documento/recibo-template'
 import { vincularRecibo } from '@shared/recibo-rascunho'
+import { descricaoExclusaoRecibo, rotuloExclusaoRecibo } from '@shared/recibo-exclusao'
 import {
   errosConfirmacaoRecibo,
   localPagamentoSugerido,
@@ -70,7 +71,7 @@ export function RecibosPage({
   const [errosCampos, setErrosCampos] = useState<ErrosRecibo>({})
   const [ocupado, setOcupado] = useState(false)
   const [previa, setPrevia] = useState(false)
-  const [confirmacao, setConfirmacao] = useState<'receber' | 'cancelar' | null>(null)
+  const [confirmacao, setConfirmacao] = useState<'receber' | 'cancelar' | 'excluir' | null>(null)
   useBloqueioEdicao(!!r && (!r.id || JSON.stringify(r) !== salvo))
   const recarregar = async (): Promise<void> => {
     setLista(await api.recibos.list())
@@ -266,6 +267,7 @@ export function RecibosPage({
       {!r ? (
         <HistoricoDocumentos
           tipo="recibo"
+          onAtualizar={() => void executar(recarregar)}
           registros={lista.map((d) =>
             registroRecibo(
               d,
@@ -535,6 +537,17 @@ export function RecibosPage({
                   }
                 />
               )}
+              {r.id && (
+                <Button
+                  icon={Trash2}
+                  variant="outline"
+                  disabled={ocupado}
+                  onClick={() => setConfirmacao('excluir')}
+                  className="text-red-600 hover:bg-red-50"
+                >
+                  Excluir
+                </Button>
+              )}
             </div>
             <p className="mt-3 text-sm text-slate-500">
               {r.status === 'recebido'
@@ -548,8 +561,20 @@ export function RecibosPage({
       )}
       <ConfirmDialog
         open={!!confirmacao}
-        title={confirmacao === 'receber' ? 'Confirmar recebimento' : 'Cancelar documento'}
-        confirmLabel={confirmacao === 'receber' ? 'Confirmar recebimento' : 'Cancelar / estornar'}
+        title={
+          confirmacao === 'receber'
+            ? 'Confirmar recebimento'
+            : confirmacao === 'excluir'
+              ? 'Excluir recibo'
+              : 'Cancelar documento'
+        }
+        confirmLabel={
+          confirmacao === 'receber'
+            ? 'Confirmar recebimento'
+            : confirmacao === 'excluir'
+              ? rotuloExclusaoRecibo(r?.status)
+              : 'Cancelar / estornar'
+        }
         danger={confirmacao !== 'receber'}
         description={
           confirmacao === 'receber'
@@ -558,13 +583,24 @@ export function RecibosPage({
                   ? 'O saldo do relatório vinculado será atualizado uma única vez.'
                   : 'Este recibo registrará o pagamento sem exigir ou alterar um relatório.'
               }`
-            : 'O documento será preservado. Um novo recebimento criado por este recibo será estornado; adiantamentos preexistentes serão mantidos.'
+            : confirmacao === 'excluir'
+              ? descricaoExclusaoRecibo(r?.numero ?? 0, r?.status)
+              : 'O documento será preservado. Um novo recebimento criado por este recibo será estornado; adiantamentos preexistentes serão mantidos.'
         }
         onCancel={() => setConfirmacao(null)}
         onConfirm={() => {
           const acao = confirmacao
           setConfirmacao(null)
           void executar(async () => {
+            if (acao === 'excluir') {
+              if (!r?.id) return
+              await api.recibos.remove(r.id, r.status === 'recebido')
+              setR(null)
+              setSalvo('')
+              setErrosCampos({})
+              await recarregar()
+              return
+            }
             const d = somenteLeitura ? r! : await salvar()
             const novo =
               acao === 'receber'

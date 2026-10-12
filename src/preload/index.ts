@@ -26,7 +26,8 @@ const api: AppApi = {
     create: (dto) => invoke('recibos.create', dto) as never,
     update: (id, p) => invoke('recibos.update', id, p) as never,
     confirmar: (id) => invoke('recibos.confirmar', id) as never,
-    cancelar: (id) => invoke('recibos.cancelar', id) as never
+    cancelar: (id) => invoke('recibos.cancelar', id) as never,
+    remove: (id, estornar) => invoke('recibos.remove', id, estornar) as Promise<void>
   },
   versoes: {
     html: (id) => invoke('versoes.html', id) as never,

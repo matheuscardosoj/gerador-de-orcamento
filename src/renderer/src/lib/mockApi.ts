@@ -199,6 +199,9 @@ export function criarMockApi(): AppApi {
       else db.pagamentosPadrao = ordenada as FormaPagamentoPadrao[]
     },
     recibos: {
+      remove: async () => {
+        throw new Error('Disponível no aplicativo desktop.')
+      },
       list: async () => [],
       get: async () => null,
       create: async () => {

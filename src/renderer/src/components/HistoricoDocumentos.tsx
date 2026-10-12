@@ -35,6 +35,7 @@ import {
   type PreferenciasHistorico
 } from '@shared/historico-preferencias'
 import { formatDataCurta, formatMoeda, formatNumero } from '@shared/format'
+import { descricaoExclusaoRecibo, rotuloExclusaoRecibo } from '@shared/recibo-exclusao'
 import type { Recibo, ResumoOrcamento, ResumoRelatorio, TipoDocumento } from '@shared/types'
 
 export interface RegistroHistorico {
@@ -246,7 +247,7 @@ export function HistoricoDocumentos({
       : campo === 'versao'
         ? 90
         : 145
-  const larguraAcoes = tipo === 'orcamento' ? 220 : tipo === 'relatorio' ? 145 : 70
+  const larguraAcoes = tipo === 'orcamento' ? 220 : tipo === 'relatorio' ? 145 : 110
   const larguraTabela = 96 + larguraAcoes + pref.colunas.reduce((n, k) => n + larguraColuna(k), 0)
   const ordenar = (campo: string): void =>
     mudar({
@@ -538,15 +539,13 @@ export function HistoricoDocumentos({
                           />
                         </>
                       )}
-                      {tipo !== 'recibo' && (
-                        <IconButton
-                          icon={Trash2}
-                          label={`Excluir ${tipo === 'orcamento' ? 'orçamento' : 'relatório'} Nº ${r.numero}`}
-                          disabled={ocupado}
-                          className="text-slate-400 hover:text-red-600"
-                          onClick={() => setExcluir(r)}
-                        />
-                      )}
+                      <IconButton
+                        icon={Trash2}
+                        label={`Excluir ${tipo === 'orcamento' ? 'orçamento' : tipo === 'relatorio' ? 'relatório' : 'recibo'} Nº ${r.numero}`}
+                        disabled={ocupado}
+                        className="text-slate-400 hover:text-red-600"
+                        onClick={() => setExcluir(r)}
+                      />
                     </TableActions>
                   </td>
                 </tr>
@@ -609,14 +608,23 @@ export function HistoricoDocumentos({
       </Modal>
       <ConfirmDialog
         open={!!excluir}
-        title={`Excluir ${tipo === 'orcamento' ? 'orçamento' : 'relatório'}`}
-        description={`O documento Nº ${excluir?.numero ?? ''} será excluído. Seu número e as versões salvas serão preservados.`}
+        title={`Excluir ${tipo === 'orcamento' ? 'orçamento' : tipo === 'relatorio' ? 'relatório' : 'recibo'}`}
+        confirmLabel={
+          tipo === 'recibo' ? rotuloExclusaoRecibo(excluir?.status as Recibo['status']) : 'Excluir'
+        }
+        description={
+          tipo === 'recibo'
+            ? descricaoExclusaoRecibo(excluir?.numero ?? 0, excluir?.status as Recibo['status'])
+            : `O documento Nº ${excluir?.numero ?? ''} será excluído. Seu número e as versões salvas serão preservados.`
+        }
         busy={ocupado}
         onCancel={() => setExcluir(null)}
         onConfirm={() =>
           void executar(async () => {
             if (!excluir) return
-            await (tipo === 'orcamento' ? api.orcamentos : api.relatorios).remove(excluir.id)
+            if (tipo === 'recibo')
+              await api.recibos.remove(excluir.id, excluir.status === 'recebido')
+            else await (tipo === 'orcamento' ? api.orcamentos : api.relatorios).remove(excluir.id)
             setExcluir(null)
             onAtualizar?.()
           })

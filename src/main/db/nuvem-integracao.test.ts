@@ -318,3 +318,46 @@ it('concilia conflito financeiro sem publicar saldo ou pagamento de uma operaç�
   expect(repos.relatoriosRepo.get(rel.id)?.totais.saldo).toBe(1000)
   expect(recibosRepo.get(r.id)?.status).toBe('pendente')
 })
+
+it('sincroniza exclusão de recibos com versões, estornos e números preservados entre perfis', async () => {
+  const { recibosRepo } = await import('../recibos')
+  await trocar('pc1')
+  const criar = () =>
+    recibosRepo.create({
+      data: '2026-10-11',
+      destinatario: 'Cliente da exclusão',
+      descricao: 'Serviço',
+      valor: 100,
+      local: 'Rio Verde',
+      formaPagamento: 'Pix',
+      status: 'pendente',
+      quitacao: 'parcial',
+      observacao: ''
+    })
+  const pago = criar()
+  recibosRepo.confirmar(pago.id)
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  await trocar('pc2')
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  expect(() => recibosRepo.remove(pago.id, true)).toThrow('outro computador')
+  await trocar('pc1')
+  recibosRepo.remove(pago.id, true)
+  const semPublicacao = criar()
+  recibosRepo.remove(semPublicacao.id)
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  await trocar('pc2')
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  for (const r of [pago, semPublicacao]) {
+    expect(recibosRepo.get(r.id)).toBeNull()
+    expect(
+      sql.get('SELECT count(*) AS n FROM versoes WHERE tipo=? AND documento_id=?', ['recibo', r.id])
+        ?.n
+    ).toBeGreaterThan(0)
+    expect(
+      sql.get('SELECT 1 FROM numeros_usados WHERE tipo=? AND numero=?', ['recibo', r.numero])
+    ).toBeTruthy()
+  }
+  expect(
+    sql.get('SELECT estornado FROM recebimentos WHERE recibo_id=?', [pago.id])?.estornado
+  ).toBe(1)
+})
