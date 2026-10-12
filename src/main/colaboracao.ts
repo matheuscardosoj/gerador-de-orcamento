@@ -93,7 +93,15 @@ export async function autorizarGravacao(tipo: TipoDocumento, id: string): Promis
   const proprio =
     controle?.usuario === statusNuvem().usuarioId && controle?.computador === computadorId()
   if (proprio && Number(controle.offline)) return
-  await controlarEdicao(tipo, id, 'adquirir')
+  let c = await controlarEdicao(tipo, id, 'adquirir')
+  if (!c) {
+    const status = await sincronizarNuvem()
+    if (status.erro || status.pendentes)
+      throw new Error('Aguarde a primeira sincronização do documento antes de continuar.')
+    c = await controlarEdicao(tipo, id, 'adquirir')
+  }
+  if (!c?.podeEditar)
+    throw new Error('Não foi possível obter autorização de edição. Preserve seu rascunho.')
 }
 export async function renovarEdicoes(): Promise<void> {
   if (protocoloNuvem() < 2) return

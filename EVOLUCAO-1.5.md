@@ -114,3 +114,20 @@ autorizar exportação e proteger números já exportados no servidor; SDK não 
 WebSocket real. UI Configurações precisa padronizar as seções e incluir usuários/controle.
 Pacote ainda 1.4.1, não foi gerado candidato novo nem tocada base real. Atualizar para rc.1
 somente quando componentes estiverem integrados. Guia/extraResources/cópiaSQL devem usar v2.
+
+### Cliente v2 integrado e ensaiado (após b1db37a)
+
+- Fila enviada por grupo transacional; conflito v2 não paralisa grupos independentes.
+  Download não sobrescreve documentos com operações pendentes; versões locais ficam
+  preservadas. Gerações fixadas por operação continuam válidas após renovação e rejeitadas
+  após revogação. Lease e ID chegam no envelope v2; controles também consultados por
+  endpoint próprio a cada passagem, pois mudanças de lease não alteram revisão do conteúdo.
+- Autorizar gravação aguarda a primeira publicação quando necessário. Startup negocia
+  contexto antes de ativar canal. Authoriza edição por usuário/PC e gerações no servidor.
+- Teste `colaboracao-integracao.test.ts` usa dois perfis SQLite, dois logins, funções v2
+  reais PostgreSQL com papel authenticated e transporte HTTP simulado. Três cenários
+  passaram: publicação/download/ID igual; troca de edição e autoria B; offline com fila
+  presa à geração antiga, recuperação por A e conflito preservando conteúdo B.
+- Não comprova WebSocket nem meta de dois segundos: SDK é mockado neste teste para não
+  contactar serviço externo. Restam teste local com socket real e validação Supabase
+  real após revisão/configuração SQL; não afirmar essas etapas concluídas.

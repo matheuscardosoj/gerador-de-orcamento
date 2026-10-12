@@ -578,8 +578,9 @@ END $$;
 
 CREATE OR REPLACE FUNCTION public.gdo_alteracoes_v2(p_cursor bigint DEFAULT 0,p_limite integer DEFAULT 50) RETURNS SETOF jsonb
 LANGUAGE sql SECURITY DEFINER SET search_path=public,sincronizacao,pg_temp AS $$
-  SELECT to_jsonb(e)||jsonb_build_object('identificador',to_jsonb(i)) FROM public.gdo_entities e
+  SELECT to_jsonb(e)||jsonb_build_object('identificador',to_jsonb(i),'controle',to_jsonb(l)) FROM public.gdo_entities e
   LEFT JOIN public.identificadores_documento i ON i.empresa_id=e.usuario AND i.tipo=split_part(e.entidade,':',1) AND i.documento_id=substr(e.entidade,length(i.tipo)+2)
+  LEFT JOIN public.edicoes_documento l ON l.empresa_id=e.usuario AND l.tipo=split_part(e.entidade,':',1) AND l.documento_id=substr(e.entidade,length(l.tipo)+2)
   WHERE e.usuario=public.gdo_empresa() AND e.sequencia>p_cursor ORDER BY e.sequencia LIMIT least(greatest(p_limite,1),100);
 $$;
 CREATE OR REPLACE FUNCTION public.gdo_batch_v2(p_operacoes jsonb,p_dispositivo uuid) RETURNS jsonb

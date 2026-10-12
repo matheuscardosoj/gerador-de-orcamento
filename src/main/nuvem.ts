@@ -429,6 +429,16 @@ function upsert(t: string, row: Record<string, unknown>): void {
   }
 }
 type Remoto = {
+  controle?: {
+    tipo: TipoDocumento
+    documento_id: string
+    usuario_id: string
+    dispositivo: string
+    geracao: number
+    expira_em: string | null
+    offline: boolean
+    revisao: number
+  } | null
   identificador?: {
     tipo: TipoDocumento
     documento_id: string
@@ -545,10 +555,25 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
   if (ocupado || conectando) return statusNuvem()
   ocupado = true
   try {
-    if (get('SELECT 1 FROM conflitos_nuvem LIMIT 1'))
+    if (protocoloNuvem() >= 2) await reconhecerEmpresa()
+    if (protocoloNuvem() < 2 && get('SELECT 1 FROM conflitos_nuvem LIMIT 1'))
       throw new Error('Resolva os conflitos antes de sincronizar novas alterações.')
-    const fila = all('SELECT * FROM fila_nuvem ORDER BY rowid')
-    if (fila.length) {
+    const pendencias = all('SELECT * FROM fila_nuvem ORDER BY rowid')
+    const grupos =
+      protocoloNuvem() < 2
+        ? [pendencias]
+        : [...new Set(pendencias.map((l) => texto(l.grupo)))].map((grupo) =>
+            pendencias.filter((l) => texto(l.grupo) === grupo)
+          )
+    const bloqueadas = new Set(
+      all('SELECT entidade FROM conflitos_nuvem').map((l) => texto(l.entidade))
+    )
+    for (const fila of grupos) {
+      if (
+        !fila.length ||
+        (protocoloNuvem() >= 2 && fila.some((l) => bloqueadas.has(texto(l.entidade))))
+      )
+        continue
       const result = (await pedido(
         `/rest/v1/rpc/${protocoloNuvem() >= 2 ? 'gdo_batch_v2' : 'gdo_batch'}`,
         {
@@ -561,7 +586,24 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
           })),
           p_dispositivo: computadorId()
         }
-      )) as {
+      ).catch((e: unknown) => {
+        if (
+          protocoloNuvem() < 2 ||
+          !/Autorização.*(expirada|revogada)|Documento em edição/.test(String(e))
+        )
+          throw e
+        const op =
+          fila.find((l) =>
+            ['orcamento', 'relatorio', 'recibo'].includes(texto(l.entidade).split(':')[0])
+          ) ?? fila[0]
+        run('INSERT OR REPLACE INTO conflitos_nuvem VALUES (?,?,?,?)', [
+          op.id,
+          op.entidade,
+          String(e).replace(/^Error:\s*/, ''),
+          'null'
+        ])
+        return { ok: false, entidade: op.entidade, remoto: null }
+      })) as {
         ok: boolean
         resultados?: Array<{ entidade: string; revisao: number }>
         entidade?: string
@@ -575,7 +617,10 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
           'A base remota mudou. Suas alterações locais foram preservadas.',
           JSON.stringify(result.remoto)
         ])
-        throw new Error('Conflito de sincronização. Compare as versões e escolha como continuar.')
+        if (protocoloNuvem() < 2)
+          throw new Error('Conflito de sincronização. Compare as versões e escolha como continuar.')
+        for (const l of fila) bloqueadas.add(texto(l.entidade))
+        continue
       }
       tx(() => {
         for (const r of result.resultados ?? [])
@@ -588,6 +633,45 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
     }
     let cursor = config<number>('cursorNuvem') ?? 0
     const alteracoes = await baixarAlteracoes(cursor)
+    if (protocoloNuvem() >= 2) {
+      const controles = (await pedido('/rest/v1/edicoes_documento?select=*')) as Array<{
+        tipo: TipoDocumento
+        documento_id: string
+        usuario_id: string
+        dispositivo: string
+        geracao: number
+        expira_em: string | null
+        offline: boolean
+        revisao: number
+      }>
+      const mudancas: string[] = []
+      tx(() => {
+        for (const c of controles) {
+          if (!tipos.includes(c.tipo) || !Number.isSafeInteger(c.geracao) || c.geracao < 1)
+            throw new Error('Autorização remota inválida.')
+          const antes = get(
+            'SELECT usuario,computador,geracao,offline FROM edicoes_documento WHERE tipo=? AND documento_id=?',
+            [c.tipo, c.documento_id]
+          )
+          aplicarIdentificador({
+            entidade: `${c.tipo}:${c.documento_id}`,
+            revisao: 0,
+            sequencia: 0,
+            payload: { id: c.documento_id, tipo: c.tipo },
+            controle: c
+          })
+          if (
+            !antes ||
+            antes.usuario !== c.usuario_id ||
+            antes.computador !== c.dispositivo ||
+            Number(antes.geracao) !== c.geracao ||
+            Number(antes.offline) !== Number(c.offline)
+          )
+            mudancas.push(`controle:${c.tipo}:${c.documento_id}`)
+        }
+      })
+      if (mudancas.length) avisarDados({ origem: 'nuvem', entidades: mudancas, status: true })
+    }
     cursor = Math.max(cursor, ...alteracoes.map((e) => e.sequencia))
     ordenarDependencias(alteracoes)
     semRastreamento(() =>
@@ -599,9 +683,11 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
           )
           const pendente = get('SELECT 1 FROM fila_nuvem WHERE entidade=?', [e.entidade])
           if (pendente && e.revisao > conhecido)
-            throw new Error(
-              'Há edições locais novas; sincronize novamente antes de baixar alterações.'
-            )
+            if (protocoloNuvem() >= 2) continue
+            else
+              throw new Error(
+                'Há edições locais novas; sincronize novamente antes de baixar alterações.'
+              )
           if (e.revisao > conhecido) aplicar(e)
         }
         salvar('cursorNuvem', cursor)
@@ -641,7 +727,12 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
     }
     salvar('bytesNuvem', await pedido('/rest/v1/rpc/gdo_usage', {}))
     salvar('ultimaNuvem', new Date().toISOString())
-    salvar('erroNuvem', null)
+    salvar(
+      'erroNuvem',
+      bloqueadas.size
+        ? 'Há alterações em conflito preservadas para conciliação. Os demais dados continuam sincronizando.'
+        : null
+    )
     if (alteracoes.length)
       avisarDados({ origem: 'nuvem', entidades: alteracoes.map((e) => e.entidade), status: true })
   } catch (e) {
@@ -652,6 +743,29 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
   return statusNuvem()
 }
 function aplicarIdentificador(e: Remoto): void {
+  const c = e.controle
+  if (c) {
+    if (
+      c.tipo !== e.payload.tipo ||
+      c.documento_id !== e.payload.id ||
+      !Number.isSafeInteger(c.geracao) ||
+      c.geracao < 1
+    )
+      throw new Error('Controle de edição remoto inválido.')
+    run(
+      'INSERT INTO edicoes_documento VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(tipo,documento_id) DO UPDATE SET usuario=excluded.usuario,computador=excluded.computador,geracao=excluded.geracao,expira_em=excluded.expira_em,offline=excluded.offline,base_revisao=excluded.base_revisao',
+      [
+        c.tipo,
+        c.documento_id,
+        c.usuario_id,
+        c.dispositivo,
+        c.geracao,
+        c.expira_em,
+        c.offline ? 1 : 0,
+        c.revisao
+      ]
+    )
+  }
   const i = e.identificador
   if (!i) return
   if (
