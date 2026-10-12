@@ -1,13 +1,12 @@
 import { ListaOrdenavel } from '../ui/ordenavel'
 import { validarCliente } from '@shared/clientes'
 import { useState } from 'react'
-import { Trash2, Plus, Pencil, Save } from 'lucide-react'
+import { Trash2, Plus, Pencil, Save, FilterX } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAsync } from '../lib/hooks'
 import { PageShell, Tabs } from '../ui/layout'
 import {
   Button,
-  Card,
   Field,
   Input,
   NumberField,
@@ -22,14 +21,30 @@ import {
 } from '../ui/primitives'
 import { IconButton } from '../ui/primitives'
 import { formatMoeda } from '@shared/format'
+import { correspondeBusca } from '@shared/historico-preferencias'
+import { DataTableFrame, TableActions, SortableHeader } from '../ui/dataTable'
 import type { Cliente, ServicoCatalogo } from '@shared/types'
 
 type Aba = 'clientes' | 'servicos'
 
 export function CadastrosPage(): JSX.Element {
   const [aba, setAba] = useState<Aba>('clientes')
+  const [editCliente, setEditCliente] = useState<Cliente | 'novo' | null>(null)
+  const [editServico, setEditServico] = useState<ServicoCatalogo | 'novo' | null>(null)
   return (
-    <PageShell titulo="Cadastros" descricao="Clientes e catálogo de serviços">
+    <PageShell
+      largura="full"
+      titulo="Cadastros"
+      descricao="Clientes e catálogo de serviços"
+      acoes={
+        <Button
+          icon={Plus}
+          onClick={() => (aba === 'clientes' ? setEditCliente('novo') : setEditServico('novo'))}
+        >
+          {aba === 'clientes' ? 'Novo cliente' : 'Novo serviço'}
+        </Button>
+      }
+    >
       <Tabs
         atual={aba}
         onChange={setAba}
@@ -38,7 +53,11 @@ export function CadastrosPage(): JSX.Element {
           { id: 'servicos', label: 'Catálogo de serviços' }
         ]}
       />
-      {aba === 'clientes' ? <SecaoClientes /> : <SecaoServicos />}
+      {aba === 'clientes' ? (
+        <SecaoClientes edit={editCliente} setEdit={setEditCliente} />
+      ) : (
+        <SecaoServicos edit={editServico} setEdit={setEditServico} />
+      )}
     </PageShell>
   )
 }
@@ -53,9 +72,18 @@ const clienteVazio = (): Omit<Cliente, 'id' | 'criadoEm'> => ({
   ativo: true
 })
 
-function SecaoClientes(): JSX.Element {
-  const { data, error: erroCarga, reload } = useAsync(() => api.clientes.list(), [])
-  const [edit, setEdit] = useState<Cliente | 'novo' | null>(null)
+function SecaoClientes({
+  edit,
+  setEdit
+}: {
+  edit: Cliente | 'novo' | null
+  setEdit: (edit: Cliente | 'novo' | null) => void
+}): JSX.Element {
+  const { data, loading, error: erroCarga, reload } = useAsync(() => api.clientes.list(), [])
+  const [busca, setBusca] = useState('')
+  const [estado, setEstado] = useState('')
+  const [tipo, setTipo] = useState('')
+  const [direcao, setDirecao] = useState<'asc' | 'desc'>('asc')
   const [excluir, setExcluir] = useState<Cliente | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const confirmar = async (): Promise<void> => {
@@ -69,55 +97,175 @@ function SecaoClientes(): JSX.Element {
     }
   }
 
+  const filtrados = (data ?? [])
+    .filter(
+      (c) =>
+        (!estado || (estado === 'ativo') === c.ativo) &&
+        (!tipo || (c.tipoPessoa ?? 'pf') === tipo) &&
+        correspondeBusca(busca, [
+          c.nome,
+          c.nomeFantasia ?? '',
+          c.documento ?? '',
+          c.telefone ?? '',
+          c.email ?? '',
+          c.contato ?? '',
+          c.pessoaContato ?? '',
+          c.observacao ?? ''
+        ])
+    )
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR') * (direcao === 'asc' ? 1 : -1))
   return (
-    <Card className="p-6">
-      <div className="mb-4 flex justify-end">
-        <Button icon={Plus} onClick={() => setEdit('novo')}>
-          Novo cliente
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <Input
+          className="max-w-md"
+          aria-label="Buscar clientes"
+          placeholder="Buscar por nome, CPF/CNPJ, telefone ou e-mail…"
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+        />
+        <Select
+          className="w-full sm:w-48"
+          aria-label="Filtrar tipo de cliente"
+          value={tipo}
+          onChange={(e) => setTipo(e.target.value)}
+        >
+          <option value="">Todos os tipos</option>
+          <option value="pf">Pessoa física</option>
+          <option value="pj">Pessoa jurídica</option>
+        </Select>
+        <Select
+          className="w-full sm:w-48"
+          aria-label="Filtrar estado do cliente"
+          value={estado}
+          onChange={(e) => setEstado(e.target.value)}
+        >
+          <option value="">Todos os estados</option>
+          <option value="ativo">Ativos</option>
+          <option value="inativo">Inativos</option>
+        </Select>
+        <Button
+          icon={FilterX}
+          variant="ghost"
+          onClick={() => {
+            setBusca('')
+            setEstado('')
+            setTipo('')
+          }}
+        >
+          Limpar filtros
         </Button>
       </div>
       {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
       {erroCarga && (
         <Mensagem className="mb-4">Não foi possível carregar os clientes. {erroCarga}</Mensagem>
       )}
-      <div className="divide-y divide-slate-100">
-        {(data ?? []).map((c) => (
-          <div key={c.id} className="flex items-center justify-between gap-4 py-3">
-            <div>
-              <p className="font-medium text-slate-800">
-                {c.nome}
-                {!c.ativo && <Badge>Inativo</Badge>}
-              </p>
-              {c.contato && <p className="text-sm text-slate-500">{c.contato}</p>}
-            </div>
-            <div className="flex gap-1">
-              <Button icon={Pencil} size="sm" variant="ghost" onClick={() => setEdit(c)}>
-                Editar
-              </Button>
-              <IconButton
-                icon={Trash2}
-                label={`Excluir cliente ${c.nome}`}
-                size="sm"
-                onClick={() => {
-                  setErro(null)
-                  setExcluir(c)
-                }}
+      {loading ? (
+        <p className="text-sm text-slate-500">Carregando…</p>
+      ) : !filtrados.length ? (
+        <EmptyState
+          title={data?.length ? 'Nenhum cliente encontrado' : 'Nenhum cliente cadastrado'}
+          description={
+            data?.length
+              ? 'Tente outros termos ou limpe os filtros.'
+              : 'Cadastre clientes para reutilizá-los nos documentos.'
+          }
+        />
+      ) : (
+        <DataTableFrame minWidth="1100px">
+          <colgroup>
+            <col style={{ width: '30%' }} />
+            <col className="w-40" />
+            <col className="w-48" />
+            <col style={{ width: '30%' }} />
+            <col className="w-28" />
+            <col className="w-28" />
+          </colgroup>
+          <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+            <tr>
+              <SortableHeader
+                label="Nome / razão social"
+                active
+                direction={direcao}
+                onSort={() => setDirecao(direcao === 'asc' ? 'desc' : 'asc')}
               />
-            </div>
-          </div>
-        ))}
-        {data && data.length === 0 && (
-          <EmptyState
-            title="Nenhum cliente cadastrado"
-            description="Cadastre clientes para reutilizá-los nos orçamentos."
-            action={
-              <Button icon={Plus} onClick={() => setEdit('novo')}>
-                Novo cliente
-              </Button>
-            }
-          />
-        )}
-      </div>
+              <th scope="col" className="px-4 py-3 text-left">
+                Tipo
+              </th>
+              <th scope="col" className="px-4 py-3 text-left">
+                CPF / CNPJ
+              </th>
+              <th scope="col" className="px-4 py-3 text-left">
+                Contato
+              </th>
+              <th scope="col" className="px-4 py-3 text-left">
+                Estado
+              </th>
+              <th
+                scope="col"
+                className="sticky right-0 z-[2] bg-slate-50 px-4 py-3 shadow-[-1px_0_0_0_#e2e8f0]"
+              >
+                <span className="sr-only">Ações</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {filtrados.map((c) => (
+              <tr key={c.id} className="group/linha-historico h-[62px] hover:bg-slate-50">
+                <td className="px-4 py-3 font-medium text-slate-800">
+                  <span className="line-clamp-2 break-words" title={c.nome}>
+                    {c.nome}
+                  </span>
+                  {c.nomeFantasia && (
+                    <span className="mt-0.5 block truncate text-xs text-slate-400">
+                      {c.nomeFantasia}
+                    </span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-slate-600">
+                  {c.tipoPessoa === 'pj' ? 'Pessoa jurídica' : 'Pessoa física'}
+                </td>
+                <td className="px-4 py-3 text-slate-600">
+                  <span className="break-words">{c.documento || '—'}</span>
+                </td>
+                <td className="px-4 py-3 text-slate-600">
+                  <span
+                    className="line-clamp-2 break-words"
+                    title={[c.telefone, c.email, c.contato].filter(Boolean).join(' · ')}
+                  >
+                    {[c.telefone, c.email, c.contato].filter(Boolean).join(' · ') || '—'}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  <Badge color={c.ativo ? 'green' : 'slate'}>{c.ativo ? 'Ativo' : 'Inativo'}</Badge>
+                </td>
+                <td className="sticky right-0 z-[1] bg-white px-4 py-3 shadow-[-1px_0_0_0_#e2e8f0] group-hover/linha-historico:bg-slate-50">
+                  <TableActions>
+                    <IconButton
+                      icon={Pencil}
+                      label={`Editar cliente ${c.nome}`}
+                      onClick={() => setEdit(c)}
+                    />
+                    <IconButton
+                      icon={Trash2}
+                      label={`Excluir cliente ${c.nome}`}
+                      onClick={() => {
+                        setErro(null)
+                        setExcluir(c)
+                      }}
+                    />
+                  </TableActions>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </DataTableFrame>
+      )}
+      {!loading && !!filtrados.length && (
+        <p className="text-xs text-slate-500">
+          {filtrados.length} de {data?.length ?? 0} clientes
+        </p>
+      )}
       {edit && (
         <ClienteModal
           cliente={edit === 'novo' ? null : edit}
@@ -135,7 +283,7 @@ function SecaoClientes(): JSX.Element {
         onCancel={() => setExcluir(null)}
         onConfirm={confirmar}
       />
-    </Card>
+    </div>
   )
 }
 
@@ -322,9 +470,15 @@ const servicoVazio = (): Omit<ServicoCatalogo, 'id'> => ({
   precoReferencia: null
 })
 
-function SecaoServicos(): JSX.Element {
-  const { data, error: erroCarga, reload } = useAsync(() => api.servicos.list(), [])
-  const [edit, setEdit] = useState<ServicoCatalogo | 'novo' | null>(null)
+function SecaoServicos({
+  edit,
+  setEdit
+}: {
+  edit: ServicoCatalogo | 'novo' | null
+  setEdit: (edit: ServicoCatalogo | 'novo' | null) => void
+}): JSX.Element {
+  const { data, loading, error: erroCarga, reload } = useAsync(() => api.servicos.list(), [])
+  const [busca, setBusca] = useState('')
   const [excluir, setExcluir] = useState<ServicoCatalogo | null>(null)
   const [reordenando, setReordenando] = useState(false)
   const [erroOrdem, setErroOrdem] = useState('')
@@ -341,52 +495,122 @@ function SecaoServicos(): JSX.Element {
     }
   }
 
+  const filtrados = (data ?? []).filter((s) =>
+    correspondeBusca(busca, [s.nome, s.descricaoPadrao, s.unidade])
+  )
   return (
-    <Card className="p-6">
+    <div className="space-y-4">
       {erroOrdem && <Mensagem className="mb-4">{erroOrdem}</Mensagem>}
-      <div className="mb-4 flex justify-end">
-        <Button icon={Plus} onClick={() => setEdit('novo')}>
-          Novo serviço
+      <div className="flex flex-wrap items-center gap-3">
+        <Input
+          className="max-w-md"
+          aria-label="Buscar serviços"
+          placeholder="Buscar por nome, descrição ou unidade…"
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+        />
+        <Button icon={FilterX} variant="ghost" onClick={() => setBusca('')}>
+          Limpar filtros
         </Button>
       </div>
+      {busca.trim() && (
+        <p className="text-xs text-slate-500">Limpe a busca para reordenar o catálogo completo.</p>
+      )}
       {erroCarga && (
         <Mensagem className="mb-4">Não foi possível carregar os serviços. {erroCarga}</Mensagem>
       )}
-      <div className="divide-y divide-slate-100">
-        <ListaOrdenavel
-          itens={data ?? []}
-          disabled={reordenando}
-          onChange={(itens) => void reordenar(itens.map((i) => i.id))}
-        >
-          {(data ?? []).map((s) => (
-            <div key={s.id} className="flex items-start justify-between gap-4 py-3">
-              <div className="min-w-0">
-                <p className="font-medium text-slate-800">
-                  {s.nome} <Badge>{s.unidade}</Badge>
-                </p>
-                <p className="truncate text-sm text-slate-500">{s.descricaoPadrao}</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-3">
-                <span className="text-sm font-medium text-slate-600">
-                  {s.precoReferencia != null
-                    ? `${formatMoeda(s.precoReferencia)}/${s.unidade}`
-                    : '—'}
-                </span>
-                <Button icon={Pencil} size="sm" variant="ghost" onClick={() => setEdit(s)}>
-                  Editar
-                </Button>
-                <IconButton
-                  icon={Trash2}
-                  label={`Excluir serviço ${s.nome}`}
-                  size="sm"
-                  onClick={() => setExcluir(s)}
-                />
-              </div>
-            </div>
-          ))}
-        </ListaOrdenavel>
-        {data && data.length === 0 && <EmptyState title="Nenhum serviço no catálogo" />}
-      </div>
+      {loading ? (
+        <p className="text-sm text-slate-500">Carregando…</p>
+      ) : !filtrados.length ? (
+        <EmptyState
+          title={data?.length ? 'Nenhum serviço encontrado' : 'Nenhum serviço no catálogo'}
+          description={
+            data?.length
+              ? 'Tente outros termos ou limpe os filtros.'
+              : 'Cadastre serviços para reutilizar descrições e preços.'
+          }
+        />
+      ) : (
+        <DataTableFrame minWidth="1000px">
+          <colgroup>
+            <col style={{ width: '30%' }} />
+            <col style={{ width: '40%' }} />
+            <col className="w-40" />
+            <col className="w-44" />
+            <col className="w-28" />
+          </colgroup>
+          <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+            <tr>
+              <th scope="col" className="px-4 py-3 text-left">
+                Serviço
+              </th>
+              <th scope="col" className="px-4 py-3 text-left">
+                Descrição padrão
+              </th>
+              <th scope="col" className="px-4 py-3 text-left">
+                Unidade
+              </th>
+              <th scope="col" className="px-4 py-3 text-right">
+                Preço de referência
+              </th>
+              <th
+                scope="col"
+                className="sticky right-0 z-[2] bg-slate-50 px-4 py-3 shadow-[-1px_0_0_0_#e2e8f0]"
+              >
+                <span className="sr-only">Ações</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            <ListaOrdenavel
+              itens={filtrados}
+              disabled={reordenando || !!busca.trim()}
+              onChange={(itens) => void reordenar(itens.map((i) => i.id))}
+            >
+              {filtrados.map((s) => (
+                <tr key={s.id} className="group/linha-historico h-[62px] hover:bg-slate-50">
+                  <td className="px-4 py-3 font-medium text-slate-800">
+                    <span className="line-clamp-2 break-words" title={s.nome}>
+                      {s.nome}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">
+                    <span className="line-clamp-2 break-words" title={s.descricaoPadrao}>
+                      {s.descricaoPadrao || '—'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">
+                    <span className="line-clamp-2 break-words">{s.unidade}</span>
+                  </td>
+                  <td className="px-4 py-3 text-right font-medium text-slate-600">
+                    {s.precoReferencia != null ? formatMoeda(s.precoReferencia) : '—'}
+                  </td>
+                  <td className="sticky right-0 z-[1] bg-white px-4 py-3 shadow-[-1px_0_0_0_#e2e8f0] group-hover/linha-historico:bg-slate-50">
+                    <TableActions>
+                      <IconButton
+                        icon={Pencil}
+                        label={`Editar serviço ${s.nome}`}
+                        onClick={() => setEdit(s)}
+                      />
+                      <IconButton
+                        icon={Trash2}
+                        label={`Excluir serviço ${s.nome}`}
+                        onClick={() => setExcluir(s)}
+                      />
+                    </TableActions>
+                  </td>
+                </tr>
+              ))}
+            </ListaOrdenavel>
+          </tbody>
+        </DataTableFrame>
+      )}
+      {!loading && !!filtrados.length && (
+        <p className="text-xs text-slate-500">
+          {filtrados.length} de {data?.length ?? 0} serviços · Arraste pela alça para alterar a
+          ordem.
+        </p>
+      )}
       {edit && (
         <ServicoModal
           servico={edit === 'novo' ? null : edit}
@@ -410,7 +634,7 @@ function SecaoServicos(): JSX.Element {
           }
         }}
       />
-    </Card>
+    </div>
   )
 }
 
