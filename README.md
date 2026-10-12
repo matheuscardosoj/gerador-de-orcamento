@@ -70,6 +70,10 @@ o app tenta o Ollama automaticamente.
 
 ## Status
 
+**Versão 1.4.1** — nuvem organizada em tabelas de domínio, migração transacional,
+integridade financeira e histórico preservado. Inclui o esquema atualizado e o
+guia para consultar os dados no Supabase; mantém compatibilidade com a 1.4.0.
+
 **Versão 1.4.0** — históricos configuráveis, listas por arraste e revisão
 de textos com IA local, além de dados compartilhados e clientes com campos opcionais,
 recibos/cobranças, recebimentos, versões imutáveis e imagens deduplicadas.

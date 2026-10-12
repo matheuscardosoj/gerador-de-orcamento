@@ -2,12 +2,13 @@
 
 Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
-## Em desenvolvimento — banco relacional — 2026-10-12
+## 1.4.1 — 2026-10-12
 
 - Nuvem organizada em tabelas de clientes, serviços, propostas e itens, relatórios e lançamentos, recibos, recebimentos, imagens e versões, com campos nativos e vínculos por empresa.
 - Migração transacional e reexecutável da estrutura genérica, conferindo todos os conteúdos antes de retirar o armazenamento anterior. A rota compatível de sincronização passa a reconstruir os pacotes a partir das tabelas, sem uma segunda cópia de imagens/documentos.
 - Proteções de integridade financeira, versões imutáveis, imagens por hash, referências históricas e isolamento por empresa. Preserva revisões, operações, reservas e identificadores amplos dos rascunhos offline.
 - Contrato declarativo para gerar o esquema e testes de migração, reversão integral, campos futuros, permissões e compatibilidade com a 1.4.0 instalada.
+- Guia de atualização da nuvem existente e consulta das tabelas incluído no instalador. Migração real conferida com 10 clientes, 17 propostas, 4 relatórios, 15 imagens e 38 versões, sem divergências ou pendências.
 
 ## 1.4.0 — 2026-10-11
 

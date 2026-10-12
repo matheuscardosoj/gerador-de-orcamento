@@ -56,5 +56,6 @@ e consultas remotas de leitura; a sessão foi decifrada somente em memória.
 
 Não foi registrado outro computador real nesta etapa. A sincronização entre dois
 perfis, reenvios, pagamentos e transferência foram validados nos testes integrados
-com PostgreSQL isolado. O merge destas alterações para `main` e uma nova publicação
-do instalador dependem de autorização específica.
+com PostgreSQL isolado. O proprietário autorizou o merge para `main` e a geração
+do instalador 1.4.1. A verificação completa desta versão passou com 152 testes,
+análise estática, formatação, tipos e compilação.
