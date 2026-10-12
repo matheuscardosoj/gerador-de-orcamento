@@ -51,6 +51,8 @@ export interface InfoNumeracao {
   /** Menor número ainda não usado (útil para fechar buracos na sequência). */
   menorLivre: number
   totalDocumentos: number
+  /** A numeração oficial vem das reservas exclusivas do computador. */
+  usaReservas?: boolean
 }
 
 export type SugestaoObservacaoEntrada =
@@ -82,6 +84,8 @@ export interface AppApi {
   }
   reordenarCadastro(tipo: 'servicos' | 'observacoes' | 'pagamentos', ids: string[]): Promise<void>
   recibos: {
+    numeracao(): Promise<InfoNumeracao>
+    definirProximoNumero(numero: number): Promise<ResultadoNumeracao>
     list(): Promise<import('./types').Recibo[]>
     get(id: string): Promise<import('./types').Recibo | null>
     create(

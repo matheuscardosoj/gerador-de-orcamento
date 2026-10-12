@@ -1,4 +1,4 @@
-import { numeroNuvem } from './numeros'
+import { numeroNuvem, numeracaoNuvem } from './numeros'
 import { envolverDocumento, nuvemConfigurada } from './versoes'
 // Repositórios sobre SQLite. As assinaturas públicas são as mesmas de quando a
 // persistência era JSON — o IPC, o preload e o renderer não conhecem o banco.
@@ -668,12 +668,12 @@ export const orcamentosRepo = {
     const agregado = get(
       'SELECT COALESCE(MAX(numero), 0) AS maior, COUNT(*) AS total FROM orcamentos'
     )
-    return {
+    return numeracaoNuvem('orcamento', {
       proximoNumero: proximoNumeroLivre(),
       maiorEmUso: numero(agregado?.maior),
       menorLivre: numeroLivreAPartirDe(1),
       totalDocumentos: numero(agregado?.total)
-    }
+    })
   },
 
   definirProximoNumero: (n: number): ResultadoNumeracao => {
@@ -1174,12 +1174,12 @@ export const relatoriosRepo = {
     const agregado = get(
       'SELECT COALESCE(MAX(numero), 0) AS maior, COUNT(*) AS total FROM relatorios'
     )
-    return {
+    return numeracaoNuvem('relatorio', {
       proximoNumero: proximoNumeroRelatorio(),
       maiorEmUso: numero(agregado?.maior),
       menorLivre: numeroRelatorioLivreAPartirDe(1),
       totalDocumentos: numero(agregado?.total)
-    }
+    })
   },
 
   definirProximoNumero: (n: number): ResultadoNumeracao => {

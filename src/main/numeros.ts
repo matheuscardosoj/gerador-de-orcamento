@@ -2,6 +2,13 @@ import { get, run } from './db/sqlite'
 import { nuvemConfigurada } from './versoes'
 import { randomBytes } from 'crypto'
 import type { TipoDocumento } from '@shared/types'
+import type { InfoNumeracao } from '@shared/api'
+
+export function numeracaoNuvem(tipo: TipoDocumento, local: InfoNumeracao): InfoNumeracao {
+  if (!nuvemConfigurada()) return local
+  const proximo = numeroNuvem(tipo, () => 0)
+  return { ...local, proximoNumero: proximo, menorLivre: proximo, usaReservas: true }
+}
 export function numeroNuvem(tipo: TipoDocumento, local: () => number, consumir = false): number {
   if (!nuvemConfigurada()) return local()
   const reserva = get(

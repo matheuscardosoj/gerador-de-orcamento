@@ -21,6 +21,8 @@ const api: AppApi = {
   },
   reordenarCadastro: (tipo, ids) => invoke('cadastros.reordenar', tipo, ids) as never,
   recibos: {
+    numeracao: () => invoke('recibos.numeracao') as never,
+    definirProximoNumero: (n) => invoke('recibos.definirProximoNumero', n) as never,
     list: () => invoke('recibos.list') as never,
     get: (id) => invoke('recibos.get', id) as never,
     create: (dto) => invoke('recibos.create', dto) as never,

@@ -1080,6 +1080,12 @@ function SecaoNumeracao(): JSX.Element {
         carregar={() => api.relatorios.numeracao()}
         definirNumero={(numero) => api.relatorios.definirProximoNumero(numero)}
       />
+      <PainelNumeracao
+        titulo="Numeração dos recibos"
+        documento="recibo"
+        carregar={() => api.recibos.numeracao()}
+        definirNumero={(numero) => api.recibos.definirProximoNumero(numero)}
+      />
     </div>
   )
 }
@@ -1135,24 +1141,42 @@ function PainelNumeracao({
       <Card className="p-6">
         <SectionTitle
           title={titulo}
-          description={`Define o número que o próximo ${documento} vai receber. Números já utilizados não são reutilizados.`}
+          description={
+            data.usaReservas
+              ? 'Na nuvem, os números vêm de faixas exclusivas deste computador. A alteração manual fica indisponível para evitar duplicidades.'
+              : `Define o número que o próximo ${documento} vai receber. Números já utilizados não são reutilizados.`
+          }
         />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field
             label="Próximo número"
-            hint={`Números já usados são recusados para não haver dois ${documento}s com o mesmo número.`}
+            hint={
+              data.usaReservas
+                ? data.proximoNumero > 0
+                  ? 'Próximo número reservado neste computador.'
+                  : 'Sincronize para reservar novos números. Você ainda pode salvar rascunhos.'
+                : `Números já usados são recusados para não haver dois ${documento}s com o mesmo número.`
+            }
           >
-            <NumberField value={proximo} onChange={definir} min={1} step={1} disabled={ocupado} />
+            <NumberField
+              value={proximo}
+              onChange={definir}
+              min={1}
+              max={999999}
+              step={1}
+              disabled={ocupado || data.usaReservas}
+            />
           </Field>
           <div className="space-y-2 self-start md:pt-7">
             <p className="text-sm text-slate-500">
               Maior número em uso:{' '}
-              <strong className="text-slate-700">{data.maiorEmUso || '—'}</strong> · Menor número
-              livre: <strong className="text-slate-700">{data.menorLivre}</strong> ·{' '}
+              <strong className="text-slate-700">{data.maiorEmUso || '—'}</strong> · Menor número{' '}
+              {data.usaReservas ? 'reservado' : 'livre'}:{' '}
+              <strong className="text-slate-700">{data.menorLivre || '—'}</strong> ·{' '}
               {data.totalDocumentos} {documento}
               {data.totalDocumentos === 1 ? '' : 's'}
             </p>
-            {proximo !== data.menorLivre && (
+            {!data.usaReservas && proximo !== data.menorLivre && (
               <Button
                 type="button"
                 variant="outline"
@@ -1170,9 +1194,11 @@ function PainelNumeracao({
           <Mensagem className="mt-4">Não foi possível definir o próximo número. {erro}</Mensagem>
         )}
 
-        <div className="mt-5 flex justify-end">
-          <BotaoSalvar salvando={operacao === 'salvar'} ok={ok} disabled={ocupado} />
-        </div>
+        {!data.usaReservas && (
+          <div className="mt-5 flex justify-end">
+            <BotaoSalvar salvando={operacao === 'salvar'} ok={ok} disabled={ocupado} />
+          </div>
+        )}
       </Card>
     </form>
   )

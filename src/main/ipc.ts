@@ -89,6 +89,8 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
       enfileirar(`${v.tipo}:${v.documentoId}`, pacoteDocumento(v.tipo, v.documentoId))
     }),
   'recibos.list': () => recibosRepo.list(),
+  'recibos.numeracao': () => recibosRepo.numeracao(),
+  'recibos.definirProximoNumero': (n) => recibosRepo.definirProximoNumero(n as number),
   'recibos.get': (id) => recibosRepo.get(id as string),
   'recibos.create': (dto) => recibosRepo.create(dto as never),
   'recibos.update': (id, p) => recibosRepo.update(id as string, p as never),

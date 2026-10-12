@@ -1,11 +1,35 @@
 import { randomUUID } from 'crypto'
 import { all, get, run, texto, tx } from './db/sqlite'
-import { envolverDocumento, exigirResponsavel } from './versoes'
-import { numeroNuvem } from './numeros'
+import { envolverDocumento, exigirResponsavel, nuvemConfigurada } from './versoes'
+import { numeroNuvem, numeracaoNuvem } from './numeros'
 import { relatoriosRepo } from './repositories'
 import { round2 } from '@shared/format'
 import { errosConfirmacaoRecibo } from '@shared/validacao-recibo'
 import type { Recibo } from '@shared/types'
+import type { InfoNumeracao, ResultadoNumeracao } from '@shared/api'
+
+const NUMERO_MAXIMO = 999999
+function numeroLivre(de: number): number {
+  let n = Math.max(1, de)
+  while (
+    n <= NUMERO_MAXIMO &&
+    (get('SELECT 1 FROM recibos WHERE numero=?', [n]) ||
+      get("SELECT 1 FROM numeros_usados WHERE tipo='recibo' AND numero=?", [n]))
+  )
+    n++
+  return n
+}
+function sequenciaRecibo(): number {
+  const config = get("SELECT valor FROM configuracoes WHERE chave='seqRecibo'")
+  if (config) return Number(config.valor)
+  return Number(get("SELECT MAX(numero) AS n FROM numeros_usados WHERE tipo='recibo'")?.n ?? 0)
+}
+function gravarSequencia(n: number): void {
+  run(
+    "INSERT INTO configuracoes VALUES ('seqRecibo',?) ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor",
+    [JSON.stringify(n)]
+  )
+}
 
 function validar(r: Recibo): void {
   if (!['parcial', 'total'].includes(r.quitacao)) throw new Error('Tipo de quitação inválido.')
@@ -27,6 +51,35 @@ function gravar(r: Recibo): Recibo {
   return r
 }
 export const recibosRepo = {
+  numeracao: (): InfoNumeracao => {
+    const agregado = get('SELECT MAX(numero) AS maior, COUNT(*) AS total FROM recibos')
+    return numeracaoNuvem('recibo', {
+      proximoNumero: numeroLivre(sequenciaRecibo() + 1),
+      maiorEmUso: Math.max(0, Number(agregado?.maior ?? 0)),
+      menorLivre: numeroLivre(1),
+      totalDocumentos: Number(agregado?.total ?? 0)
+    })
+  },
+  definirProximoNumero: (n: number): ResultadoNumeracao => {
+    if (nuvemConfigurada())
+      return {
+        ok: false,
+        erro: 'Na nuvem, a numeração usa faixas exclusivas reservadas para cada computador.'
+      }
+    if (!Number.isInteger(n) || n < 1 || n > NUMERO_MAXIMO)
+      return { ok: false, erro: `O número deve ser um inteiro entre 1 e ${NUMERO_MAXIMO}.` }
+    if (
+      get('SELECT 1 FROM recibos WHERE numero=?', [n]) ||
+      get("SELECT 1 FROM numeros_usados WHERE tipo='recibo' AND numero=?", [n])
+    )
+      return {
+        ok: false,
+        erro: 'Este número já foi utilizado e não pode ser reutilizado.',
+        proximoLivre: numeroLivre(n + 1)
+      }
+    gravarSequencia(n - 1)
+    return { ok: true }
+  },
   list: (): Recibo[] => {
     const metas = new Map(
       all("SELECT documento_id,dados FROM documento_meta WHERE tipo='recibo'").map((l) => [
@@ -47,15 +100,19 @@ export const recibosRepo = {
     tx(() => {
       if (dto.status === 'recebido' || dto.status === 'cancelado')
         throw new Error('Crie um rascunho ou cobrança antes de confirmar o pagamento.')
-      const numero = numeroNuvem(
-        'recibo',
-        () =>
-          Number(get("SELECT MAX(numero) AS n FROM numeros_usados WHERE tipo='recibo'")?.n ?? 0) +
-          1,
-        true
-      )
+      const numero = numeroNuvem('recibo', () => numeroLivre(sequenciaRecibo() + 1), true)
+      if (numero > NUMERO_MAXIMO)
+        throw new Error('A numeração dos recibos atingiu o limite de 999999.')
       const agora = new Date().toISOString()
-      return gravar({ ...dto, id: randomUUID(), numero, criadoEm: agora, atualizadoEm: agora })
+      const recibo = gravar({
+        ...dto,
+        id: randomUUID(),
+        numero,
+        criadoEm: agora,
+        atualizadoEm: agora
+      })
+      if (!nuvemConfigurada()) gravarSequencia(Math.max(numero, sequenciaRecibo()))
+      return recibo
     }),
   update: (id: string, patch: Partial<Recibo>): Recibo | null =>
     tx(() => {

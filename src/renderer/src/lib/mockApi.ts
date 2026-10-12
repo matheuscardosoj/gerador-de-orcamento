@@ -118,6 +118,7 @@ function estadoInicial(): BancoDados {
 
 export function criarMockApi(): AppApi {
   const db = estadoInicial()
+  let proximoRecibo = 1
   const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v))
 
   // Espelho simplificado das regras de numeração do main (ver repositories.ts).
@@ -199,6 +200,18 @@ export function criarMockApi(): AppApi {
       else db.pagamentosPadrao = ordenada as FormaPagamentoPadrao[]
     },
     recibos: {
+      numeracao: async () => ({
+        proximoNumero: proximoRecibo,
+        maiorEmUso: 0,
+        menorLivre: 1,
+        totalDocumentos: 0
+      }),
+      definirProximoNumero: async (n) => {
+        if (!Number.isInteger(n) || n < 1 || n > 999999)
+          return { ok: false, erro: 'O número deve ser um inteiro entre 1 e 999999.' }
+        proximoRecibo = n
+        return { ok: true }
+      },
       remove: async () => {
         throw new Error('Disponível no aplicativo desktop.')
       },
