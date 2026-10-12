@@ -491,3 +491,18 @@ it('preserva versões imutáveis e impede apagar uma imagem usada pelo históric
     (await pg.query<Record<string, unknown>>('SELECT base64 FROM imagens')).rows[0].base64
   ).toBe('WA==')
 })
+it('executa gravações e validação financeira com o papel autenticado usado no Supabase real', async () => {
+  await pg.exec('SET ROLE authenticated')
+  try {
+    await aplicar(`clientes:${cliente}`, registroCliente(cliente, 'Nome atualizado'))
+    await aplicar(`recibo:${recibo}`, payloadRecibo())
+    expect((await pg.query<{ nome: string }>('SELECT nome FROM clientes')).rows[0].nome).toBe(
+      'Nome atualizado'
+    )
+    const errado = payloadRecibo() as { rows: { recebimentos: Array<{ valor: number }> } }
+    errado.rows.recebimentos[0].valor = 201
+    await expect(aplicar(`recibo:${recibo}`, errado, 2)).rejects.toThrow('confirmados juntos')
+  } finally {
+    await pg.exec('RESET ROLE')
+  }
+})
