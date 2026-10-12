@@ -2,7 +2,17 @@ import { RevisaoIA } from '../components/RevisaoIA'
 import { ListaOrdenavel } from '../ui/ordenavel'
 import { DadosClienteDocumento, LinhaTempo } from '../components/DocumentoExtras'
 import { useEffect, useMemo, useState } from 'react'
-import { Pencil, X } from 'lucide-react'
+import {
+  Pencil,
+  X,
+  ArrowLeft,
+  Eye,
+  ClipboardPlus,
+  FileDown,
+  Save,
+  Calculator,
+  Plus
+} from 'lucide-react'
 import { api } from '../lib/api'
 import { useBloqueioEdicao, useNav } from '../lib/nav'
 import { PageShell } from '../ui/layout'
@@ -296,22 +306,37 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
       descricao={`Total: ${formatMoeda(total)}`}
       acoes={
         <>
-          <Button variant="ghost" onClick={() => navegar({ nome: 'historico' })}>
+          <Button icon={ArrowLeft} variant="ghost" onClick={() => navegar({ nome: 'historico' })}>
             Voltar
           </Button>
-          <Button variant="outline" onClick={abrirPrevia} disabled={ocupado !== null}>
+          <Button icon={Eye} variant="outline" onClick={abrirPrevia} disabled={ocupado !== null}>
             Prévia
           </Button>
-          <Button variant="outline" onClick={gerarRelatorio} disabled={ocupado !== null}>
+          <Button
+            icon={ClipboardPlus}
+            variant="outline"
+            onClick={gerarRelatorio}
+            disabled={ocupado !== null}
+          >
             Gerar relatório
           </Button>
-          <Button variant="outline" onClick={() => exportar('docx')} disabled={ocupado !== null}>
+          <Button
+            icon={FileDown}
+            variant="outline"
+            onClick={() => exportar('docx')}
+            disabled={ocupado !== null}
+          >
             DOCX
           </Button>
-          <Button variant="outline" onClick={() => exportar('pdf')} disabled={ocupado !== null}>
+          <Button
+            icon={FileDown}
+            variant="outline"
+            onClick={() => exportar('pdf')}
+            disabled={ocupado !== null}
+          >
             PDF
           </Button>
-          <Button onClick={salvar} disabled={ocupado !== null}>
+          <Button icon={Save} onClick={salvar} disabled={ocupado !== null}>
             {ocupado === 'salvar' ? 'Salvando…' : 'Salvar'}
           </Button>
         </>
@@ -659,11 +684,11 @@ export function ServicosCard({
                 </option>
               ))}
             </Select>
-            <Button variant="outline" onClick={() => setCalcAberto('novo')}>
-              + Com cálculo
+            <Button icon={Calculator} variant="outline" onClick={() => setCalcAberto('novo')}>
+              Com cálculo
             </Button>
-            <Button variant="outline" onClick={() => setManualAberto('novo')}>
-              + Manual
+            <Button icon={Plus} variant="outline" onClick={() => setManualAberto('novo')}>
+              Manual
             </Button>
           </div>
         }
@@ -857,7 +882,9 @@ function ServicoManualModal({
           <Button variant="secondary" onClick={onClose}>
             Cancelar
           </Button>
-          <Button onClick={salvar}>Salvar</Button>
+          <Button icon={Save} onClick={salvar}>
+            Salvar
+          </Button>
         </>
       }
     >
@@ -912,8 +939,8 @@ function MateriaisCard({
         title="Lista de materiais"
         description="Opcional"
         action={
-          <Button variant="outline" onClick={add}>
-            + Material
+          <Button icon={Plus} variant="outline" onClick={add}>
+            Material
           </Button>
         }
       />
@@ -997,8 +1024,8 @@ export function TextosCard({
         title={titulo}
         description={descricao}
         action={
-          <Button variant="outline" onClick={() => add()}>
-            + Adicionar
+          <Button icon={Plus} variant="outline" onClick={() => add()}>
+            Adicionar
           </Button>
         }
       />

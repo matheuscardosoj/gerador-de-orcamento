@@ -1,7 +1,7 @@
 import { RevisaoIA } from './RevisaoIA'
 import { ListaOrdenavel } from '../ui/ordenavel'
 import { useMemo, useState } from 'react'
-import { X } from 'lucide-react'
+import { X, Plus, Check } from 'lucide-react'
 import {
   calcularCustoServico,
   criarEntradaCalculo,
@@ -262,7 +262,7 @@ export function ServicoCalculoModal({
             <Button variant="secondary" className="flex-1" onClick={onCancel}>
               Cancelar
             </Button>
-            <Button className="flex-1" onClick={confirmar}>
+            <Button icon={Check} className="flex-1" onClick={confirmar}>
               Usar no orçamento
             </Button>
           </div>
@@ -297,8 +297,8 @@ function MaoDeObraBloco({ e, set }: BlocoProps): JSX.Element {
     <Bloco
       titulo="Mão de obra"
       acao={
-        <Button size="sm" variant="outline" onClick={add}>
-          + Grupo
+        <Button icon={Plus} size="sm" variant="outline" onClick={add}>
+          Grupo
         </Button>
       }
     >
@@ -455,8 +455,8 @@ function AlimentacaoBloco({
     <Bloco
       titulo="Alimentação"
       acao={
-        <Button size="sm" variant="outline" onClick={add}>
-          + Refeição
+        <Button icon={Plus} size="sm" variant="outline" onClick={add}>
+          Refeição
         </Button>
       }
     >
@@ -516,8 +516,8 @@ function FerramentasBloco({ e, set }: BlocoProps): JSX.Element {
     <Bloco
       titulo="Ferramentas (manutenção / insumos)"
       acao={
-        <Button size="sm" variant="outline" onClick={add}>
-          + Item
+        <Button icon={Plus} size="sm" variant="outline" onClick={add}>
+          Item
         </Button>
       }
     >
@@ -587,8 +587,8 @@ function CombustivelBloco({
     <Bloco
       titulo="Combustível / deslocamento"
       acao={
-        <Button size="sm" variant="outline" onClick={add}>
-          + Veículo
+        <Button icon={Plus} size="sm" variant="outline" onClick={add}>
+          Veículo
         </Button>
       }
     >
@@ -671,8 +671,8 @@ function EstadiaBloco({ e, set }: BlocoProps): JSX.Element {
     <Bloco
       titulo="Estadia / hospedagem"
       acao={
-        <Button size="sm" variant="outline" onClick={add}>
-          + Estadia
+        <Button icon={Plus} size="sm" variant="outline" onClick={add}>
+          Estadia
         </Button>
       }
     >
@@ -762,8 +762,8 @@ function AvulsosBloco({ e, set }: BlocoProps): JSX.Element {
     <Bloco
       titulo="Outros custos e repasses"
       acao={
-        <Button size="sm" variant="outline" onClick={add}>
-          + Custo
+        <Button icon={Plus} size="sm" variant="outline" onClick={add}>
+          Custo
         </Button>
       }
     >

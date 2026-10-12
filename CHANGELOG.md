@@ -4,6 +4,7 @@ Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
 ## 1.4.0-rc.2 — 2026-10-11
 
+- Ícones padronizados por significado: recibos distintos dos demais documentos, edição/consulta, duplicação, cálculo, fotos, versões, recebimentos/estornos, backup e sincronização. Botões mantêm textos/dicas e usam traço e tamanhos consistentes.
 - Atalhos de recibo/cobrança nos históricos de propostas e relatórios, sem salvar ou registrar pagamentos ao abrir.
 - Históricos compartilhando busca por múltiplos termos, filtros, colunas selecionáveis/reordenáveis e preferências persistentes por computador.
 - Históricos aproveitam a largura disponível, com rolagem horizontal quando necessária, número/ações fixos e textos limitados a duas linhas. Todas as colunas verificadas entre 1.024 e 2.560 pixels.

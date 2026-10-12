@@ -1,7 +1,7 @@
 import { ListaOrdenavel } from '../ui/ordenavel'
 import { NuvemSection } from './NuvemSection'
 import { useEffect, useRef, useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Save, Check, Plus, Pencil, Download, ArchiveRestore, Import } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAsync } from '../lib/hooks'
 import { PageShell, Tabs } from '../ui/layout'
@@ -88,8 +88,8 @@ function BotaoSalvar({
   disabled?: boolean
 }): JSX.Element {
   return (
-    <Button type="submit" disabled={disabled}>
-      {salvando ? 'Salvando…' : ok ? '✓ Salvo' : 'Salvar alterações'}
+    <Button icon={ok && !salvando ? Check : Save} type="submit" disabled={disabled}>
+      {salvando ? 'Salvando…' : ok ? 'Salvo' : 'Salvar alterações'}
     </Button>
   )
 }
@@ -551,6 +551,7 @@ function SecaoObservacoes(): JSX.Element {
           disabled={ocupado}
         />
         <Button
+          icon={Plus}
           type="button"
           onClick={adicionar}
           className="shrink-0 self-start"
@@ -664,7 +665,13 @@ function ItemObservacao({
         <div className="flex flex-wrap gap-2">
           {editando ? (
             <>
-              <Button type="button" size="sm" onClick={salvar} disabled={ocupado || !texto.trim()}>
+              <Button
+                icon={Save}
+                type="button"
+                size="sm"
+                onClick={salvar}
+                disabled={ocupado || !texto.trim()}
+              >
                 Salvar
               </Button>
               <Button
@@ -682,6 +689,7 @@ function ItemObservacao({
             </>
           ) : (
             <Button
+              icon={Pencil}
               type="button"
               size="sm"
               variant="outline"
@@ -752,6 +760,7 @@ function SecaoPagamentos(): JSX.Element {
           disabled={ocupado}
         />
         <Button
+          icon={Plus}
           type="button"
           onClick={adicionar}
           className="shrink-0 self-start"
@@ -865,7 +874,13 @@ function ItemPagamento({
         <div className="flex flex-wrap gap-2">
           {editando ? (
             <>
-              <Button type="button" size="sm" onClick={salvar} disabled={ocupado || !texto.trim()}>
+              <Button
+                icon={Save}
+                type="button"
+                size="sm"
+                onClick={salvar}
+                disabled={ocupado || !texto.trim()}
+              >
                 Salvar
               </Button>
               <Button
@@ -883,6 +898,7 @@ function ItemPagamento({
             </>
           ) : (
             <Button
+              icon={Pencil}
               type="button"
               size="sm"
               variant="outline"
@@ -1216,7 +1232,7 @@ function SecaoDados(): JSX.Element {
             Guarde esse arquivo em um local seguro. Ele permite recuperar o aplicativo em outro
             computador sem perder os anexos.
           </p>
-          <Button type="button" onClick={exportar} disabled={ocupado !== null}>
+          <Button icon={Download} type="button" onClick={exportar} disabled={ocupado !== null}>
             {ocupado === 'exportar' ? 'Exportando…' : 'Exportar backup…'}
           </Button>
         </div>
@@ -1234,6 +1250,7 @@ function SecaoDados(): JSX.Element {
               selecionado.
             </p>
             <Button
+              icon={ArchiveRestore}
               type="button"
               variant="outline"
               className="mt-4"
@@ -1250,6 +1267,7 @@ function SecaoDados(): JSX.Element {
               financeiros e IA deste computador são preservados.
             </p>
             <Button
+              icon={Import}
               type="button"
               className="mt-4"
               onClick={() => setConfirmacao('mesclar')}

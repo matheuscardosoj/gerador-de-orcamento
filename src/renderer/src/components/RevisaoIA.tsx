@@ -69,6 +69,7 @@ export function RevisaoIA({
   return (
     <>
       <Button
+        icon={Sparkles}
         type="button"
         size="sm"
         variant="outline"
@@ -80,7 +81,6 @@ export function RevisaoIA({
           void gerar(texto)
         }}
       >
-        <Sparkles size={14} className="mr-1.5" />
         {anotacao ? 'Sugerir com IA' : 'Revisar com IA'}
       </Button>
       <Modal

@@ -1,7 +1,7 @@
 import { ListaOrdenavel } from '../ui/ordenavel'
 import { validarCliente } from '@shared/clientes'
 import { useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Plus, Pencil, Save } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAsync } from '../lib/hooks'
 import { PageShell, Tabs } from '../ui/layout'
@@ -72,7 +72,9 @@ function SecaoClientes(): JSX.Element {
   return (
     <Card className="p-6">
       <div className="mb-4 flex justify-end">
-        <Button onClick={() => setEdit('novo')}>+ Novo cliente</Button>
+        <Button icon={Plus} onClick={() => setEdit('novo')}>
+          Novo cliente
+        </Button>
       </div>
       {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
       {erroCarga && (
@@ -89,7 +91,7 @@ function SecaoClientes(): JSX.Element {
               {c.contato && <p className="text-sm text-slate-500">{c.contato}</p>}
             </div>
             <div className="flex gap-1">
-              <Button size="sm" variant="ghost" onClick={() => setEdit(c)}>
+              <Button icon={Pencil} size="sm" variant="ghost" onClick={() => setEdit(c)}>
                 Editar
               </Button>
               <IconButton
@@ -108,7 +110,11 @@ function SecaoClientes(): JSX.Element {
           <EmptyState
             title="Nenhum cliente cadastrado"
             description="Cadastre clientes para reutilizá-los nos orçamentos."
-            action={<Button onClick={() => setEdit('novo')}>+ Novo cliente</Button>}
+            action={
+              <Button icon={Plus} onClick={() => setEdit('novo')}>
+                Novo cliente
+              </Button>
+            }
           />
         )}
       </div>
@@ -174,7 +180,7 @@ function ClienteModal({
           <Button variant="secondary" onClick={onClose}>
             Cancelar
           </Button>
-          <Button onClick={() => void salvar()} disabled={salvando}>
+          <Button icon={Save} onClick={() => void salvar()} disabled={salvando}>
             {salvando ? 'Salvando…' : 'Salvar'}
           </Button>
         </>
@@ -339,7 +345,9 @@ function SecaoServicos(): JSX.Element {
     <Card className="p-6">
       {erroOrdem && <Mensagem className="mb-4">{erroOrdem}</Mensagem>}
       <div className="mb-4 flex justify-end">
-        <Button onClick={() => setEdit('novo')}>+ Novo serviço</Button>
+        <Button icon={Plus} onClick={() => setEdit('novo')}>
+          Novo serviço
+        </Button>
       </div>
       {erroCarga && (
         <Mensagem className="mb-4">Não foi possível carregar os serviços. {erroCarga}</Mensagem>
@@ -364,7 +372,7 @@ function SecaoServicos(): JSX.Element {
                     ? `${formatMoeda(s.precoReferencia)}/${s.unidade}`
                     : '—'}
                 </span>
-                <Button size="sm" variant="ghost" onClick={() => setEdit(s)}>
+                <Button icon={Pencil} size="sm" variant="ghost" onClick={() => setEdit(s)}>
                   Editar
                 </Button>
                 <IconButton
@@ -436,7 +444,9 @@ function ServicoModal({
           <Button variant="secondary" onClick={onClose}>
             Cancelar
           </Button>
-          <Button onClick={salvar}>Salvar</Button>
+          <Button icon={Save} onClick={salvar}>
+            Salvar
+          </Button>
         </>
       }
     >

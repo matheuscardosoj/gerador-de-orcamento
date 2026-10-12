@@ -79,9 +79,7 @@ export function SortableHeader({
         )}
       >
         {label}
-        {active && (
-          <AppIcon icon={direction === 'asc' ? ChevronUp : ChevronDown} className="h-3.5 w-3.5" />
-        )}
+        {active && <AppIcon icon={direction === 'asc' ? ChevronUp : ChevronDown} size="sm" />}
       </button>
     </th>
   )

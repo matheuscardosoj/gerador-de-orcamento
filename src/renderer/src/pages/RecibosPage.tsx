@@ -1,6 +1,7 @@
 import { RevisaoIA } from '../components/RevisaoIA'
 import { HistoricoDocumentos, registroRecibo } from '../components/HistoricoDocumentos'
 import { useEffect, useState } from 'react'
+import { ArrowLeft, Eye, FileDown, Save, Plus, HandCoins, Undo2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useNav, useBloqueioEdicao } from '../lib/nav'
 import { PageShell } from '../ui/layout'
@@ -175,11 +176,12 @@ export function RecibosPage({
       acoes={
         r ? (
           <>
-            <Button variant="outline" onClick={fechar}>
+            <Button icon={ArrowLeft} variant="outline" onClick={fechar}>
               Voltar à lista
             </Button>
             {!somenteLeitura && (
               <Button
+                icon={Save}
                 disabled={ocupado}
                 onClick={() =>
                   void executar(async () => {
@@ -190,12 +192,13 @@ export function RecibosPage({
                 Salvar
               </Button>
             )}
-            <Button variant="outline" onClick={() => setPrevia(true)}>
+            <Button icon={Eye} variant="outline" onClick={() => setPrevia(true)}>
               Prévia
             </Button>
             {somenteLeitura &&
               (['pdf', 'docx'] as const).map((formato) => (
                 <Button
+                  icon={FileDown}
                   key={formato}
                   variant="outline"
                   disabled={ocupado}
@@ -207,6 +210,7 @@ export function RecibosPage({
           </>
         ) : (
           <Button
+            icon={Plus}
             onClick={() => {
               const d = {
                 ...vazio(),
@@ -431,12 +435,17 @@ export function RecibosPage({
             <SectionTitle title="Pagamento e emissão" />
             <div className="flex flex-wrap gap-2">
               {r.status !== 'recebido' && r.status !== 'cancelado' && (
-                <Button disabled={ocupado} onClick={() => setConfirmacao('receber')}>
+                <Button
+                  icon={HandCoins}
+                  disabled={ocupado}
+                  onClick={() => setConfirmacao('receber')}
+                >
                   Confirmar recebimento
                 </Button>
               )}
               {r.id && r.status !== 'cancelado' && (
                 <Button
+                  icon={Undo2}
                   variant="outline"
                   disabled={ocupado}
                   onClick={() => setConfirmacao('cancelar')}
@@ -447,7 +456,13 @@ export function RecibosPage({
               {r.id &&
                 !somenteLeitura &&
                 (['pdf', 'docx'] as const).map((f) => (
-                  <Button variant="outline" disabled={ocupado} key={f} onClick={() => exportar(f)}>
+                  <Button
+                    icon={FileDown}
+                    variant="outline"
+                    disabled={ocupado}
+                    key={f}
+                    onClick={() => exportar(f)}
+                  >
                     Exportar {f.toUpperCase()}
                   </Button>
                 ))}

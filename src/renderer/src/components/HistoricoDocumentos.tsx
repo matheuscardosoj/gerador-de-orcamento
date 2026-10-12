@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Columns3, Copy, FileText, FolderOpen, ClipboardPlus, Trash2 } from 'lucide-react'
+import {
+  Columns3,
+  CopyPlus,
+  ReceiptText,
+  FilePenLine,
+  FileSearch,
+  ClipboardPlus,
+  Trash2,
+  FilterX
+} from 'lucide-react'
 import { api } from '../lib/api'
 import { useNav } from '../lib/nav'
 import {
@@ -312,11 +321,15 @@ export function HistoricoDocumentos({
             </option>
           ))}
         </Select>
-        <Button variant="outline" disabled={!carregadas} onClick={() => setColunas(true)}>
-          <Columns3 size={16} className="mr-2" />
+        <Button
+          icon={Columns3}
+          variant="outline"
+          disabled={!carregadas}
+          onClick={() => setColunas(true)}
+        >
           Colunas
         </Button>
-        <Button variant="ghost" disabled={!carregadas} onClick={limpar}>
+        <Button icon={FilterX} variant="ghost" disabled={!carregadas} onClick={limpar}>
           Limpar filtros
         </Button>
       </div>
@@ -475,7 +488,11 @@ export function HistoricoDocumentos({
                   <td className="sticky right-0 z-[1] bg-white px-4 py-3 shadow-[-1px_0_0_0_#e2e8f0] group-hover/linha-historico:bg-slate-50">
                     <TableActions>
                       <IconButton
-                        icon={FolderOpen}
+                        icon={
+                          tipo === 'recibo' && ['recebido', 'cancelado'].includes(r.status)
+                            ? FileSearch
+                            : FilePenLine
+                        }
                         label={`Abrir ${tipo === 'orcamento' ? 'orçamento' : tipo === 'relatorio' ? 'relatório' : 'recibo'} Nº ${r.numero}`}
                         disabled={ocupado}
                         onClick={() =>
@@ -490,7 +507,7 @@ export function HistoricoDocumentos({
                       />
                       {tipo !== 'recibo' && (
                         <IconButton
-                          icon={FileText}
+                          icon={ReceiptText}
                           label={`Gerar recibo / cobrança do ${tipo === 'orcamento' ? 'orçamento' : 'relatório'} Nº ${r.numero}`}
                           disabled={ocupado}
                           onClick={() => navegar({ nome: 'recibos', origem: { tipo, id: r.id } })}
@@ -510,7 +527,7 @@ export function HistoricoDocumentos({
                             }
                           />
                           <IconButton
-                            icon={Copy}
+                            icon={CopyPlus}
                             label={`Duplicar orçamento Nº ${r.numero}`}
                             disabled={ocupado}
                             onClick={() =>

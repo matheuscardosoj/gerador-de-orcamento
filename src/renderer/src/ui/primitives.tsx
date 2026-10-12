@@ -23,8 +23,8 @@ export function cn(...parts: Array<string | false | null | undefined>): string {
 
 // ------------------------------------------------------------------- Ícone
 /**
- * Ícone padronizado da interface. Mantém todos os ícones no mesmo tamanho
- * e com caixa fixa, para alinhamento consistente entre telas.
+ * Ícone padronizado: 20 px na navegação, 18 px nas ações e 16 px nos controles
+ * compactos. O traço mantém a mesma espessura visual em todos os tamanhos.
  */
 export function Icone({
   children,
@@ -48,13 +48,23 @@ export function Icone({
 
 export function AppIcon({
   icon: Icon,
-  className
+  className,
+  size = 'md'
 }: {
   icon: LucideIcon
   className?: string
+  size?: 'sm' | 'md' | 'lg'
 }): JSX.Element {
+  const pixels = size === 'sm' ? 16 : size === 'lg' ? 20 : 18
   return (
-    <Icon aria-hidden className={cn('h-[18px] w-[18px] shrink-0', className)} strokeWidth={1.9} />
+    <Icon
+      aria-hidden
+      focusable="false"
+      size={pixels}
+      className={cn('shrink-0', className)}
+      strokeWidth={2}
+      absoluteStrokeWidth
+    />
   )
 }
 
@@ -72,8 +82,12 @@ const buttonVariants: Record<ButtonVariant, string> = {
 
 export const Button = forwardRef<
   HTMLButtonElement,
-  ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: ButtonSize }
->(function Button({ className, variant = 'primary', size = 'md', ...props }, ref) {
+  ButtonHTMLAttributes<HTMLButtonElement> & {
+    variant?: ButtonVariant
+    size?: ButtonSize
+    icon?: LucideIcon
+  }
+>(function Button({ className, variant = 'primary', size = 'md', icon, children, ...props }, ref) {
   return (
     <button
       ref={ref}
@@ -84,7 +98,10 @@ export const Button = forwardRef<
         className
       )}
       {...props}
-    />
+    >
+      {icon && <AppIcon icon={icon} />}
+      {children}
+    </button>
   )
 })
 

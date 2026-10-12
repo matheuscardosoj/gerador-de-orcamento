@@ -3,7 +3,14 @@ import { useEffect, useState } from 'react'
 import type { StatusNuvem } from '@shared/types'
 import { NavProvider, useNav, type Rota } from './lib/nav'
 import { cn, AppIcon } from './ui/primitives'
-import { ClipboardList, ContactRound, FileText, Settings, type LucideIcon } from 'lucide-react'
+import {
+  ClipboardList,
+  ContactRound,
+  FileText,
+  ReceiptText,
+  Settings,
+  type LucideIcon
+} from 'lucide-react'
 import { api } from './lib/api'
 import { useAsync } from './lib/hooks'
 import { HistoricoPage } from './pages/HistoricoPage'
@@ -16,7 +23,7 @@ import { EditorRelatorioPage } from './pages/EditorRelatorioPage'
 const itens: Array<{ nome: Rota['nome']; label: string; icon: LucideIcon }> = [
   { nome: 'historico', label: 'Orçamentos', icon: FileText },
   { nome: 'historicoRelatorios', label: 'Relatórios', icon: ClipboardList },
-  { nome: 'recibos', label: 'Recibos', icon: FileText },
+  { nome: 'recibos', label: 'Recibos', icon: ReceiptText },
   { nome: 'cadastros', label: 'Cadastros', icon: ContactRound },
   { nome: 'configuracoes', label: 'Configurações', icon: Settings }
 ]
@@ -77,7 +84,7 @@ function Sidebar(): JSX.Element {
                 ativo ? 'bg-brand-teal/10 text-brand-tealDark' : 'text-slate-600 hover:bg-slate-100'
               )}
             >
-              <AppIcon icon={item.icon} />
+              <AppIcon icon={item.icon} size="lg" />
               {item.label}
             </button>
           )

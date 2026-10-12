@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { RefreshCw, History, RotateCcw, CopyPlus, FileDown, ArrowRightLeft } from 'lucide-react'
 import type { Cliente, DocumentoMetadados, TipoDocumento, VersaoDocumento } from '@shared/types'
 import { api } from '../lib/api'
 import {
@@ -59,6 +60,7 @@ export function DadosClienteDocumento({
       <div className="mt-6 flex flex-wrap gap-2">
         {documento.clienteId && (
           <Button
+            icon={RefreshCw}
             variant="outline"
             onClick={() =>
               onChange({
@@ -70,6 +72,7 @@ export function DadosClienteDocumento({
           </Button>
         )}
         <Button
+          icon={RefreshCw}
           variant="outline"
           onClick={() => {
             void api.empresa.get().then((empresaSnapshot) => onChange({ empresaSnapshot }))
@@ -138,7 +141,7 @@ export function LinhaTempo({
     anterior && selecionada ? compararDocumentos(anterior.documento, selecionada.documento) : []
   return (
     <>
-      <Button variant="outline" onClick={() => setAberto(true)}>
+      <Button icon={History} variant="outline" onClick={() => setAberto(true)}>
         Versões e transferência
       </Button>
       <Modal
@@ -187,6 +190,7 @@ export function LinhaTempo({
               </Field>
               <div className="flex flex-wrap gap-2">
                 <Button
+                  icon={RotateCcw}
                   disabled={ocupado}
                   onClick={() =>
                     void executar(async () => {
@@ -199,6 +203,7 @@ export function LinhaTempo({
                   Retomar esta versão
                 </Button>
                 <Button
+                  icon={CopyPlus}
                   disabled={ocupado}
                   variant="outline"
                   onClick={() =>
@@ -219,6 +224,7 @@ export function LinhaTempo({
                 </Button>
                 {(['pdf', 'docx'] as const).map((f) => (
                   <Button
+                    icon={FileDown}
                     key={f}
                     disabled={ocupado}
                     variant="outline"
@@ -318,6 +324,7 @@ export function LinhaTempo({
               </Select>
             </Field>
             <Button
+              icon={ArrowRightLeft}
               className="mt-6"
               disabled={!destino || ocupado}
               onClick={() =>

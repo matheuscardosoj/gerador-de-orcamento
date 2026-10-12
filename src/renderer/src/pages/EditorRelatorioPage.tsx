@@ -2,7 +2,7 @@ import { RevisaoIA } from '../components/RevisaoIA'
 import { ListaOrdenavel } from '../ui/ordenavel'
 import { DadosClienteDocumento, LinhaTempo } from '../components/DocumentoExtras'
 import { useEffect, useMemo, useState } from 'react'
-import { X } from 'lucide-react'
+import { X, ArrowLeft, Eye, FileDown, Save, Plus } from 'lucide-react'
 import { api } from '../lib/api'
 import { PageShell } from '../ui/layout'
 import {
@@ -266,19 +266,33 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
   }
   const acoes = (
     <div className="flex flex-wrap gap-2">
-      <Button variant="ghost" onClick={() => navegar({ nome: 'historicoRelatorios' })}>
+      <Button
+        icon={ArrowLeft}
+        variant="ghost"
+        onClick={() => navegar({ nome: 'historicoRelatorios' })}
+      >
         Voltar
       </Button>
-      <Button variant="outline" onClick={abrirPrevia} disabled={ocupado !== null}>
+      <Button icon={Eye} variant="outline" onClick={abrirPrevia} disabled={ocupado !== null}>
         Prévia
       </Button>
-      <Button variant="outline" onClick={() => exportar('pdf')} disabled={ocupado !== null}>
+      <Button
+        icon={FileDown}
+        variant="outline"
+        onClick={() => exportar('pdf')}
+        disabled={ocupado !== null}
+      >
         PDF
       </Button>
-      <Button variant="outline" onClick={() => exportar('docx')} disabled={ocupado !== null}>
+      <Button
+        icon={FileDown}
+        variant="outline"
+        onClick={() => exportar('docx')}
+        disabled={ocupado !== null}
+      >
         Word
       </Button>
-      <Button disabled={ocupado !== null} onClick={salvar}>
+      <Button icon={Save} disabled={ocupado !== null} onClick={salvar}>
         {ocupado === 'salvar' ? 'Salvando…' : 'Salvar'}
       </Button>
     </div>
@@ -555,8 +569,8 @@ function LancamentosCard({
         title={titulo}
         description={descricao}
         action={
-          <Button variant="outline" onClick={add}>
-            + Adicionar
+          <Button icon={Plus} variant="outline" onClick={add}>
+            Adicionar
           </Button>
         }
       />

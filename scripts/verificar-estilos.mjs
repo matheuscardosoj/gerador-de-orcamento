@@ -94,6 +94,16 @@ try {
           excessoConteudo: main ? main.scrollWidth - main.clientWidth : 0,
           titulos,
           campos,
+          icones: [...document.querySelectorAll('svg.lucide')]
+            .filter((el) => el.getClientRects().length)
+            .map((el) => ({
+              largura: el.getBoundingClientRect().width,
+              altura: el.getBoundingClientRect().height,
+              traco:
+                (Number(el.getAttribute('stroke-width')) * el.getBoundingClientRect().width) / 24,
+              decorativo: el.getAttribute('aria-hidden'),
+              foco: el.getAttribute('focusable')
+            })),
           rotulosAninhados: document.querySelectorAll('label label').length
         }
       })
@@ -108,6 +118,13 @@ try {
       for (const c of medidas.campos) {
         assert.equal(c.fonte, '14px', `${nome}: fonte do campo`)
         assert.equal(c.borda, '8px', `${nome}: borda do campo`)
+      }
+      for (const i of medidas.icones) {
+        assert.ok([16, 18, 20].includes(i.largura), `${nome}: tamanho do ícone`)
+        assert.equal(i.largura, i.altura, `${nome}: ícone deformado`)
+        assert.ok(Math.abs(i.traco - 2) < 0.01, `${nome}: espessura do ícone divergente`)
+        assert.equal(i.decorativo, 'true', `${nome}: ícone duplicando o nome acessível`)
+        assert.equal(i.foco, 'false', `${nome}: foco adicional no ícone`)
       }
       await page.screenshot({ path: join(saida, `${nome}-${largura}.png`) })
       for (const titulo of [
@@ -178,7 +195,7 @@ try {
   await page.getByRole('button', { name: 'Cadastros', exact: true }).click()
   await page.getByRole('button', { name: 'Descartar alterações', exact: true }).click()
   await conferir('lista-clientes')
-  await page.getByRole('button', { name: '+ Novo cliente', exact: true }).first().click()
+  await page.getByRole('button', { name: 'Novo cliente', exact: true }).first().click()
   await conferir('cadastro-cliente')
   await page.getByRole('button', { name: 'Cancelar', exact: true }).click()
   await page.getByRole('tab', { name: 'Catálogo de serviços', exact: true }).click()

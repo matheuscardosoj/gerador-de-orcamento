@@ -1,6 +1,6 @@
 import { ListaOrdenavel } from '../ui/ordenavel'
 import { useEffect, useRef, useState } from 'react'
-import { X } from 'lucide-react'
+import { X, ImagePlus } from 'lucide-react'
 import { arquivosParaAnexos } from '../lib/imagens'
 import {
   Button,
@@ -81,11 +81,12 @@ export function AnexosCard<T extends AnexoEditavel>({
         description={descricao}
         action={
           <Button
+            icon={ImagePlus}
             variant="outline"
             onClick={() => inputRef.current?.click()}
             disabled={processando}
           >
-            {processando ? 'Processando…' : '+ Fotos'}
+            {processando ? 'Processando…' : 'Fotos'}
           </Button>
         }
       />
@@ -121,7 +122,7 @@ export function AnexosCard<T extends AnexoEditavel>({
       >
         {anexos.length
           ? 'Arraste mais imagens aqui para anexar.'
-          : 'Nenhuma foto anexada. Arraste imagens aqui ou use “+ Fotos”.'}
+          : 'Nenhuma foto anexada. Arraste imagens aqui ou use “Fotos”.'}
       </div>
       {anexos.length > 0 && (
         <div className="mt-4 space-y-3">

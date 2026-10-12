@@ -16,6 +16,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical } from 'lucide-react'
+import { AppIcon } from './primitives'
 
 export function ListaOrdenavel<T extends { id: string }>({
   itens,
@@ -100,7 +101,7 @@ function LinhaOrdenavel({
       className="shrink-0 touch-none rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal/40 disabled:opacity-40"
       style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
     >
-      <GripVertical size={16} />
+      <AppIcon icon={GripVertical} size="sm" />
     </button>
   )
   const style = {

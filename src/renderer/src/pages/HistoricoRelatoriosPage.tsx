@@ -1,4 +1,5 @@
 import { api } from '../lib/api'
+import { Plus } from 'lucide-react'
 import { useAsync } from '../lib/hooks'
 import { useNav } from '../lib/nav'
 import { PageShell } from '../ui/layout'
@@ -12,7 +13,11 @@ export function HistoricoRelatoriosPage(): JSX.Element {
       largura="full"
       titulo="Relatórios"
       descricao="Histórico de serviços prestados"
-      acoes={<Button onClick={() => navegar({ nome: 'editorRelatorio' })}>+ Novo relatório</Button>}
+      acoes={
+        <Button icon={Plus} onClick={() => navegar({ nome: 'editorRelatorio' })}>
+          Novo relatório
+        </Button>
+      }
     >
       <HistoricoDocumentos
         tipo="relatorio"

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Cloud, RefreshCw, LogOut } from 'lucide-react'
 import { api } from '../lib/api'
 import type { ConfigNuvem, StatusNuvem } from '@shared/types'
 import {
@@ -160,12 +161,14 @@ export function NuvemSection(): JSX.Element {
         )}
         <div className="mt-2 flex flex-wrap gap-2 md:col-span-2">
           <Button
+            icon={Cloud}
             disabled={ocupado || !senha || !c.url || !c.chavePublica || !c.email}
             onClick={() => setConfirmar(true)}
           >
             Conectar
           </Button>
           <Button
+            icon={RefreshCw}
             disabled={ocupado || !s?.autenticada}
             variant="outline"
             onClick={() => void executar(() => api.nuvem.sincronizar())}
@@ -173,6 +176,7 @@ export function NuvemSection(): JSX.Element {
             Sincronizar agora
           </Button>
           <Button
+            icon={LogOut}
             disabled={ocupado || !s?.autenticada}
             variant="outline"
             onClick={() =>

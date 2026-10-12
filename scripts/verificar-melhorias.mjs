@@ -222,15 +222,15 @@ try {
     ],
     ids.p
   )
-  await page.getByRole('button', { name: '+ Com cálculo', exact: true }).click()
+  await page.getByRole('button', { name: 'Com cálculo', exact: true }).click()
   const calculo = page.getByRole('dialog', { name: 'Calcular custo do serviço', exact: true })
   const blocos = [
-    ['Mão de obra', '+ Grupo'],
-    ['Alimentação', '+ Refeição'],
-    ['Ferramentas (manutenção / insumos)', '+ Item'],
-    ['Combustível / deslocamento', '+ Veículo'],
-    ['Estadia / hospedagem', '+ Estadia'],
-    ['Outros custos e repasses', '+ Custo']
+    ['Mão de obra', 'Grupo'],
+    ['Alimentação', 'Refeição'],
+    ['Ferramentas (manutenção / insumos)', 'Item'],
+    ['Combustível / deslocamento', 'Veículo'],
+    ['Estadia / hospedagem', 'Estadia'],
+    ['Outros custos e repasses', 'Custo']
   ]
   for (const [titulo, adicionar] of blocos) {
     const bloco = calculo
