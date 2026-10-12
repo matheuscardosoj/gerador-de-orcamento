@@ -29,7 +29,32 @@ Solicitada em 12/10/2026, após a publicação conferida da base correta: 10 cli
    execução pelo proprietário no SQL Editor. Nenhuma credencial administrativa.
 5. Conferir a nuvem real e reinício da versão instalada após a migração.
 
-Implementação e migração em cópia concluídas. Passaram 151 testes, verificações
-estáticas e compilação. A cópia real com 69 entidades foi migrada e comparada
-integralmente, incluindo 71 vínculos de imagens históricas. A base real ainda usa
-a estrutura anterior até executar o script validado no SQL Editor.
+Implementação e migração em cópia concluídas. A verificação completa passou com
+151 testes, verificações estáticas e compilação; o teste adicional de gravação com
+o papel autenticado também passou, com tipos, formatação e análise estática,
+totalizando 152 testes validados. A cópia real com 69 entidades foi migrada e
+comparada integralmente, incluindo 71 vínculos de imagens históricas.
+
+## Conferência da nuvem real
+
+O proprietário executou o script no SQL Editor. Em **12/10/2026 às 01:58:52
+(America/Sao_Paulo)**, a comparação remota autenticada confirmou:
+
+- 10 clientes, 17 propostas, 4 relatórios, 15 imagens, 38 versões e um recebimento
+  estornado, sem diferenças nos conteúdos, valores, números ou referências.
+- 71 vínculos de imagens históricas, um computador e 78 números reservados/utilizados.
+- Metadados e histórico de seis propostas, um relatório e três recibos excluídos
+  preservados; nenhum recibo ativo.
+- Zero alterações pendentes e zero conflitos após reabrir e sincronizar a versão
+  1.4.0 instalada. As tabelas de domínio foram consultadas diretamente pela API
+  autenticada, além da consulta compatível usada pelo aplicativo.
+
+O guia e o script de configuração da instalação foram atualizados e conferidos
+por hash, preservando cópia dos recursos anteriores. Os backups local e remoto
+anteriores à migração continuam guardados. A conferência utilizou uma cópia local
+e consultas remotas de leitura; a sessão foi decifrada somente em memória.
+
+Não foi registrado outro computador real nesta etapa. A sincronização entre dois
+perfis, reenvios, pagamentos e transferência foram validados nos testes integrados
+com PostgreSQL isolado. O merge destas alterações para `main` e uma nova publicação
+do instalador dependem de autorização específica.
