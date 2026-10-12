@@ -226,3 +226,9 @@ main nem versão final antes da revisão e autorização desta nova entrega.
 - Arraste real por mouse, teclado e cancelamento passou após aguardar ativação/render do sensor. Cadastro preenchendo só nome e número de recibo 120 com colisão recusada passaram em perfil descartável. Evidência output/playwright/cadastros-numeracao-1791823470651.
 - Backup atual compatível com 1.5 exportado/restaurado em perfil isolado, incluindo 24 IDs, 54 versões e os 4 recebimentos. Sem sessão, reservas ou autorizações. SHA-256 e evidência em output/backups-corrigidos/base-atual-1791823401072.
 - CLI GitHub oficial instalada, conta matheuscardosoj confirmada com a credencial existente somente em memória. Publicação será privada, excluindo bancos, backups, recursos de IA, builds e saídas de teste. Merge em main e versão final não realizados.
+
+### Publicação e acesso para revisão
+
+- Repositório privado criado e conferido: https://github.com/matheuscardosoj/gerador-de-orcamento. Branch main preservada em 6ad6803 (1.4.1), claude publicada com o candidato. Tags estáveis anteriores enviadas. Auditoria de 815 blobs do histórico sem bancos/backups ou padrões de credenciais privadas; recursos de IA/builds/saídas de teste ignorados.
+- Atalho “Gerador de Orçamentos 1.5 - Candidato” e backup “Base atual - compatível 1.5.0-rc.1.gdo-backup” entregues na Área de Trabalho. Manifesto com hashes e COMO TESTAR.txt em release/candidato-1.5.0-rc.1.
+- Perguntado se o usuário possui outro computador para concluir o ensaio físico com segundo login. A migração e os ensaios reais do mesmo PC estão concluídos; essa conferência de campo e a autorização de merge/versão final continuam pendentes.
