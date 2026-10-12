@@ -45,3 +45,38 @@ Base real foi conferida somente por leitura no planejamento: 17 propostas (1–1
 4 relatórios (1–4), 3 recibos ativos (4,5,6; recebido/cancelado/recebido), 54 versões,
 zero pendências/conflitos. Ela mudou desde o backup da 1.4.1: capturar nova cópia antes
 da validação final, sem usar o backup anterior como se fosse a base atual.
+
+## Progresso
+
+- 34b7bdc: etapa 1. Esquema 9, cache dos IDs internos, rascunhos/autorizações/auditoria,
+  Ordem e ID interno nos históricos, IPC de eventos e largura full de Configurações.
+  Verificação completa passou com 158 testes; três testes adicionais de migração
+  passaram (161 no total). IDs locais aguardam atribuição pela nuvem.
+- Camada SQL de colaboração implementada separadamente em `supabase/colaboracao.sql`;
+  gerador produz `schema-colaboracao.sql` transacional, incluindo esquema relacional.
+  `schema.sql` permanece como referência do protocolo antigo para os testes existentes.
+  Seis testes PostgreSQL v2 passaram: migração de IDs sem alterar valores/números,
+  dois logins na mesma empresa, usuário externo isolado, bloqueio/offline/recuperação,
+  idempotência, rejeição de escrita antiga/direta, último membro e sequência protegida.
+- Não foi executado SQL remoto. O app ainda não usa as rotas v2 nem WebSocket.
+  Restam integração do cliente, SDK, bloqueios/rascunhos/conciliador, UI de usuários,
+  atualizações de editores, backup de autorizações/rascunhos, testes reais e candidato.
+
+## Integração v2 a completar
+
+- Contexto via `gdo_contexto_v2(p_criar)`; resolve empresa pelo membro ativo, nunca
+  pela conta como empresa. `gdo_dispositivo_v2` associa dispositivo a usuário.
+- Leituras via `gdo_alteracoes_v2(p_cursor,p_limite)` retornam envelopes antigos mais
+  `identificador`. Aplicar cache de IDs mesmo se a revisão do conteúdo já for conhecida.
+- Escrita `gdo_batch_v2(p_operacoes,p_dispositivo)` requer `geracao` em cada operação
+  de documento existente. Novos documentos ganham ID e bloqueio automaticamente.
+- Endpoints de membros/edição/numeração/reservas/bootstrap já existem no SQL v2.
+  Renovação 30s, validade 120s, autorização offline não expira por falta de conexão.
+  Reaquisição própria é idempotente. Geração velha rejeitada após recuperação.
+- Reservas numéricas de documentos já atribuídos podem ser usadas por outro membro
+  autorizado; reservas ainda não utilizadas continuam exclusivas do dispositivo.
+- Canal privado `empresa:<empresaId>`, evento `alteracao`, payload só `{alterado:true}`.
+  RLS para membros ativos; fonte é trigger transacional. PGlite simula `realtime.send`.
+- Pacote deve incluir e copiar `schema-colaboracao.sql`, não o schema antigo. Protocolos
+  antigos ficam sem escrita após migração. Adaptar simulador REST dos testes ao v2,
+  mantendo testes antigos de domínio como regressão da migração v1.

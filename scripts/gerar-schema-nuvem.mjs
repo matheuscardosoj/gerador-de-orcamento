@@ -227,3 +227,8 @@ writeFileSync(
   `-- Gerado por scripts/gerar-schema-nuvem.mjs. Edite o contrato ou relacional-base.sql.\n${sql}`
 )
 console.log(`Esquema gerado: ${nomes.length} tabelas de domínio.`)
+const colaboracao = readFileSync('supabase/colaboracao.sql', 'utf8')
+writeFileSync(
+  'supabase/schema-colaboracao.sql',
+  `-- Instalação/migração 1.5, protocolo 2. Execute inteiro.\n${sql.replace(/COMMIT;\s*$/, '')}\n${colaboracao}\nCOMMIT;\n`
+)
