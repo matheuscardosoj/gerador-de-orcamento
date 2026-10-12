@@ -430,6 +430,7 @@ function upsert(t: string, row: Record<string, unknown>): void {
   }
 }
 export type Remoto = {
+  emissao?: { tipo: TipoDocumento; documento_id: string; numero: number; criado_em: string } | null
   controle?: {
     tipo: TipoDocumento
     documento_id: string
@@ -613,7 +614,9 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
       ).catch((e: unknown) => {
         if (
           protocoloNuvem() < 2 ||
-          !/Autorização.*(expirada|revogada)|Documento em edição/.test(String(e))
+          !/Autorização.*(expirada|revogada)|Documento em edição|financeiro reservado|origem reservado/.test(
+            String(e)
+          )
         )
           throw e
         const op =
@@ -644,6 +647,8 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
         if (protocoloNuvem() < 2)
           throw new Error('Conflito de sincronização. Compare as versões e escolha como continuar.')
         for (const l of fila) bloqueadas.add(texto(l.entidade))
+        const { preservarConflitos } = await import('./rascunhos')
+        preservarConflitos(fila.map((l) => texto(l.entidade)))
         continue
       }
       tx(() => {
@@ -695,6 +700,26 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
         }
       })
       if (mudancas.length) avisarDados({ origem: 'nuvem', entidades: mudancas, status: true })
+      const pedidos = (await pedido('/rest/v1/pedidos_edicao?select=*')) as Array<{
+        tipo: TipoDocumento
+        documento_id: string
+      }>
+      const pedidosAntes = config<typeof pedidos>('pedidosEdicaoCache') ?? []
+      if (JSON.stringify(pedidos) !== JSON.stringify(pedidosAntes)) {
+        salvar('pedidosEdicaoCache', pedidos)
+        avisarDados({
+          origem: 'nuvem',
+          entidades: [...pedidosAntes, ...pedidos].map(
+            (p) => `controle:${p.tipo}:${p.documento_id}`
+          ),
+          status: true
+        })
+      }
+      const membros = await pedido('/rest/v1/rpc/gdo_membros_v2', {})
+      if (JSON.stringify(membros) !== JSON.stringify(config('membrosCache'))) {
+        salvar('membrosCache', membros)
+        avisarDados({ origem: 'nuvem', entidades: ['membros'], status: true })
+      }
     }
     cursor = Math.max(cursor, ...alteracoes.map((e) => e.sequencia))
     ordenarDependencias(alteracoes)
@@ -787,6 +812,20 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
   return statusNuvem()
 }
 function aplicarIdentificador(e: Remoto): void {
+  if (e.emissao) {
+    if (
+      e.emissao.tipo !== e.payload.tipo ||
+      e.emissao.documento_id !== e.payload.id ||
+      e.emissao.numero <= 0
+    )
+      throw new Error('Numeração de emissão remota inválida.')
+    run('INSERT OR IGNORE INTO numeros_emitidos VALUES (?,?,?,?)', [
+      e.emissao.tipo,
+      e.emissao.documento_id,
+      e.emissao.numero,
+      e.emissao.criado_em
+    ])
+  }
   if (
     e.payload.tipo &&
     !e.payload.excluido &&
@@ -882,6 +921,15 @@ export function sairNuvem(): void {
   run("DELETE FROM configuracoes WHERE chave='sessaoNuvem'")
 }
 export async function aplicarConflito(id: string): Promise<void> {
+  const conflito = get('SELECT entidade FROM conflitos_nuvem WHERE id=?', [id])
+  if (
+    protocoloNuvem() >= 2 &&
+    conflito &&
+    ['orcamento', 'relatorio', 'recibo'].includes(texto(conflito.entidade).split(':')[0])
+  )
+    throw new Error(
+      'O trabalho local foi preservado como rascunho. Compare no editor; operações financeiras não são sobrescritas pela conciliação textual.'
+    )
   if (ocupado || conectando) throw new Error('Aguarde a sincronização atual.')
   const l = get('SELECT * FROM conflitos_nuvem WHERE id=?', [id])
   if (!l) throw new Error('Conflito não encontrado.')

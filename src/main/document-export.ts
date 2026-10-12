@@ -21,7 +21,7 @@ import {
   enfileirar,
   pacoteDocumento
 } from './versoes'
-import { numeroNuvem } from './numeros'
+import { numeroNuvem, registrarNumeroEmitido } from './numeros'
 import { imagemDataUrl } from './imagens'
 import { run, tx } from './db/sqlite'
 import type { Documento, Orcamento, Relatorio, Recibo, TipoDocumento } from '@shared/types'
@@ -170,6 +170,10 @@ async function exportar(
   const caminho = await escolher(nome, formato)
   if (!caminho) return { caminho: null }
   await writeFile(caminho, buffer!)
+  tx(() => {
+    registrarNumeroEmitido(tipo, d.id, d.numero)
+    enfileirar(`${tipo}:${d.id}`, pacoteDocumento(tipo, d.id))
+  })
   return { caminho }
 }
 export const gerarPdf = (id: string): Promise<DocumentoResultado> =>

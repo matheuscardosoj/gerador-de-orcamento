@@ -185,6 +185,13 @@ export function registrarVersao(tipo: TipoDocumento, d: Documento, descricao = '
         ? computadorId()
         : (d.computadorResponsavel ?? meta.computadorResponsavel ?? computadorId())
   }
+  if (d.status !== 'rascunho' && d.numero > 0)
+    run('INSERT OR IGNORE INTO numeros_emitidos VALUES (?,?,?,?)', [
+      tipo,
+      d.id,
+      d.numero,
+      new Date().toISOString()
+    ])
   if (antigo && normalizado(antigo) === normalizado(documento))
     return { ...documento, versao: Number(anterior?.numero) }
   const numero = Number(anterior?.numero ?? 0) + 1
@@ -277,6 +284,7 @@ export const tabelasFilhos: Record<string, string[]> = {
   recibo: []
 }
 export function pacoteDocumento(tipo: TipoDocumento, id: string): unknown {
+  const contexto = get("SELECT valor FROM configuracoes WHERE chave='contextoNuvem'")
   const tabela = { orcamento: 'orcamentos', relatorio: 'relatorios', recibo: 'recibos' }[tipo]
   const principal = get(`SELECT * FROM ${tabela} WHERE id=?`, [id])
   const rows: Record<string, unknown> = { [tabela]: principal ? [principal] : [] }
@@ -293,7 +301,16 @@ export function pacoteDocumento(tipo: TipoDocumento, id: string): unknown {
     id,
     rows,
     excluido: !principal,
-    responsavel: lerMeta(tipo, id).computadorResponsavel
+    responsavel: lerMeta(tipo, id).computadorResponsavel,
+    ...(contexto && JSON.parse(texto(contexto.valor)).protocolo >= 2
+      ? {
+          emissao:
+            get('SELECT numero,criado_em FROM numeros_emitidos WHERE tipo=? AND documento_id=?', [
+              tipo,
+              id
+            ]) ?? null
+        }
+      : {})
   }
 }
 export function envolverDocumento<T extends object>(repo: T, tipo: TipoDocumento): T {

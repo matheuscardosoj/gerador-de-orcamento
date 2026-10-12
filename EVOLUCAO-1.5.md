@@ -165,3 +165,40 @@ mas ainda falta mostrar pedido ao possuidor. Usuários e UI colaborativa não im
 Configurações só está com largura full e título Numeração dos documentos; restante das
 seções precisa conferência/padronização visual. UI antiga de transferir continua no LinhaTempo
 e precisa trocar pelo controle v2. Nenhum pacote novo, base real e SQL remoto intactos.
+
+### Interfaces e garantias integradas (etapa posterior a fc33e47)
+
+- Usuários com tabela, busca e vínculo de contas existentes; controles de editor,
+  rascunhos locais, comparação de três versões e alternativas como novo documento.
+  Retomar uma versão v2 abre rascunho. Operações financeiras ficam fora desse fluxo.
+- Editores limpos recebem atualizações; formulários alterados mostram aviso sem perder
+  conteúdo. Respostas assíncronas de documento anterior são descartadas. Históricos de
+  recibos, status e membros observam eventos. Bloqueio renova apenas com editor aberto;
+  encerramento tenta liberar, com expiração automática se não houver conexão.
+- Preparação offline reserva o conjunto relatório/recibos; aquisição/recebimento respeita
+  essa exclusividade. Recuperação revoga todas as gerações relacionadas. Verificação local
+  de dependências e hashes antes de preparar; cache dos controles relacionado é baixado.
+- Conflitos de operações geram rascunhos automaticamente. A conciliação legada por
+  sobrescrita de conjunto financeiro fica bloqueada no protocolo v2. Ainda falta a
+  revisão explícita de operações financeiras pendentes após conflito de geração.
+- Números emitidos protegidos em SQLite/PostgreSQL, inclusive após voltar ao rascunho.
+  Correção de rascunhos usa reservas próprias; recibos agora têm API e campo de número.
+  Configurações ajustam faixas futuras transacionalmente, mantendo reservas anteriores.
+- Pedidos de edição são persistidos e mostrados ao possuidor. Auditoria não cresce a
+  cada renovação de 30s. Estado do cliente é separado de posse permanente antiga.
+- Configurações: largura full; salvar no cabeçalho de Empresa/Parâmetros/IA; selects e
+  espaçamentos compartilhados; observações/pagamentos com tabela, filtros, alça e modal,
+  mesmo padrão de Cadastros. Conferência visual do executável ainda pendente.
+- Verificação completa passou: 181 testes/31 arquivos, lint, formato, tipos e build.
+  Nenhuma modificação no banco de uso nem no Supabase real; ainda não há pacote 1.5.
+
+Novo pedido: publicar no GitHub **depois de concluir/validar**, repositório privado
+`gerador-de-orcamento`, autorizado explicitamente. Git usa credential manager, não há
+remote e `gh` não está instalado. Validar credencial sem imprimir tokens, instalar CLI
+se necessário, auditar arquivos/histórico e ignorar bancos/backups antes de publicar.
+
+Próximos pontos: WebSocket real com SDK (meta 2s), testes financeiros de confirmação/
+estorno após revogação, auditoria UI/responsividade e bloqueio de alterações não salvas,
+backup/mesclagem de tabelas v9, cópia atualizada da base (17/4/3 ativos e 54 versões na
+última leitura), pacote/guia v2 e candidato 1.5.0-rc.1. Não fazer migração real nem merge
+main nem versão final antes da revisão e autorização desta nova entrega.

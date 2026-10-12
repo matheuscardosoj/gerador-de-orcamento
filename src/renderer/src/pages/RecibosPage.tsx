@@ -1,4 +1,6 @@
 import { RevisaoIA } from '../components/RevisaoIA'
+import { ColaboracaoDocumento } from '../components/ColaboracaoDocumento'
+import { useDocumentoRemoto, AvisoAtualizacao } from '../lib/atualizacao-remota'
 import { HistoricoDocumentos, registroRecibo } from '../components/HistoricoDocumentos'
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Eye, FileDown, Save, Plus, HandCoins, Undo2, Trash2 } from 'lucide-react'
@@ -71,8 +73,46 @@ export function RecibosPage({
   const [errosCampos, setErrosCampos] = useState<ErrosRecibo>({})
   const [ocupado, setOcupado] = useState(false)
   const [previa, setPrevia] = useState(false)
+  const [rascunhoId, setRascunhoId] = useState<string>()
   const [confirmacao, setConfirmacao] = useState<'receber' | 'cancelar' | 'excluir' | null>(null)
   useBloqueioEdicao(!!r && (!r.id || JSON.stringify(r) !== salvo))
+  const atualizacao = useDocumentoRemoto(
+    'recibo',
+    rascunhoId ? undefined : r?.id,
+    !!r && JSON.stringify(r) !== salvo,
+    r,
+    () => (r?.id ? api.recibos.get(r.id) : Promise.resolve(null)),
+    (d) => {
+      setR(d)
+      setSalvo(JSON.stringify(d))
+    }
+  )
+  useEffect(
+    () =>
+      api.eventos.observarDados((evento) => {
+        if (evento.entidades.some((e) => e.startsWith('recibo:')))
+          void api.recibos
+            .list()
+            .then(setLista)
+            .catch(() => undefined)
+        if (evento.entidades.some((e) => e.startsWith('relatorio:')))
+          void api.relatorios
+            .list()
+            .then(setRelatorios)
+            .catch(() => undefined)
+        if (evento.entidades.some((e) => e.startsWith('orcamento:')))
+          void api.orcamentos
+            .list()
+            .then(setOrcamentos)
+            .catch(() => undefined)
+        if (evento.entidades.some((e) => e.startsWith('clientes:')))
+          void api.clientes
+            .list()
+            .then(setClientes)
+            .catch(() => undefined)
+      }),
+    []
+  )
   const recarregar = async (): Promise<void> => {
     setLista(await api.recibos.list())
   }
@@ -154,6 +194,20 @@ export function RecibosPage({
   }
   const salvar = async (): Promise<Recibo> => {
     if (!r) throw new Error('Abra um recibo.')
+    if (rascunhoId) {
+      const salvo = await api.rascunhos.save(rascunhoId, r)
+      const d = salvo.documento as Recibo
+      setR(d)
+      setSalvo(JSON.stringify(d))
+      return d
+    }
+    if (r.id) {
+      const atual = await api.recibos.get(r.id)
+      if (atual && atual.numero !== r.numero) {
+        const resultado = await api.recibos.alterarNumero(r.id, r.numero)
+        if (!resultado.ok) throw new Error(resultado.erro)
+      }
+    }
     const d = r.id ? await api.recibos.update(r.id, r) : await api.recibos.create(r)
     if (!d) throw new Error('Recibo não encontrado.')
     setR(d)
@@ -172,6 +226,10 @@ export function RecibosPage({
   }
   const somenteLeitura = r?.status === 'recebido' || r?.status === 'cancelado'
   const confirmarRecebimento = (): void => {
+    if (rascunhoId) {
+      setErro('Aplique o rascunho ou crie um novo documento antes de confirmar recebimento.')
+      return
+    }
     if (!r) return
     const local = r.local.trim() || localPagamentoSugerido(r.empresaSnapshot ?? empresa)
     const atualizado = { ...r, local }
@@ -191,6 +249,10 @@ export function RecibosPage({
     setConfirmacao('receber')
   }
   const exportar = (formato: 'pdf' | 'docx'): void => {
+    if (rascunhoId) {
+      setErro('Aplique o rascunho ou crie um novo documento antes de emitir.')
+      return
+    }
     if (!r?.id) return
     void executar(async () => {
       const documento = somenteLeitura ? r : await salvar()
@@ -287,12 +349,42 @@ export function RecibosPage({
         />
       ) : (
         <div className="space-y-5">
+          <AvisoAtualizacao {...atualizacao} />
+          <ColaboracaoDocumento
+            tipo="recibo"
+            documento={r}
+            sujo={JSON.stringify(r) !== salvo}
+            rascunhoId={rascunhoId}
+            onAbrir={(d, id) => {
+              setR(d as Recibo)
+              setSalvo(JSON.stringify(d))
+              setRascunhoId(id)
+            }}
+          />
           <Card className="p-6">
             <SectionTitle
               title="Dados do recibo"
               description="Identificação do serviço e do pagamento"
             />
             <fieldset disabled={somenteLeitura || ocupado} className="grid gap-4 md:grid-cols-2">
+              {r.id && (
+                <div className="md:col-span-2">
+                  <Field
+                    label="Número do documento"
+                    hint="Correção disponível somente para rascunhos. Ordem e ID interno são automáticos."
+                  >
+                    <NumberField
+                      value={r.numero}
+                      min={1}
+                      max={999999}
+                      step={1}
+                      disabled={r.status !== 'rascunho' || !!rascunhoId}
+                      onChange={(numero) => set({ numero })}
+                      className="max-w-xs"
+                    />
+                  </Field>
+                </div>
+              )}
               <Field label="Cliente">
                 <Select
                   value={r.clienteId ?? ''}
@@ -495,67 +587,80 @@ export function RecibosPage({
           )}
           <Card className="p-6">
             <SectionTitle title="Pagamento e emissão" />
-            <div className="flex flex-wrap gap-2">
-              {r.status !== 'recebido' && r.status !== 'cancelado' && (
-                <Button icon={HandCoins} disabled={ocupado} onClick={confirmarRecebimento}>
-                  Confirmar recebimento
-                </Button>
-              )}
-              {r.id && r.status !== 'cancelado' && (
-                <Button
-                  icon={Undo2}
-                  variant="outline"
-                  disabled={ocupado}
-                  onClick={() => setConfirmacao('cancelar')}
-                >
-                  Cancelar / estornar
-                </Button>
-              )}
-              {r.id &&
-                !somenteLeitura &&
-                (['pdf', 'docx'] as const).map((f) => (
-                  <Button
-                    icon={FileDown}
-                    variant="outline"
-                    disabled={ocupado}
-                    key={f}
-                    onClick={() => exportar(f)}
-                  >
-                    Exportar {f.toUpperCase()}
-                  </Button>
-                ))}
-              {r.id && (
-                <LinhaTempo
-                  tipo="recibo"
-                  id={r.id}
-                  onRestaurado={() =>
-                    void api.recibos.get(r.id).then((d) => {
-                      setR(d)
-                      setSalvo(JSON.stringify(d))
-                      void recarregar()
-                    })
-                  }
-                />
-              )}
-              {r.id && (
-                <Button
-                  icon={Trash2}
-                  variant="outline"
-                  disabled={ocupado}
-                  onClick={() => setConfirmacao('excluir')}
-                  className="text-red-600 hover:bg-red-50"
-                >
-                  Excluir
-                </Button>
-              )}
-            </div>
-            <p className="mt-3 text-sm text-slate-500">
-              {r.status === 'recebido'
-                ? 'Recebimento confirmado. O documento está preservado.'
-                : r.status === 'cancelado'
-                  ? 'Documento cancelado, preservado no histórico.'
-                  : 'Pagamento pendente não comprova quitação.'}
-            </p>
+            {rascunhoId ? (
+              <Mensagem tom="info">
+                Aplique o rascunho ou crie um novo documento para emitir e registrar pagamentos.
+              </Mensagem>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {r.status !== 'recebido' && r.status !== 'cancelado' && (
+                    <Button icon={HandCoins} disabled={ocupado} onClick={confirmarRecebimento}>
+                      Confirmar recebimento
+                    </Button>
+                  )}
+                  {r.id && r.status !== 'cancelado' && (
+                    <Button
+                      icon={Undo2}
+                      variant="outline"
+                      disabled={ocupado}
+                      onClick={() => setConfirmacao('cancelar')}
+                    >
+                      Cancelar / estornar
+                    </Button>
+                  )}
+                  {r.id &&
+                    !somenteLeitura &&
+                    (['pdf', 'docx'] as const).map((f) => (
+                      <Button
+                        icon={FileDown}
+                        variant="outline"
+                        disabled={ocupado}
+                        key={f}
+                        onClick={() => exportar(f)}
+                      >
+                        Exportar {f.toUpperCase()}
+                      </Button>
+                    ))}
+                  {r.id && !rascunhoId && (
+                    <LinhaTempo
+                      tipo="recibo"
+                      id={r.id}
+                      onRascunho={(d, id) => {
+                        setR(d as Recibo)
+                        setSalvo(JSON.stringify(d))
+                        setRascunhoId(id)
+                      }}
+                      onRestaurado={() =>
+                        void api.recibos.get(r.id).then((d) => {
+                          setR(d)
+                          setSalvo(JSON.stringify(d))
+                          void recarregar()
+                        })
+                      }
+                    />
+                  )}
+                  {r.id && (
+                    <Button
+                      icon={Trash2}
+                      variant="outline"
+                      disabled={ocupado}
+                      onClick={() => setConfirmacao('excluir')}
+                      className="text-red-600 hover:bg-red-50"
+                    >
+                      Excluir
+                    </Button>
+                  )}
+                </div>
+                <p className="mt-3 text-sm text-slate-500">
+                  {r.status === 'recebido'
+                    ? 'Recebimento confirmado. O documento está preservado.'
+                    : r.status === 'cancelado'
+                      ? 'Documento cancelado, preservado no histórico.'
+                      : 'Pagamento pendente não comprova quitação.'}
+                </p>
+              </>
+            )}
           </Card>
         </div>
       )}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Cloud, RefreshCw, LogOut } from 'lucide-react'
 import { api } from '../lib/api'
+import { useNav } from '../lib/nav'
 import type { ConfigNuvem, StatusNuvem } from '@shared/types'
 import {
   Button,
@@ -13,6 +14,7 @@ import {
   Mensagem
 } from '../ui/primitives'
 export function NuvemSection(): JSX.Element {
+  const { navegar } = useNav()
   const [c, setC] = useState<ConfigNuvem>({ url: '', chavePublica: '', email: '' })
   const [senha, setSenha] = useState('')
   const [modo, setModo] = useState<'publicar' | 'baixar'>('publicar')
@@ -25,6 +27,13 @@ export function NuvemSection(): JSX.Element {
   useEffect(() => {
     void api.nuvem.config().then(setC)
     void api.nuvem.status().then(setS)
+    return api.eventos.observarDados((evento) => {
+      if (evento.status)
+        void api.nuvem
+          .status()
+          .then(setS)
+          .catch(() => undefined)
+    })
   }, [])
   const executar = async (acao: () => Promise<StatusNuvem>): Promise<void> => {
     setOcupado(true)
@@ -196,6 +205,21 @@ export function NuvemSection(): JSX.Element {
             {s.autenticada ? 'Conta conectada' : 'Conta desconectada'} · {s.pendentes} alterações
             aguardando envio
           </p>
+          {s.autenticada && (
+            <p>
+              Tempo real:{' '}
+              {s.protocolo !== 2
+                ? 'atualize a configuração SQL para habilitar a colaboração'
+                : s.tempoReal === 'conectado'
+                  ? 'conectado — alterações confirmadas chegam automaticamente'
+                  : s.tempoReal === 'conectando'
+                    ? 'conectando…'
+                    : s.tempoReal === 'indisponivel'
+                      ? 'canal indisponível — recuperação periódica ativa'
+                      : 'desconectado'}
+            </p>
+          )}
+          {s.erroTempoReal && <p className="text-amber-800">{s.erroTempoReal}</p>}
           <p>
             Última sincronização:{' '}
             {s.ultimaSincronizacao
@@ -221,14 +245,43 @@ export function NuvemSection(): JSX.Element {
               className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"
             >
               <p>{x.detalhe}</p>
-              <p>
-                Para preservar a edição local, crie uma cópia no editor antes de adotar a versão
-                remota. Recibos e relatório vinculados serão conciliados juntos. Uma cópia de
-                segurança com todas as edições locais será salva antes da conciliação.
-              </p>
-              <Button variant="outline" disabled={ocupado} onClick={() => setConciliar(x.id)}>
-                Adotar versão remota e guardar backup local
-              </Button>
+              {(s.protocolo ?? 1) >= 2 &&
+              ['orcamento', 'relatorio', 'recibo'].includes(x.entidade.split(':')[0]) ? (
+                <>
+                  <p>
+                    Suas alterações estão preservadas em um rascunho local. Abra o documento para
+                    comparar os campos e manter a alternativa desejada. Recebimentos e estornos
+                    continuam protegidos.
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const [tipo, ...partes] = x.entidade.split(':')
+                      const id = partes.join(':')
+                      navegar(
+                        tipo === 'orcamento'
+                          ? { nome: 'editor', orcamentoId: id }
+                          : tipo === 'relatorio'
+                            ? { nome: 'editorRelatorio', relatorioId: id }
+                            : { nome: 'recibos', reciboId: id }
+                      )
+                    }}
+                  >
+                    Abrir documento e comparar
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p>
+                    Para preservar a edição local, crie uma cópia no editor antes de adotar a versão
+                    remota. Recibos e relatório vinculados serão conciliados juntos. Uma cópia de
+                    segurança com todas as edições locais será salva antes da conciliação.
+                  </p>
+                  <Button variant="outline" disabled={ocupado} onClick={() => setConciliar(x.id)}>
+                    Adotar versão remota e guardar backup local
+                  </Button>
+                </>
+              )}
             </div>
           ))}
         </div>

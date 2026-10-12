@@ -1,7 +1,13 @@
 import { randomUUID } from 'crypto'
 import { all, get, run, texto, tx } from './db/sqlite'
 import { envolverDocumento, exigirResponsavel, nuvemConfigurada } from './versoes'
-import { numeroNuvem, numeracaoNuvem } from './numeros'
+import {
+  numeroNuvem,
+  numeracaoNuvem,
+  validarTrocaNumero,
+  consumirTrocaNumero,
+  registrarNumeroEmitido
+} from './numeros'
 import { relatoriosRepo } from './repositories'
 import { round2 } from '@shared/format'
 import { errosConfirmacaoRecibo } from '@shared/validacao-recibo'
@@ -51,6 +57,26 @@ function gravar(r: Recibo): Recibo {
   return r
 }
 export const recibosRepo = {
+  alterarNumero: (id: string, n: number): ResultadoNumeracao & { recibo?: Recibo } =>
+    tx(() => {
+      const atual = recibosRepo.get(id)
+      if (!atual) return { ok: false, erro: 'Recibo não encontrado.' }
+      if (atual.numero === n) return { ok: true, recibo: atual }
+      const invalido = validarTrocaNumero('recibo', id, atual.status, n)
+      if (invalido) return invalido
+      if (!Number.isSafeInteger(n) || n < 1 || n > NUMERO_MAXIMO)
+        return { ok: false, erro: 'Informe um número inteiro entre 1 e 999999.' }
+      if (
+        get("SELECT 1 FROM numeros_usados WHERE tipo='recibo' AND numero=?", [n]) ||
+        get('SELECT 1 FROM recibos WHERE numero=?', [n])
+      )
+        return { ok: false, erro: 'Este número já foi usado e não pode ser reutilizado.' }
+      consumirTrocaNumero('recibo', n)
+      const r = { ...atual, numero: n, atualizadoEm: new Date().toISOString() }
+      run('UPDATE recibos SET numero=?,dados=? WHERE id=?', [n, JSON.stringify(r), id])
+      gravarSequencia(Math.max(n, sequenciaRecibo()))
+      return { ok: true, recibo: r }
+    }),
   numeracao: (): InfoNumeracao => {
     const agregado = get('SELECT MAX(numero) AS maior, COUNT(*) AS total FROM recibos')
     return numeracaoNuvem('recibo', {
@@ -155,6 +181,7 @@ export const recibosRepo = {
         run('UPDATE recibos SET numero=?,dados=? WHERE id=?', [numero, JSON.stringify(r), id])
       }
       const novo = { ...r, status: 'recebido' as const, atualizadoEm: new Date().toISOString() }
+      registrarNumeroEmitido('recibo', id, r.numero)
       validar(novo)
       if (r.origemTipo === 'relatorio' && r.origemId) {
         exigirResponsavel('relatorio', r.origemId)

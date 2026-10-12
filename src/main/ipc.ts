@@ -14,7 +14,11 @@ import {
   vincularMembro,
   ativarMembro,
   controlarEdicao,
-  autorizarGravacao
+  autorizarGravacao,
+  acompanharEdicao,
+  autorizarEmissao,
+  numeracaoCompartilhada,
+  definirNumeracaoCompartilhada
 } from './colaboracao'
 import { lerPreferencias, salvarPreferencias, reordenarCadastro } from './preferencias'
 import { copiarInstalacaoNuvem } from './nuvem-configuracao'
@@ -37,7 +41,8 @@ import {
   transferirDocumento,
   sairNuvem,
   aplicarConflito,
-  capturarCadastros
+  capturarCadastros,
+  protocoloNuvem
 } from './nuvem'
 import { app, ipcMain, dialog, nativeImage } from 'electron'
 import { readFileSync } from 'fs'
@@ -105,6 +110,8 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
   'rascunhos.copiar': (id) => copiarRascunho(String(id)),
   'rascunhos.remove': (id) => descartarRascunho(String(id)),
   'colaboracao.membros': () => membrosEmpresa(),
+  'colaboracao.acompanhar': (tipo, id, ativo) =>
+    acompanharEdicao(tipo as never, String(id), ativo === true),
   'colaboracao.vincularMembro': (email, nome) => vincularMembro(String(email), String(nome)),
   'colaboracao.ativarMembro': (usuario, ativo) => ativarMembro(String(usuario), ativo === true),
   'colaboracao.edicao': (tipo, id, acao, destino) =>
@@ -127,6 +134,7 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
     }),
   'recibos.list': () => recibosRepo.list(),
   'recibos.numeracao': () => recibosRepo.numeracao(),
+  'recibos.alterarNumero': (id, n) => recibosRepo.alterarNumero(String(id), Number(n)),
   'recibos.definirProximoNumero': (n) => recibosRepo.definirProximoNumero(n as number),
   'recibos.get': (id) => recibosRepo.get(id as string),
   'recibos.create': (dto) => recibosRepo.create(dto as never),
@@ -224,9 +232,39 @@ export function registrarIpc(): void {
   for (const [canal, fn] of Object.entries(handlers)) {
     ipcMain.handle(canal, async (_evento, ...args) => {
       const dominio = canal.split('.')[0]
+      if (canal.startsWith('documentos.gerar')) {
+        const t = canal.includes('Recibo')
+          ? 'recibo'
+          : canal.includes('Relatorio')
+            ? 'relatorio'
+            : 'orcamento'
+        await autorizarEmissao(t, String(args[0]))
+      }
+      if (canal === 'versoes.exportar') {
+        const v = obterVersao(String(args[0]))
+        const atual = (
+          v.tipo === 'orcamento'
+            ? orcamentosRepo
+            : v.tipo === 'relatorio'
+              ? relatoriosRepo
+              : recibosRepo
+        ).get(v.documentoId)
+        if (atual && atual.numero !== v.documento.numero)
+          throw new Error(
+            'Esta versão tem um número anterior à correção do rascunho. Crie um novo documento a partir dela para emitir.'
+          )
+        await autorizarEmissao(v.tipo, v.documentoId)
+      }
       const tipo = (
         { orcamentos: 'orcamento', relatorios: 'relatorio', recibos: 'recibo' } as const
       )[dominio as 'orcamentos' | 'relatorios' | 'recibos']
+      if (tipo && canal.endsWith('.numeracao'))
+        return numeracaoCompartilhada(
+          tipo,
+          (await fn(...args)) as import('@shared/api').InfoNumeracao
+        )
+      if (tipo && canal.endsWith('.definirProximoNumero') && protocoloNuvem() >= 2)
+        return definirNumeracaoCompartilhada(tipo, Number(args[0]))
       if (tipo && /\.(update|remove|alterarNumero|confirmar|cancelar)$/.test(canal)) {
         await autorizarGravacao(tipo, String(args[0]))
         if (tipo === 'recibo') {

@@ -69,6 +69,26 @@ export function listarRascunhos(tipo?: TipoDocumento, id?: string): RascunhoComp
     [tipo ?? null, tipo ?? null, id ?? null, id ?? null]
   ).map((l) => obterRascunho(texto(l.id)))
 }
+export function preservarConflitos(entidades: string[]): void {
+  for (const entidade of entidades) {
+    const separador = entidade.indexOf(':')
+    const tipo = entidade.slice(0, separador) as TipoDocumento,
+      id = entidade.slice(separador + 1)
+    if (!['orcamento', 'relatorio', 'recibo'].includes(tipo)) continue
+    const documento = repo(tipo).get(id) as Documento | null
+    if (!documento) continue
+    const snapshot = JSON.stringify(prepararSnapshot(documento))
+    if (
+      get(
+        "SELECT 1 FROM rascunhos_compartilhados WHERE tipo=? AND documento_id=? AND documento=? AND estado='conflito'",
+        [tipo, id, snapshot]
+      )
+    )
+      continue
+    const r = criarRascunho(tipo, id, documento)
+    run("UPDATE rascunhos_compartilhados SET estado='conflito' WHERE id=?", [r.id])
+  }
+}
 export function criarRascunho(
   tipo: TipoDocumento,
   id: string,
@@ -155,7 +175,8 @@ export async function compararRascunho(
   }
 }
 function financeiroAlterado(base: Documento, d: Documento): boolean {
-  const campos = ['status', 'adiantamentos', 'reembolsos', 'adiantamentoId']
+  const campos = ['adiantamentos', 'reembolsos', 'adiantamentoId']
+  if ('totais' in d || 'quitacao' in d) campos.push('status')
   return campos.some(
     (k) =>
       JSON.stringify((base as unknown as Record<string, unknown>)[k]) !==

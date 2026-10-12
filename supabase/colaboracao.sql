@@ -71,6 +71,22 @@ CREATE TABLE IF NOT EXISTS public.auditoria_colaboracao (
   criado_em timestamptz NOT NULL DEFAULT now(),usuario_id uuid,dispositivo uuid,
   acao text NOT NULL,entidade text,dados jsonb NOT NULL DEFAULT '{}'
 );
+CREATE TABLE IF NOT EXISTS public.numeros_emitidos (
+  empresa_id uuid NOT NULL REFERENCES empresas(id),tipo text NOT NULL,documento_id text NOT NULL,
+  numero bigint NOT NULL,criado_em timestamptz NOT NULL DEFAULT now(),usuario_id uuid,dispositivo uuid,
+  PRIMARY KEY(empresa_id,tipo,documento_id),FOREIGN KEY(empresa_id,tipo,documento_id) REFERENCES documentos(empresa_id,tipo,documento_id)
+);
+CREATE TABLE IF NOT EXISTS public.pedidos_edicao (
+  empresa_id uuid NOT NULL REFERENCES empresas(id),tipo text NOT NULL,documento_id text NOT NULL,
+  usuario_id uuid NOT NULL,dispositivo uuid NOT NULL,criado_em timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY(empresa_id,tipo,documento_id,usuario_id,dispositivo),
+  FOREIGN KEY(empresa_id,tipo,documento_id) REFERENCES documentos(empresa_id,tipo,documento_id)
+);
+INSERT INTO numeros_emitidos(empresa_id,tipo,documento_id,numero)
+ SELECT empresa_id,'orcamento',id,numero FROM orcamentos WHERE status<>'rascunho'
+ UNION ALL SELECT empresa_id,'relatorio',id,numero FROM relatorios WHERE status<>'rascunho'
+ UNION ALL SELECT empresa_id,'recibo',id,numero FROM recibos WHERE status<>'rascunho'
+ ON CONFLICT DO NOTHING;
 CREATE TABLE IF NOT EXISTS sincronizacao.sequencias_documentos (
   empresa_id uuid NOT NULL REFERENCES empresas(id),tipo text NOT NULL,proximo integer NOT NULL CHECK(proximo BETWEEN 1 AND 999999),
   PRIMARY KEY(empresa_id,tipo)
@@ -157,9 +173,18 @@ BEGIN
   RETURN (SELECT coalesce(jsonb_agg(jsonb_build_object('usuarioId',m.usuario_id,'nome',m.nome,'email',a.email,'ativo',m.ativo) ORDER BY m.nome),'[]') FROM membros_empresa m JOIN auth.users a ON a.id=m.usuario_id WHERE m.empresa_id=e);
 END $$;
 
+-- Um relatório e seus recibos compartilham a autorização financeira offline.
+CREATE OR REPLACE FUNCTION sincronizacao.conjunto_financeiro(p_empresa uuid,p_tipo text,p_id text) RETURNS TABLE(tipo text,documento_id text)
+LANGUAGE sql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+  WITH origem AS (SELECT CASE WHEN p_tipo='relatorio' THEN p_id ELSE
+    (SELECT origem_id FROM recibos WHERE empresa_id=p_empresa AND id=p_id AND origem_tipo='relatorio') END AS id)
+  SELECT p_tipo,p_id UNION
+  SELECT 'relatorio',id FROM origem WHERE id IS NOT NULL UNION
+  SELECT 'recibo',r.id FROM recibos r,origem o WHERE r.empresa_id=p_empresa AND r.origem_tipo='relatorio' AND r.origem_id=o.id;
+$$;
 CREATE OR REPLACE FUNCTION public.gdo_edicao_v2(p_tipo text,p_id text,p_dispositivo uuid,p_acao text DEFAULT 'obter',p_geracao bigint DEFAULT NULL,p_destino uuid DEFAULT NULL) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,sincronizacao,pg_temp AS $$
-DECLARE e uuid:=gdo_empresa(); l public.edicoes_documento%rowtype; r bigint; u uuid; vencido boolean;
+DECLARE e uuid:=gdo_empresa(); l public.edicoes_documento%rowtype; r bigint; u uuid; vencido boolean; relacionado record;
 BEGIN
   PERFORM sincronizacao.exigir_dispositivo(e,p_dispositivo);
   IF p_tipo NOT IN ('orcamento','relatorio','recibo') THEN RAISE EXCEPTION 'Tipo inválido'; END IF;
@@ -170,15 +195,30 @@ BEGIN
   vencido:=l.geracao IS NULL OR (NOT l.offline AND (l.expira_em IS NULL OR l.expira_em<=now()));
   IF p_acao IN ('adquirir','offline','recuperar') THEN
     IF NOT vencido AND (l.usuario_id<>auth.uid() OR l.dispositivo<>p_dispositivo) AND p_acao<>'recuperar' THEN RAISE EXCEPTION 'Documento em edição ou preparado offline por outro usuário/computador'; END IF;
-    IF p_acao='offline' AND EXISTS(SELECT 1 FROM edicoes_documento WHERE empresa_id=e AND offline AND dispositivo<>p_dispositivo AND (
-      (tipo='relatorio' AND documento_id=(SELECT origem_id FROM recibos WHERE empresa_id=e AND id=p_id AND p_tipo='recibo' AND origem_tipo='relatorio')) OR
-      (tipo='recibo' AND documento_id IN (SELECT id FROM recibos WHERE empresa_id=e AND origem_tipo='relatorio' AND origem_id=p_id AND p_tipo='relatorio'))
-    )) THEN RAISE EXCEPTION 'O conjunto financeiro possui autorização offline em outro computador'; END IF;
+    IF p_acao<>'recuperar' AND EXISTS(SELECT 1 FROM edicoes_documento a JOIN sincronizacao.conjunto_financeiro(e,p_tipo,p_id) c USING(tipo,documento_id)
+      WHERE a.empresa_id=e AND (a.usuario_id<>auth.uid() OR a.dispositivo<>p_dispositivo) AND
+      (a.offline OR (p_acao='offline' AND a.expira_em>now()))) THEN
+      RAISE EXCEPTION 'O conjunto financeiro possui autorização em outro usuário/computador'; END IF;
+    IF p_acao='recuperar' THEN
+      UPDATE edicoes_documento a SET geracao=a.geracao+1,offline=false,expira_em=now()
+        FROM sincronizacao.conjunto_financeiro(e,p_tipo,p_id) c
+        WHERE a.empresa_id=e AND a.tipo=c.tipo AND a.documento_id=c.documento_id AND NOT (a.tipo=p_tipo AND a.documento_id=p_id);
+    END IF;
     IF NOT vencido AND l.usuario_id=auth.uid() AND l.dispositivo=p_dispositivo AND (p_acao='adquirir' OR (p_acao='offline' AND l.offline)) THEN
       UPDATE edicoes_documento SET expira_em=CASE WHEN offline THEN NULL ELSE now()+interval '120 seconds' END WHERE empresa_id=e AND tipo=p_tipo AND documento_id=p_id;
     ELSE
     INSERT INTO edicoes_documento VALUES(e,p_tipo,p_id,auth.uid(),p_dispositivo,coalesce(l.geracao,0)+1,CASE WHEN p_acao='offline' THEN NULL ELSE now()+interval '120 seconds' END,p_acao='offline',r)
       ON CONFLICT(empresa_id,tipo,documento_id) DO UPDATE SET usuario_id=excluded.usuario_id,dispositivo=excluded.dispositivo,geracao=excluded.geracao,expira_em=excluded.expira_em,offline=excluded.offline,revisao=excluded.revisao;
+    END IF;
+    IF p_acao='offline' THEN
+      FOR relacionado IN SELECT * FROM sincronizacao.conjunto_financeiro(e,p_tipo,p_id) LOOP
+        IF relacionado.tipo=p_tipo AND relacionado.documento_id=p_id THEN CONTINUE; END IF;
+        INSERT INTO edicoes_documento VALUES(e,relacionado.tipo,relacionado.documento_id,auth.uid(),p_dispositivo,1,NULL,true,
+          (SELECT revisao FROM sincronizacao.entidades WHERE empresa_id=e AND entidade=relacionado.tipo||':'||relacionado.documento_id))
+        ON CONFLICT(empresa_id,tipo,documento_id) DO UPDATE SET usuario_id=excluded.usuario_id,dispositivo=excluded.dispositivo,
+          geracao=CASE WHEN edicoes_documento.offline AND edicoes_documento.usuario_id=auth.uid() AND edicoes_documento.dispositivo=p_dispositivo THEN edicoes_documento.geracao ELSE edicoes_documento.geracao+1 END,
+          offline=true,expira_em=NULL,revisao=excluded.revisao;
+      END LOOP;
     END IF;
   ELSIF p_acao IN ('renovar','liberar','transferir') THEN
     IF l.usuario_id IS DISTINCT FROM auth.uid() OR l.dispositivo IS DISTINCT FROM p_dispositivo OR l.geracao IS DISTINCT FROM p_geracao OR vencido THEN RAISE EXCEPTION 'Autorização de edição expirada ou revogada'; END IF;
@@ -189,23 +229,35 @@ BEGIN
       IF u IS NULL OR NOT EXISTS(SELECT 1 FROM membros_empresa WHERE empresa_id=e AND usuario_id=u AND ativo) THEN RAISE EXCEPTION 'Destino não registrado ou membro inativo'; END IF;
       UPDATE edicoes_documento SET usuario_id=u,dispositivo=p_destino,geracao=geracao+1,expira_em=CASE WHEN offline THEN NULL ELSE now()+interval '120 seconds' END WHERE empresa_id=e AND tipo=p_tipo AND documento_id=p_id;
     END IF;
-  ELSIF p_acao NOT IN ('obter','solicitar') THEN RAISE EXCEPTION 'Ação inválida'; END IF;
-  IF p_acao<>'obter' THEN INSERT INTO auditoria_colaboracao(empresa_id,usuario_id,dispositivo,acao,entidade,dados) VALUES(e,auth.uid(),p_dispositivo,p_acao,p_tipo||':'||p_id,jsonb_build_object('destino',p_destino)); END IF;
+    IF l.offline AND p_acao IN ('liberar','transferir') THEN
+      UPDATE edicoes_documento a SET usuario_id=CASE WHEN p_acao='transferir' THEN u ELSE a.usuario_id END,
+        dispositivo=CASE WHEN p_acao='transferir' THEN p_destino ELSE a.dispositivo END,
+        geracao=a.geracao+1,offline=p_acao='transferir',expira_em=CASE WHEN p_acao='transferir' THEN NULL ELSE now() END
+      FROM sincronizacao.conjunto_financeiro(e,p_tipo,p_id) c
+      WHERE a.empresa_id=e AND a.tipo=c.tipo AND a.documento_id=c.documento_id AND NOT (a.tipo=p_tipo AND a.documento_id=p_id);
+    END IF;
+  ELSIF p_acao='solicitar' THEN
+    INSERT INTO pedidos_edicao VALUES(e,p_tipo,p_id,auth.uid(),p_dispositivo,now())
+      ON CONFLICT(empresa_id,tipo,documento_id,usuario_id,dispositivo) DO UPDATE SET criado_em=excluded.criado_em;
+  ELSIF p_acao<>'obter' THEN RAISE EXCEPTION 'Ação inválida'; END IF;
+  IF p_acao IN ('liberar','transferir','recuperar') THEN DELETE FROM pedidos_edicao WHERE empresa_id=e AND tipo=p_tipo AND documento_id=p_id; END IF;
+  IF p_acao NOT IN ('obter','renovar') THEN INSERT INTO auditoria_colaboracao(empresa_id,usuario_id,dispositivo,acao,entidade,dados) VALUES(e,auth.uid(),p_dispositivo,p_acao,p_tipo||':'||p_id,jsonb_build_object('destino',p_destino)); END IF;
   SELECT * INTO l FROM edicoes_documento WHERE empresa_id=e AND tipo=p_tipo AND documento_id=p_id;
   IF l.geracao IS NULL THEN RETURN NULL; END IF;
-  RETURN jsonb_build_object('tipo',p_tipo,'documentoId',p_id,'usuarioId',l.usuario_id,'usuarioNome',(SELECT nome FROM membros_empresa WHERE empresa_id=e AND usuario_id=l.usuario_id),'computador',l.dispositivo,'geracao',l.geracao,'expiraEm',l.expira_em,'offline',l.offline,'revisao',r,'podeEditar',l.usuario_id=auth.uid() AND l.dispositivo=p_dispositivo AND (l.offline OR l.expira_em>now()));
+  RETURN jsonb_build_object('tipo',p_tipo,'documentoId',p_id,'usuarioId',l.usuario_id,'usuarioNome',(SELECT nome FROM membros_empresa WHERE empresa_id=e AND usuario_id=l.usuario_id),'computador',l.dispositivo,'geracao',l.geracao,'expiraEm',l.expira_em,'offline',l.offline,'revisao',r,'podeEditar',l.usuario_id=auth.uid() AND l.dispositivo=p_dispositivo AND (l.offline OR l.expira_em>now()),
+    'solicitacoes',(SELECT coalesce(jsonb_agg(jsonb_build_object('usuarioNome',m.nome,'computador',p.dispositivo,'criadoEm',p.criado_em) ORDER BY p.criado_em),'[]') FROM pedidos_edicao p JOIN membros_empresa m ON m.empresa_id=p.empresa_id AND m.usuario_id=p.usuario_id WHERE p.empresa_id=e AND p.tipo=p_tipo AND p.documento_id=p_id AND m.ativo));
 END $$;
 
 CREATE OR REPLACE FUNCTION public.gdo_alteracoes_v2(p_cursor bigint DEFAULT 0,p_limite integer DEFAULT 50) RETURNS SETOF jsonb
 LANGUAGE sql SECURITY DEFINER SET search_path=public,sincronizacao,pg_temp AS $$
-  SELECT to_jsonb(e)||jsonb_build_object('identificador',to_jsonb(i),'controle',to_jsonb(l)) FROM public.gdo_entities e
+  SELECT to_jsonb(e)||jsonb_build_object('identificador',to_jsonb(i),'controle',to_jsonb(l),'emissao',(SELECT to_jsonb(m) FROM numeros_emitidos m WHERE m.empresa_id=e.usuario AND m.tipo=split_part(e.entidade,':',1) AND m.documento_id=substr(e.entidade,length(m.tipo)+2))) FROM public.gdo_entities e
   LEFT JOIN public.identificadores_documento i ON i.empresa_id=e.usuario AND i.tipo=split_part(e.entidade,':',1) AND i.documento_id=substr(e.entidade,length(i.tipo)+2)
   LEFT JOIN public.edicoes_documento l ON l.empresa_id=e.usuario AND l.tipo=split_part(e.entidade,':',1) AND l.documento_id=substr(e.entidade,length(l.tipo)+2)
   WHERE e.usuario=public.gdo_empresa() AND e.sequencia>p_cursor ORDER BY e.sequencia LIMIT least(greatest(p_limite,1),100);
 $$;
 CREATE OR REPLACE FUNCTION public.gdo_batch_v2(p_operacoes jsonb,p_dispositivo uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,sincronizacao,pg_temp AS $$
-DECLARE e uuid:=gdo_empresa(); x jsonb; t text; id_doc text; l public.edicoes_documento%rowtype; r jsonb; n bigint; novas text[]:='{}';
+DECLARE e uuid:=gdo_empresa(); x jsonb; t text; id_doc text; l public.edicoes_documento%rowtype; r jsonb; n bigint; novas text[]:='{}'; d jsonb; pagamento jsonb; origem text;
 BEGIN
   PERFORM sincronizacao.exigir_dispositivo(e,p_dispositivo);
   PERFORM pg_advisory_xact_lock(hashtextextended(e::text,0));
@@ -214,6 +266,42 @@ BEGIN
     IF EXISTS(SELECT 1 FROM sincronizacao.operacoes WHERE empresa_id=e AND id=(x->>'id')::uuid) THEN CONTINUE; END IF;
     novas:=array_append(novas,x->>'id');
     t:=split_part(x->>'entidade',':',1); id_doc:=substr(x->>'entidade',length(t)+2);
+    IF t IN ('orcamento','relatorio','recibo') AND NOT coalesce((x->'payload'->>'excluido')::boolean,false) THEN
+      n:=(x->'payload'->'rows'->(CASE t WHEN 'orcamento' THEN 'orcamentos' WHEN 'relatorio' THEN 'relatorios' ELSE 'recibos' END)->0->>'numero')::bigint;
+      IF EXISTS(SELECT 1 FROM numeros_emitidos WHERE empresa_id=e AND tipo=t AND documento_id=id_doc AND numero<>n) THEN
+        RAISE EXCEPTION 'Número de documento emitido protegido; crie um novo rascunho'; END IF;
+      IF x->'payload'->'emissao' IS NOT NULL AND x->'payload'->'emissao'<>'null'::jsonb AND (n<=0 OR n IS DISTINCT FROM (x->'payload'->'emissao'->>'numero')::bigint) THEN
+        RAISE EXCEPTION 'Emissão com número divergente'; END IF;
+    END IF;
+    IF t IN ('relatorio','recibo') THEN
+      IF EXISTS(SELECT 1 FROM edicoes_documento a JOIN sincronizacao.conjunto_financeiro(e,t,id_doc) c USING(tipo,documento_id)
+        WHERE a.empresa_id=e AND a.offline AND (a.usuario_id<>auth.uid() OR a.dispositivo<>p_dispositivo)) THEN
+        RAISE EXCEPTION 'Conjunto financeiro reservado offline em outro usuário/computador'; END IF;
+    END IF;
+    IF t='recibo' THEN
+      d:=(x->'payload'->'rows'->'recibos'->0->>'dados')::jsonb;
+      origem:=CASE WHEN d->>'origemTipo'='relatorio' THEN d->>'origemId' ELSE NULL END;
+      IF origem IS NOT NULL AND EXISTS(SELECT 1 FROM edicoes_documento a JOIN sincronizacao.conjunto_financeiro(e,'relatorio',origem) c USING(tipo,documento_id)
+        WHERE a.empresa_id=e AND a.offline AND (a.usuario_id<>auth.uid() OR a.dispositivo<>p_dispositivo)) THEN
+        RAISE EXCEPTION 'Relatório de origem reservado offline em outro usuário/computador'; END IF;
+      IF EXISTS(SELECT 1 FROM recibos WHERE empresa_id=e AND id=id_doc AND (
+          (status='cancelado' AND d->>'status' IS DISTINCT FROM 'cancelado' AND NOT coalesce((x->'payload'->>'excluido')::boolean,false)) OR
+          (status='recebido' AND d->>'status' NOT IN ('recebido','cancelado')))) THEN
+        RAISE EXCEPTION 'Recebimentos e estornos não podem ser desfeitos por uma versão textual'; END IF;
+      FOR pagamento IN SELECT * FROM jsonb_array_elements(coalesce(x->'payload'->'rows'->'recebimentos','[]')) LOOP
+        IF EXISTS(SELECT 1 FROM recebimentos p WHERE p.empresa_id=e AND p.id=pagamento->>'id' AND
+          (p.estornado>(pagamento->>'estornado')::integer OR p.valor IS DISTINCT FROM (pagamento->>'valor')::numeric OR
+           p.relatorio_id IS DISTINCT FROM pagamento->>'relatorio_id' OR p.adiantamento_id IS DISTINCT FROM pagamento->>'adiantamento_id')) THEN
+          RAISE EXCEPTION 'Um lançamento financeiro existente não pode ser reescrito'; END IF;
+        origem:=pagamento->>'relatorio_id';
+        IF origem IS NOT NULL AND NOT EXISTS(SELECT 1 FROM recebimentos p WHERE p.empresa_id=e AND p.id=pagamento->>'id' AND to_jsonb(p)-ARRAY['empresa_id','recibo_tipo','relatorio_tipo']=pagamento) THEN
+          SELECT * INTO l FROM edicoes_documento WHERE empresa_id=e AND tipo='relatorio' AND documento_id=origem;
+          IF l.usuario_id IS DISTINCT FROM auth.uid() OR l.dispositivo IS DISTINCT FROM p_dispositivo OR
+            (NOT l.offline AND (l.expira_em IS NULL OR l.expira_em<=now())) THEN
+            RAISE EXCEPTION 'Autorize o relatório antes de confirmar ou estornar o recebimento'; END IF;
+        END IF;
+      END LOOP;
+    END IF;
     IF t IN ('orcamento','relatorio','recibo') AND EXISTS(SELECT 1 FROM documentos WHERE empresa_id=e AND tipo=t AND documento_id=id_doc) THEN
       SELECT * INTO l FROM edicoes_documento WHERE empresa_id=e AND tipo=t AND documento_id=id_doc;
       IF l.geracao IS NULL OR l.usuario_id<>auth.uid() OR l.dispositivo<>p_dispositivo OR
@@ -221,7 +309,7 @@ BEGIN
         (NOT l.offline AND l.expira_em<=now()) THEN RAISE EXCEPTION 'Autorização de edição expirada ou revogada; preserve o rascunho e solicite edição'; END IF;
     END IF;
   END LOOP;
-  r:=gdo_batch(p_operacoes,p_dispositivo);
+  r:=gdo_batch((SELECT jsonb_agg(jsonb_set(op.item,'{payload}',(op.item->'payload')-'emissao')) FROM jsonb_array_elements(p_operacoes) AS op(item)),p_dispositivo);
   IF NOT (r->>'ok')::boolean THEN RETURN r; END IF;
   FOR x IN SELECT * FROM jsonb_array_elements(p_operacoes) LOOP
     IF NOT (x->>'id'=ANY(novas)) THEN CONTINUE; END IF;
@@ -233,6 +321,13 @@ BEGIN
         INSERT INTO identificadores_documento VALUES(e,t,id_doc,n,auth.uid(),auth.uid());
       ELSE UPDATE identificadores_documento SET alterado_por=auth.uid() WHERE empresa_id=e AND tipo=t AND documento_id=id_doc; END IF;
       INSERT INTO edicoes_documento VALUES(e,t,id_doc,auth.uid(),p_dispositivo,1,now()+interval '120 seconds',false,(SELECT revisao FROM sincronizacao.entidades WHERE empresa_id=e AND entidade=x->>'entidade')) ON CONFLICT DO NOTHING;
+      IF (x->'payload'->'emissao' IS NOT NULL AND x->'payload'->'emissao'<>'null'::jsonb) OR
+        EXISTS(SELECT 1 FROM orcamentos WHERE empresa_id=e AND id=id_doc AND t='orcamento' AND status<>'rascunho') OR
+        EXISTS(SELECT 1 FROM relatorios WHERE empresa_id=e AND id=id_doc AND t='relatorio' AND status<>'rascunho') OR
+        EXISTS(SELECT 1 FROM recibos WHERE empresa_id=e AND id=id_doc AND t='recibo' AND status<>'rascunho') THEN
+        n:=(x->'payload'->'rows'->(CASE t WHEN 'orcamento' THEN 'orcamentos' WHEN 'relatorio' THEN 'relatorios' ELSE 'recibos' END)->0->>'numero')::bigint;
+        INSERT INTO numeros_emitidos VALUES(e,t,id_doc,n,now(),auth.uid(),p_dispositivo) ON CONFLICT DO NOTHING;
+      END IF;
     END IF;
     INSERT INTO auditoria_colaboracao(empresa_id,usuario_id,dispositivo,acao,entidade,dados) SELECT e,auth.uid(),p_dispositivo,'salvar',x->>'entidade',jsonb_build_object('operacao',x->>'id','base',x->'base') WHERE NOT EXISTS(SELECT 1 FROM auditoria_colaboracao WHERE empresa_id=e AND dados->>'operacao'=x->>'id');
   END LOOP;
@@ -312,7 +407,7 @@ GRANT EXECUTE ON FUNCTION public.gdo_empresa(),public.gdo_contexto_v2(boolean),p
 NOTIFY pgrst,'reload schema';
 CREATE OR REPLACE FUNCTION public.gdo_documento_v2(p_tipo text,p_id text) RETURNS jsonb
 LANGUAGE sql SECURITY DEFINER SET search_path=public,sincronizacao,pg_temp AS $$
-  SELECT to_jsonb(e)||jsonb_build_object('identificador',to_jsonb(i),'controle',to_jsonb(l)) FROM public.gdo_entities e
+  SELECT to_jsonb(e)||jsonb_build_object('identificador',to_jsonb(i),'controle',to_jsonb(l),'emissao',(SELECT to_jsonb(m) FROM numeros_emitidos m WHERE m.empresa_id=e.usuario AND m.tipo=split_part(e.entidade,':',1) AND m.documento_id=substr(e.entidade,length(m.tipo)+2))) FROM public.gdo_entities e
   LEFT JOIN public.identificadores_documento i ON i.empresa_id=e.usuario AND i.tipo=p_tipo AND i.documento_id=p_id
   LEFT JOIN public.edicoes_documento l ON l.empresa_id=e.usuario AND l.tipo=p_tipo AND l.documento_id=p_id
   WHERE e.usuario=public.gdo_empresa() AND e.entidade=p_tipo||':'||p_id;

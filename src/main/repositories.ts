@@ -1,4 +1,4 @@
-import { numeroNuvem, numeracaoNuvem } from './numeros'
+import { numeroNuvem, numeracaoNuvem, validarTrocaNumero, consumirTrocaNumero } from './numeros'
 import { envolverDocumento, nuvemConfigurada } from './versoes'
 // Repositórios sobre SQLite. As assinaturas públicas são as mesmas de quando a
 // persistência era JSON — o IPC, o preload e o renderer não conhecem o banco.
@@ -695,10 +695,11 @@ export const orcamentosRepo = {
       const atual = orcamentosRepo.get(id)
       if (!atual) return { ok: false, erro: 'Orçamento não encontrado.' }
       if (atual.numero === n) return { ok: true, orcamento: atual }
-      if (nuvemConfigurada())
-        return { ok: false, erro: 'Não é possível renumerar documentos vinculados à nuvem.' }
+      const protegido = validarTrocaNumero('orcamento', id, atual.status, n)
+      if (protegido) return protegido
       const invalido = validarNumero(n, id)
       if (invalido) return invalido
+      consumirTrocaNumero('orcamento', n)
       run('UPDATE orcamentos SET numero = ?, atualizado_em = ? WHERE id = ?', [n, nowIso(), id])
       // O contador acompanha para o próximo orçamento não colidir.
       if (n > seqAtual()) gravarConfig('seqOrcamento', n)
@@ -1210,10 +1211,11 @@ export const relatoriosRepo = {
       const atual = relatoriosRepo.get(id)
       if (!atual) return { ok: false, erro: 'Relatório não encontrado.' }
       if (atual.numero === n) return { ok: true, relatorio: atual }
-      if (nuvemConfigurada())
-        return { ok: false, erro: 'Não é possível renumerar documentos vinculados à nuvem.' }
+      const protegido = validarTrocaNumero('relatorio', id, atual.status, n)
+      if (protegido) return protegido
       const invalido = validarNumeroRelatorio(n, id)
       if (invalido) return invalido
+      consumirTrocaNumero('relatorio', n)
       run('UPDATE relatorios SET numero = ?, atualizado_em = ? WHERE id = ?', [n, nowIso(), id])
       if (n > seqRelatorioAtual()) gravarConfig('seqRelatorio', n)
       return { ok: true, relatorio: relatoriosRepo.get(id) as Relatorio }

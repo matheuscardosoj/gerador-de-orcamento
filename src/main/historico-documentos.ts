@@ -3,6 +3,7 @@ import { orcamentosRepo, relatoriosRepo } from './repositories'
 import { recibosRepo } from './recibos'
 import type { Documento, Recibo, Relatorio } from '@shared/types'
 import { randomUUID } from 'crypto'
+import { calcularTotaisRelatorio } from '@shared/relatorio'
 export function restaurarVersao(id: string, copiar: boolean): Documento {
   const v = obterVersao(id)
   const d = structuredClone(v.documento)
@@ -15,13 +16,23 @@ export function restaurarVersao(id: string, copiar: boolean): Documento {
       status: 'rascunho',
       numero: undefined,
       computadorResponsavel: undefined,
-      versao: undefined
+      versao: undefined,
+      idInterno: undefined,
+      usuarioCriador: undefined,
+      alteradoPor: undefined,
+      autorNome: undefined
     }
     if (v.tipo === 'recibo') {
       const r = dto as unknown as Recibo
       r.adiantamentoId = null
       r.origemId = null
       r.origemTipo = undefined
+    }
+    if (v.tipo === 'relatorio') {
+      const r = dto as unknown as Relatorio
+      r.adiantamentos = []
+      r.reembolsos = []
+      r.totais = calcularTotaisRelatorio(r.itensServico, [], [])
     }
     return (repo.create as (dto: unknown) => Documento)(dto)
   }
@@ -35,6 +46,7 @@ export function restaurarVersao(id: string, copiar: boolean): Documento {
   }
   if (v.tipo === 'relatorio') {
     ;(patch as Relatorio).adiantamentos = (atual as Relatorio).adiantamentos
+    ;(patch as Relatorio).reembolsos = (atual as Relatorio).reembolsos
     patch.status = atual.status
   }
   return (repo.update as (id: string, d: unknown) => Documento)(atual.id, patch)

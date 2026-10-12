@@ -86,6 +86,7 @@ export interface MembroEmpresa {
   ativo: boolean
 }
 export interface ControleEdicao {
+  solicitacoes?: Array<{ usuarioNome: string; computador: string; criadoEm: string }>
   tipo: TipoDocumento
   documentoId: string
   usuarioId: string

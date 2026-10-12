@@ -89,6 +89,8 @@ beforeAll(async () => {
         ).rows
       else if (u.pathname === '/rest/v1/edicoes_documento')
         result = (await pg.query('SELECT * FROM edicoes_documento')).rows
+      else if (u.pathname === '/rest/v1/pedidos_edicao')
+        result = (await pg.query('SELECT * FROM pedidos_edicao')).rows
       else if (u.pathname === '/rest/v1/reservas_numeros')
         result = (
           await pg.query(

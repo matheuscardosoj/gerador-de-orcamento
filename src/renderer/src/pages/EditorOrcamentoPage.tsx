@@ -1,4 +1,6 @@
 import { RevisaoIA } from '../components/RevisaoIA'
+import { ColaboracaoDocumento } from '../components/ColaboracaoDocumento'
+import { useDocumentoRemoto, AvisoAtualizacao } from '../lib/atualizacao-remota'
 import { ListaOrdenavel } from '../ui/ordenavel'
 import { DadosClienteDocumento, LinhaTempo } from '../components/DocumentoExtras'
 import { useEffect, useMemo, useState } from 'react'
@@ -86,10 +88,12 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
   const [mensagem, setMensagem] = useState<string | null>(null)
   const [snapshotSalvo, setSnapshotSalvo] = useState<string | null>(null)
   const [previaAberta, setPreviaAberta] = useState(false)
+  const [rascunhoId, setRascunhoId] = useState<string>()
   // Número com que o orçamento foi carregado: só mexemos na numeração se mudou.
   const [numeroOriginal, setNumeroOriginal] = useState<number | null>(null)
 
   useEffect(() => {
+    setRascunhoId(undefined)
     let vivo = true
     ;(async () => {
       try {
@@ -162,6 +166,18 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
   )
   const sujo = orc !== null && snapshotSalvo !== null && JSON.stringify(orc) !== snapshotSalvo
   useBloqueioEdicao(sujo)
+  const atualizacao = useDocumentoRemoto(
+    'orcamento',
+    rascunhoId ? undefined : orc?.id,
+    sujo,
+    orc,
+    () => (orc?.id ? api.orcamentos.get(orc.id) : Promise.resolve(null)),
+    (d) => {
+      setOrc(d)
+      setSnapshotSalvo(JSON.stringify(d))
+      setNumeroOriginal(d.numero)
+    }
+  )
 
   if (!orc || !dados) {
     return (
@@ -193,6 +209,16 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
     setErro(null)
     try {
       const payload = normalizarOrcamento({ ...orc, valorTotal: total })
+      if (rascunhoId) {
+        if (exigirFinal)
+          throw new Error('Aplique o rascunho ou crie um novo documento antes de emitir.')
+        const r = await api.rascunhos.save(rascunhoId, payload)
+        const d = r.documento as Orcamento
+        setOrc(d)
+        setSnapshotSalvo(JSON.stringify(d))
+        setMensagem('Rascunho guardado neste computador.')
+        return d
+      }
       if (exigirFinal || payload.status !== 'rascunho') {
         const erros = validarOrcamentoFinal(payload)
         if (erros.length) {
@@ -302,7 +328,13 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
 
   return (
     <PageShell
-      titulo={orc.id ? `Orçamento ${orc.numero}` : 'Novo orçamento'}
+      titulo={
+        rascunhoId
+          ? `Rascunho do orçamento ${orc.numero}`
+          : orc.id
+            ? `Orçamento ${orc.numero}`
+            : 'Novo orçamento'
+      }
       descricao={`Total: ${formatMoeda(total)}`}
       acoes={
         <>
@@ -358,6 +390,19 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
         </div>
       )}
       <div className="space-y-5">
+        <AvisoAtualizacao {...atualizacao} />
+        <ColaboracaoDocumento
+          tipo="orcamento"
+          documento={orc}
+          sujo={sujo}
+          rascunhoId={rascunhoId}
+          onAbrir={(d, id) => {
+            setOrc(d as Orcamento)
+            setSnapshotSalvo(JSON.stringify(d))
+            setNumeroOriginal(d.numero)
+            setRascunhoId(id)
+          }}
+        />
         <DadosGeraisCard
           orc={orc}
           set={set}
@@ -404,10 +449,16 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
           buscarImagem={(id) => api.anexos.imagem(id)}
         />
         <DadosClienteDocumento documento={orc} clientes={dados.clientes} onChange={set} />
-        {orc.id && (
+        {orc.id && !rascunhoId && (
           <LinhaTempo
             tipo="orcamento"
             id={orc.id}
+            onRascunho={(d, id) => {
+              setOrc(d as Orcamento)
+              setSnapshotSalvo(JSON.stringify(d))
+              setNumeroOriginal(d.numero)
+              setRascunhoId(id)
+            }}
             onRestaurado={() =>
               void api.orcamentos.get(orc.id).then((d) => {
                 if (d) {

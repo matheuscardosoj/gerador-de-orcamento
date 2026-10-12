@@ -1,4 +1,6 @@
 import { RevisaoIA } from '../components/RevisaoIA'
+import { ColaboracaoDocumento } from '../components/ColaboracaoDocumento'
+import { useDocumentoRemoto, AvisoAtualizacao } from '../lib/atualizacao-remota'
 import { ListaOrdenavel } from '../ui/ordenavel'
 import { DadosClienteDocumento, LinhaTempo } from '../components/DocumentoExtras'
 import { useEffect, useMemo, useState } from 'react'
@@ -54,8 +56,10 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
   const [mensagem, setMensagem] = useState<string | null>(null)
   const [snapshotSalvo, setSnapshotSalvo] = useState<string | null>(null)
   const [previa, setPrevia] = useState(false)
+  const [rascunhoId, setRascunhoId] = useState<string>()
   const [numeroOriginal, setNumeroOriginal] = useState<number | null>(null)
   useEffect(() => {
+    setRascunhoId(undefined)
     let vivo = true
     void (async () => {
       try {
@@ -126,6 +130,18 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
   )
   const sujo = rel !== null && snapshotSalvo !== null && JSON.stringify(rel) !== snapshotSalvo
   useBloqueioEdicao(sujo)
+  const atualizacao = useDocumentoRemoto(
+    'relatorio',
+    rascunhoId ? undefined : rel?.id,
+    sujo,
+    rel,
+    () => (rel?.id ? api.relatorios.get(rel.id) : Promise.resolve(null)),
+    (d) => {
+      setRel(d)
+      setSnapshotSalvo(JSON.stringify(d))
+      setNumeroOriginal(d.numero)
+    }
+  )
 
   const limparErrosValidacao = (campos: string[]): void => {
     setErrosValidacao((atuais) =>
@@ -159,6 +175,16 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
     setErro(null)
     try {
       const payload = normalizarRelatorio({ ...rel, totais })
+      if (rascunhoId) {
+        if (exigirFinal)
+          throw new Error('Aplique o rascunho ou crie um novo documento antes de emitir.')
+        const r = await api.rascunhos.save(rascunhoId, payload)
+        const d = r.documento as Relatorio
+        setRel(d)
+        setSnapshotSalvo(JSON.stringify(d))
+        setMensagem('Rascunho guardado neste computador.')
+        return d
+      }
       if (exigirFinal || payload.status !== 'rascunho') {
         const erros = validarRelatorioFinal(payload)
         if (erros.length) {
@@ -299,7 +325,13 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
   )
   return (
     <PageShell
-      titulo={rel.id ? `Relatório Nº ${rel.numero}` : 'Novo relatório'}
+      titulo={
+        rascunhoId
+          ? `Rascunho do relatório ${rel.numero}`
+          : rel.id
+            ? `Relatório Nº ${rel.numero}`
+            : 'Novo relatório'
+      }
       descricao="Serviços prestados, adiantamentos e reembolsos"
       acoes={acoes}
     >
@@ -320,7 +352,22 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
           Gerado da proposta Nº {rel.origemOrcamento.numero}. Alterações aqui não mudam a proposta.
         </Mensagem>
       )}
-      <Card className="mb-6 p-6">
+      <div className="mb-5 space-y-5">
+        <AvisoAtualizacao {...atualizacao} />
+        <ColaboracaoDocumento
+          tipo="relatorio"
+          documento={rel}
+          sujo={sujo}
+          rascunhoId={rascunhoId}
+          onAbrir={(d, id) => {
+            setRel(d as Relatorio)
+            setSnapshotSalvo(JSON.stringify(d))
+            setNumeroOriginal(d.numero)
+            setRascunhoId(id)
+          }}
+        />
+      </div>
+      <Card className="mb-5 p-6">
         <SectionTitle title="Dados do relatório" />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Field label="Número">
@@ -496,10 +543,16 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
           onChange={(pagamentos) => set({ pagamentos })}
         />
         <DadosClienteDocumento documento={rel} clientes={dados.clientes} onChange={set} />
-        {rel.id && (
+        {rel.id && !rascunhoId && (
           <LinhaTempo
             tipo="relatorio"
             id={rel.id}
+            onRascunho={(d, id) => {
+              setRel(d as Relatorio)
+              setSnapshotSalvo(JSON.stringify(d))
+              setNumeroOriginal(d.numero)
+              setRascunhoId(id)
+            }}
             onRestaurado={() =>
               void api.relatorios.get(rel.id).then((d) => {
                 if (d) {

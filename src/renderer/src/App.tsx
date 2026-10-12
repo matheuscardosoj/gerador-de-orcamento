@@ -45,10 +45,14 @@ function Sidebar(): JSX.Element {
         .catch(() => undefined)
     }
     atualizar()
+    const remover = api.eventos.observarDados((evento) => {
+      if (evento.status) atualizar()
+    })
     const timer = setInterval(atualizar, 5000)
     return () => {
       vivo = false
       clearInterval(timer)
+      remover()
     }
   }, [])
   const nomeEmpresa = empresa

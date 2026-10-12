@@ -206,3 +206,108 @@ it('impede retirar o último membro e mudar a sequência para números reservado
     ).rows[0].r.proximoNumero
   ).toBe(100)
 })
+it('protege relatório e recibos como conjunto offline e revoga todas as gerações na recuperação', async () => {
+  await pg.exec('RESET ROLE')
+  try {
+    await pg.query('UPDATE membros_empresa SET ativo=true WHERE empresa_id=$1 AND usuario_id=$2', [
+      a,
+      b
+    ])
+    await pg.query("INSERT INTO documentos VALUES($1,'relatorio','financeiro',false,$2,'{}')", [
+      a,
+      pcA
+    ])
+    await pg.query(
+      "INSERT INTO relatorios(empresa_id,id,numero,data,total_servicos,total_adiantamentos,total_reembolsos,saldo) VALUES($1,'financeiro',1,'2026-10-12',0,0,0,0)",
+      [a]
+    )
+    await pg.query(
+      "INSERT INTO sincronizacao.entidades VALUES($1,'relatorio:financeiro',1,nextval('gdo_changes'),false)",
+      [a]
+    )
+    await pg.query(
+      "UPDATE recibos SET origem_tipo='relatorio',origem_id='financeiro' WHERE empresa_id=$1 AND id='legado-6'",
+      [a]
+    )
+  } finally {
+    await pg.exec('SET ROLE authenticated')
+  }
+  const chamar = async (tipo: string, id: string, acao: string, pc: string) =>
+    (
+      await pg.query<{ r: { geracao: number; offline: boolean } }>(
+        'SELECT gdo_edicao_v2($1,$2,$3,$4) AS r',
+        [tipo, id, pc, acao]
+      )
+    ).rows[0].r
+  const offline = await chamar('recibo', 'legado-6', 'offline', pcA)
+  expect((await chamar('relatorio', 'financeiro', 'obter', pcA)).offline).toBe(true)
+  await usuario(b)
+  await expect(chamar('relatorio', 'financeiro', 'adquirir', pcB)).rejects.toThrow('outro usuário')
+  await expect(chamar('relatorio', 'financeiro', 'offline', pcB)).rejects.toThrow('outro usuário')
+  await chamar('relatorio', 'financeiro', 'recuperar', pcB)
+  await usuario(a)
+  await expect(gravar('legado-6', 6, 1, offline.geracao)).rejects.toThrow('revogada')
+  expect((await chamar('recibo', 'legado-6', 'obter', pcA)).geracao).toBeGreaterThan(
+    offline.geracao
+  )
+})
+it('permite corrigir rascunho com reserva própria e protege o número depois da emissão', async () => {
+  const reserva = (
+    await pg.query<{ numero: number }>(
+      "SELECT numero FROM reservas_numeros WHERE empresa_id=$1 AND tipo='recibo' AND dispositivo=$2 AND documento IS NULL ORDER BY numero LIMIT 2",
+      [a, pcA]
+    )
+  ).rows
+  const atual = (
+    await pg.query<{ revisao: number }>(
+      "SELECT revisao FROM sincronizacao.entidades WHERE empresa_id=$1 AND entidade='recibo:novo'",
+      [a]
+    )
+  ).rows[0]
+  const c = await edicao('novo', 'adquirir')
+  expect((await gravar('novo', reserva[0].numero, atual.revisao, c!.geracao)).ok).toBe(true)
+  const p = pacote('novo', reserva[0].numero)
+  const op = {
+    id: randomUUID(),
+    entidade: 'recibo:novo',
+    base: Number(atual.revisao) + 1,
+    geracao: c!.geracao,
+    payload: { ...p, emissao: { numero: reserva[0].numero } }
+  }
+  expect(
+    (
+      await pg.query<{ r: { ok: boolean } }>('SELECT gdo_batch_v2($1,$2) AS r', [
+        JSON.stringify([op]),
+        pcA
+      ])
+    ).rows[0].r.ok
+  ).toBe(true)
+  await expect(
+    gravar('novo', reserva[1].numero, Number(atual.revisao) + 2, c!.geracao)
+  ).rejects.toThrow('emitido protegido')
+  expect(
+    (
+      await pg.query<{ id_interno: number }>(
+        "SELECT id_interno FROM identificadores_documento WHERE documento_id='novo'"
+      )
+    ).rows[0].id_interno
+  ).toBe(3)
+})
+it('apresenta pedidos de edição ao possuidor e não repete auditoria nas renovações', async () => {
+  await usuario(b)
+  await edicao('novo', 'solicitar', pcB)
+  await usuario(a)
+  const c = (
+    await pg.query<{ r: { geracao: number; solicitacoes: Array<{ usuarioNome: string }> } }>(
+      "SELECT gdo_edicao_v2('recibo','novo',$1) AS r",
+      [pcA]
+    )
+  ).rows[0].r
+  expect(c.solicitacoes).toHaveLength(1)
+  const antes = (await pg.query<{ n: number }>('SELECT count(*) AS n FROM auditoria_colaboracao'))
+    .rows[0].n
+  await edicao('novo', 'renovar', pcA, c.geracao)
+  expect(
+    (await pg.query<{ n: number }>('SELECT count(*) AS n FROM auditoria_colaboracao')).rows[0].n
+  ).toBe(antes)
+})

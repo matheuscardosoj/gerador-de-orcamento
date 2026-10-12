@@ -297,6 +297,7 @@ const v9 = (d: Database): void => {
       usuario_criador TEXT, alterado_por TEXT,
       PRIMARY KEY(tipo,documento_id), UNIQUE(tipo,id_interno)
     );
+    CREATE TABLE numeros_emitidos (tipo TEXT NOT NULL,documento_id TEXT NOT NULL,numero INTEGER NOT NULL,criado_em TEXT NOT NULL,PRIMARY KEY(tipo,documento_id));
     CREATE TABLE bases_documento (
       tipo TEXT NOT NULL,documento_id TEXT NOT NULL,revisao INTEGER NOT NULL,documento TEXT NOT NULL,
       PRIMARY KEY(tipo,documento_id)
@@ -318,6 +319,24 @@ const v9 = (d: Database): void => {
       computador TEXT, acao TEXT NOT NULL, entidade TEXT, dados TEXT NOT NULL
     );
   `)
+  const migradoEm = new Date().toISOString()
+  for (const [tipo, tabela] of [
+    ['orcamento', 'orcamentos'],
+    ['relatorio', 'relatorios']
+  ] as const) {
+    const colunas = d.all(`PRAGMA table_info(${tabela})`) as Array<{ name: string }>
+    if (!colunas.some((c) => c.name === 'status') || !colunas.some((c) => c.name === 'numero'))
+      continue
+    for (const doc of d.all(`SELECT id,numero FROM ${tabela} WHERE status<>'rascunho'`) as Array<{
+      id: string
+      numero: number
+    }>)
+      d.run('INSERT INTO numeros_emitidos VALUES (?,?,?,?)', [tipo, doc.id, doc.numero, migradoEm])
+  }
+  d.run(
+    "INSERT INTO numeros_emitidos SELECT 'recibo',id,numero,? FROM recibos WHERE json_extract(dados,'$.status') IN ('recebido','cancelado')",
+    [migradoEm]
+  )
   for (const l of d.all(
     "SELECT chave,valor FROM configuracoes WHERE chave LIKE 'historico:%'"
   ) as Array<{ chave: string; valor: string }>) {

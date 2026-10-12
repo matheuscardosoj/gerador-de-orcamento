@@ -26,6 +26,7 @@ const api: AppApi = {
     remove: (id) => invoke('rascunhos.remove', id) as never
   },
   colaboracao: {
+    acompanhar: (tipo, id, ativo) => invoke('colaboracao.acompanhar', tipo, id, ativo) as never,
     membros: () => invoke('colaboracao.membros') as never,
     vincularMembro: (email, nome) => invoke('colaboracao.vincularMembro', email, nome) as never,
     ativarMembro: (usuario, ativo) => invoke('colaboracao.ativarMembro', usuario, ativo) as never,
@@ -48,6 +49,7 @@ const api: AppApi = {
   },
   reordenarCadastro: (tipo, ids) => invoke('cadastros.reordenar', tipo, ids) as never,
   recibos: {
+    alterarNumero: (id, n) => invoke('recibos.alterarNumero', id, n) as never,
     numeracao: () => invoke('recibos.numeracao') as never,
     definirProximoNumero: (n) => invoke('recibos.definirProximoNumero', n) as never,
     list: () => invoke('recibos.list') as never,

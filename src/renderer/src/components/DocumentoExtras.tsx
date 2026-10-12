@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 import { RefreshCw, History, RotateCcw, CopyPlus, FileDown, ArrowRightLeft } from 'lucide-react'
-import type { Cliente, DocumentoMetadados, TipoDocumento, VersaoDocumento } from '@shared/types'
+import type {
+  Cliente,
+  Documento,
+  DocumentoMetadados,
+  TipoDocumento,
+  VersaoDocumento
+} from '@shared/types'
 import { api } from '../lib/api'
 import {
   Button,
@@ -87,11 +93,13 @@ export function DadosClienteDocumento({
 export function LinhaTempo({
   tipo,
   id,
-  onRestaurado
+  onRestaurado,
+  onRascunho
 }: {
   tipo: TipoDocumento
   id: string
   onRestaurado: () => void
+  onRascunho?: (documento: Documento, id: string) => void
 }): JSX.Element {
   const [aberto, setAberto] = useState(false)
   const [versoes, setVersoes] = useState<VersaoDocumento[]>([])
@@ -102,6 +110,7 @@ export function LinhaTempo({
   const [html, setHtml] = useState('')
   const [destino, setDestino] = useState('')
   const [pcs, setPcs] = useState<Array<{ id: string; nome: string }>>([])
+  const [protocolo, setProtocolo] = useState(1)
   const { navegar } = useNav()
   const executar = async (acao: () => Promise<void>): Promise<void> => {
     if (ocupado) return
@@ -117,6 +126,10 @@ export function LinhaTempo({
   }
   useEffect(() => {
     if (!aberto) return
+    void api.nuvem
+      .status()
+      .then((s) => setProtocolo(s.protocolo ?? 1))
+      .catch(() => undefined)
     void api.versoes
       .list(tipo, id)
       .then((v) => {
@@ -142,7 +155,7 @@ export function LinhaTempo({
   return (
     <>
       <Button icon={History} variant="outline" onClick={() => setAberto(true)}>
-        Versões e transferência
+        Versões
       </Button>
       <Modal
         open={aberto}
@@ -194,9 +207,12 @@ export function LinhaTempo({
                   disabled={ocupado}
                   onClick={() =>
                     void executar(async () => {
-                      await api.versoes.restaurar(selecionada.id, false)
+                      if (protocolo >= 2 && onRascunho) {
+                        const r = await api.rascunhos.create(tipo, id, selecionada.documento)
+                        onRascunho(r.documento, r.id)
+                      } else await api.versoes.restaurar(selecionada.id, false)
                       setAberto(false)
-                      onRestaurado()
+                      if (protocolo < 2 || !onRascunho) onRestaurado()
                     })
                   }
                 >
@@ -304,40 +320,42 @@ export function LinhaTempo({
               />
             </>
           )}
-          <div className="border-t border-slate-200 pt-6">
-            <SectionTitle
-              title="Transferência de responsabilidade"
-              description="Todas as pendências precisam estar sincronizadas para transferir a emissão a outro computador."
-            />
-            <Field label="Computador de destino">
-              <Select
-                aria-label="Computador de destino"
-                value={destino}
-                onChange={(e) => setDestino(e.target.value)}
+          {protocolo < 2 && (
+            <div className="border-t border-slate-200 pt-6">
+              <SectionTitle
+                title="Transferência de responsabilidade"
+                description="Todas as pendências precisam estar sincronizadas para transferir a emissão a outro computador."
+              />
+              <Field label="Computador de destino">
+                <Select
+                  aria-label="Computador de destino"
+                  value={destino}
+                  onChange={(e) => setDestino(e.target.value)}
+                >
+                  <option value="">Escolha o computador</option>
+                  {pcs.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nome}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Button
+                icon={ArrowRightLeft}
+                className="mt-6"
+                disabled={!destino || ocupado}
+                onClick={() =>
+                  void executar(async () => {
+                    await api.nuvem.transferir(tipo, id, destino)
+                    setAberto(false)
+                    onRestaurado()
+                  })
+                }
               >
-                <option value="">Escolha o computador</option>
-                {pcs.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nome}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Button
-              icon={ArrowRightLeft}
-              className="mt-6"
-              disabled={!destino || ocupado}
-              onClick={() =>
-                void executar(async () => {
-                  await api.nuvem.transferir(tipo, id, destino)
-                  setAberto(false)
-                  onRestaurado()
-                })
-              }
-            >
-              Transferir
-            </Button>
-          </div>
+                Transferir
+              </Button>
+            </div>
+          )}
         </div>
       </Modal>
     </>

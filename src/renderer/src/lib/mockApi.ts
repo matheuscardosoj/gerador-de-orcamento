@@ -200,6 +200,7 @@ export function criarMockApi(): AppApi {
       remove: async () => {}
     },
     colaboracao: {
+      acompanhar: async () => {},
       membros: async () => [],
       vincularMembro: async () => {
         throw new Error('Disponível no aplicativo conectado à nuvem.')
@@ -233,6 +234,7 @@ export function criarMockApi(): AppApi {
       else db.pagamentosPadrao = ordenada as FormaPagamentoPadrao[]
     },
     recibos: {
+      alterarNumero: async () => ({ ok: false, erro: 'Disponível no aplicativo desktop.' }),
       numeracao: async () => ({
         proximoNumero: proximoRecibo,
         maiorEmUso: 0,

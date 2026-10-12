@@ -1,7 +1,8 @@
-import { ListaOrdenavel } from '../ui/ordenavel'
+import { PadroesConfig } from './PadroesConfig'
 import { NuvemSection } from './NuvemSection'
-import { useEffect, useRef, useState } from 'react'
-import { Trash2, Save, Check, Plus, Pencil, Download, ArchiveRestore, Import } from 'lucide-react'
+import { UsuariosSection } from './UsuariosSection'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { Save, Check, Plus, Download, ArchiveRestore, Import } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAsync } from '../lib/hooks'
 import { PageShell, Tabs } from '../ui/layout'
@@ -12,19 +13,14 @@ import {
   Input,
   NumberField,
   Select,
-  Textarea,
   SectionTitle,
   Checkbox,
-  EmptyState,
   ConfirmDialog,
   Mensagem
 } from '../ui/primitives'
-import { AppIcon } from '../ui/primitives'
 import type {
   EmpresaConfig,
   ParametrosFinanceiros,
-  ObservacaoPadrao,
-  FormaPagamentoPadrao,
   ConfigIA,
   StatusIA,
   CampoCliente
@@ -36,46 +32,97 @@ import {
   validarUrlOllamaLocal
 } from '@shared/validacao'
 
-const aplicacoes = [
-  { valor: 'ambos', rotulo: 'Orçamento e relatório' },
-  { valor: 'orcamento', rotulo: 'Somente orçamento' },
-  { valor: 'relatorio', rotulo: 'Somente relatório' }
-] as const
-
 type Aba =
-  'nuvem' | 'empresa' | 'parametros' | 'observacoes' | 'pagamentos' | 'numeracao' | 'dados' | 'ia'
+  | 'nuvem'
+  | 'usuarios'
+  | 'empresa'
+  | 'parametros'
+  | 'observacoes'
+  | 'pagamentos'
+  | 'numeracao'
+  | 'dados'
+  | 'ia'
+
+type EstadoSalvar = { salvando: boolean; ok: boolean; disabled: boolean }
+const AcoesFormulario = createContext<{
+  formId?: string
+  atualizar: (estado: EstadoSalvar) => void
+} | null>(null)
 
 export function ConfiguracoesPage(): JSX.Element {
   const [aba, setAba] = useState<Aba>('empresa')
+  const [novoUsuario, setNovoUsuario] = useState(false)
+  const [novoTexto, setNovoTexto] = useState(false)
+  const [estadoSalvar, setEstadoSalvar] = useState<EstadoSalvar>({
+    salvando: false,
+    ok: false,
+    disabled: false
+  })
+  const formId = ['empresa', 'parametros', 'ia'].includes(aba) ? `config-${aba}` : undefined
   return (
-    <PageShell
-      largura="full"
-      titulo="Configurações"
-      descricao="Dados fixos, parâmetros de cálculo e textos padrão"
-    >
-      <Tabs
-        atual={aba}
-        onChange={setAba}
-        tabs={[
-          { id: 'empresa', label: 'Empresa / Cabeçalho' },
-          { id: 'parametros', label: 'Parâmetros financeiros' },
-          { id: 'observacoes', label: 'Observações padrão' },
-          { id: 'pagamentos', label: 'Formas de pagamento' },
-          { id: 'numeracao', label: 'Numeração dos documentos' },
-          { id: 'dados', label: 'Dados e backup' },
-          { id: 'nuvem', label: 'Nuvem / Sincronização' },
-          { id: 'ia', label: 'IA local' }
-        ]}
-      />
-      {aba === 'nuvem' && <NuvemSection />}
-      {aba === 'empresa' && <SecaoEmpresa />}
-      {aba === 'parametros' && <SecaoParametros />}
-      {aba === 'observacoes' && <SecaoObservacoes />}
-      {aba === 'pagamentos' && <SecaoPagamentos />}
-      {aba === 'numeracao' && <SecaoNumeracao />}
-      {aba === 'dados' && <SecaoDados />}
-      {aba === 'ia' && <SecaoIA />}
-    </PageShell>
+    <AcoesFormulario.Provider value={{ formId, atualizar: setEstadoSalvar }}>
+      <PageShell
+        largura="full"
+        titulo="Configurações"
+        descricao="Dados fixos, parâmetros de cálculo e textos padrão"
+        acoes={
+          aba === 'usuarios' ? (
+            <Button icon={Plus} onClick={() => setNovoUsuario(true)}>
+              Vincular usuário
+            </Button>
+          ) : aba === 'observacoes' || aba === 'pagamentos' ? (
+            <Button icon={Plus} onClick={() => setNovoTexto(true)}>
+              {aba === 'observacoes' ? 'Nova observação' : 'Nova forma de pagamento'}
+            </Button>
+          ) : formId ? (
+            <Button
+              icon={estadoSalvar.ok && !estadoSalvar.salvando ? Check : Save}
+              type="submit"
+              form={formId}
+              disabled={estadoSalvar.disabled}
+            >
+              {estadoSalvar.salvando
+                ? 'Salvando…'
+                : estadoSalvar.ok
+                  ? 'Salvo'
+                  : 'Salvar alterações'}
+            </Button>
+          ) : undefined
+        }
+      >
+        <Tabs
+          atual={aba}
+          onChange={(aba) => {
+            setAba(aba)
+            setNovoTexto(false)
+          }}
+          tabs={[
+            { id: 'empresa', label: 'Empresa / Cabeçalho' },
+            { id: 'parametros', label: 'Parâmetros financeiros' },
+            { id: 'observacoes', label: 'Observações padrão' },
+            { id: 'pagamentos', label: 'Formas de pagamento' },
+            { id: 'numeracao', label: 'Numeração dos documentos' },
+            { id: 'dados', label: 'Dados e backup' },
+            { id: 'nuvem', label: 'Nuvem / Sincronização' },
+            { id: 'usuarios', label: 'Usuários' },
+            { id: 'ia', label: 'IA local' }
+          ]}
+        />
+        {aba === 'nuvem' && <NuvemSection />}
+        {aba === 'usuarios' && <UsuariosSection novo={novoUsuario} setNovo={setNovoUsuario} />}
+        {aba === 'empresa' && <SecaoEmpresa />}
+        {aba === 'parametros' && <SecaoParametros />}
+        {aba === 'observacoes' && (
+          <PadroesConfig tipo="observacoes" novo={novoTexto} setNovo={setNovoTexto} />
+        )}
+        {aba === 'pagamentos' && (
+          <PadroesConfig tipo="pagamentos" novo={novoTexto} setNovo={setNovoTexto} />
+        )}
+        {aba === 'numeracao' && <SecaoNumeracao />}
+        {aba === 'dados' && <SecaoDados />}
+        {aba === 'ia' && <SecaoIA />}
+      </PageShell>
+    </AcoesFormulario.Provider>
   )
 }
 
@@ -87,7 +134,14 @@ function BotaoSalvar({
   salvando: boolean
   ok: boolean
   disabled?: boolean
-}): JSX.Element {
+}): JSX.Element | null {
+  const contexto = useContext(AcoesFormulario)
+  const atualizar = contexto?.atualizar,
+    formId = contexto?.formId
+  useEffect(() => {
+    if (formId && atualizar) atualizar({ salvando, ok, disabled })
+  }, [formId, atualizar, salvando, ok, disabled])
+  if (formId) return null
   return (
     <Button icon={ok && !salvando ? Check : Save} type="submit" disabled={disabled}>
       {salvando ? 'Salvando…' : ok ? 'Salvo' : 'Salvar alterações'}
@@ -179,7 +233,7 @@ function SecaoEmpresa(): JSX.Element {
   }
 
   return (
-    <form onSubmit={salvar}>
+    <form id="config-empresa" onSubmit={salvar}>
       <Card className="p-6">
         <SectionTitle
           title="Dados do cabeçalho"
@@ -199,8 +253,7 @@ function SecaoEmpresa(): JSX.Element {
             label="Nome exibido no menu do app"
             hint="Escolha qual nome aparece na barra lateral"
           >
-            <select
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/30"
+            <Select
               value={form.nomeExibicao}
               onChange={(e) =>
                 set({ nomeExibicao: e.target.value as EmpresaConfig['nomeExibicao'] })
@@ -208,7 +261,7 @@ function SecaoEmpresa(): JSX.Element {
             >
               <option value="nome">Nome fantasia</option>
               <option value="razaoSocial">Razão social</option>
-            </select>
+            </Select>
           </Field>
           <Field label="CNPJ">
             <Input value={form.cnpj} onChange={(e) => set({ cnpj: e.target.value })} />
@@ -325,9 +378,7 @@ function SecaoEmpresa(): JSX.Element {
           </Mensagem>
         )}
 
-        <div className="mt-6 flex justify-end">
-          <BotaoSalvar salvando={operacao === 'salvar'} ok={ok} disabled={ocupado} />
-        </div>
+        <BotaoSalvar salvando={operacao === 'salvar'} ok={ok} disabled={ocupado} />
       </Card>
     </form>
   )
@@ -378,7 +429,7 @@ function SecaoParametros(): JSX.Element {
   }
 
   return (
-    <form onSubmit={salvar} className="space-y-6">
+    <form id="config-parametros" onSubmit={salvar} className="space-y-5">
       <Card className="p-6">
         <SectionTitle
           title="Encargos CLT (%)"
@@ -496,8 +547,7 @@ function SecaoParametros(): JSX.Element {
             />
           </Field>
           <Field label="Modo do imposto padrão" hint="Gross-up preserva o valor líquido calculado">
-            <select
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/30"
+            <Select
               value={form.modoImpostoPadrao}
               onChange={(e) =>
                 set({
@@ -507,437 +557,16 @@ function SecaoParametros(): JSX.Element {
             >
               <option value="gross_up">Gross-up (dividir por 1 − alíquota)</option>
               <option value="simples">Simples (somar alíquota)</option>
-            </select>
+            </Select>
           </Field>
         </div>
         {erro && <Mensagem className="mt-4">{erro}</Mensagem>}
-        <div className="mt-6 flex justify-end">
-          <BotaoSalvar salvando={salvando} ok={ok} />
-        </div>
+        <BotaoSalvar salvando={salvando} ok={ok} />
       </Card>
     </form>
   )
 }
 
-// ----------------------------------------------------------- Observações
-function SecaoObservacoes(): JSX.Element {
-  const { data, error: erroCarga, reload } = useAsync(() => api.observacoes.list(), [])
-  const [novo, setNovo] = useState('')
-  const { ocupado, erro, executar } = useMutacao<'alterar'>()
-
-  const adicionar = (): void => {
-    if (!novo.trim()) return
-    void executar('alterar', async () => {
-      await api.observacoes.create({ texto: novo.trim(), padrao: true, aplicacao: 'ambos' })
-      setNovo('')
-      reload()
-    })
-  }
-
-  return (
-    <Card className="p-6">
-      <SectionTitle
-        title="Observações padrão"
-        description="Defina onde o texto pode ser usado e se ele entra automaticamente em documentos novos"
-      />
-      {erroCarga && (
-        <Mensagem className="mb-4">Não foi possível carregar as observações. {erroCarga}</Mensagem>
-      )}
-      {erro && (
-        <Mensagem className="mb-4">Não foi possível alterar as observações. {erro}</Mensagem>
-      )}
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row">
-        <Textarea
-          value={novo}
-          onChange={(e) => setNovo(e.target.value)}
-          placeholder="Escreva uma nova observação padrão…"
-          className="min-h-[80px] flex-1"
-          disabled={ocupado}
-        />
-        <Button
-          icon={Plus}
-          type="button"
-          onClick={adicionar}
-          className="shrink-0 self-start"
-          disabled={ocupado || !novo.trim()}
-        >
-          {ocupado ? 'Salvando…' : 'Adicionar'}
-        </Button>
-      </div>
-      <div className="space-y-2">
-        <ListaOrdenavel
-          itens={data ?? []}
-          disabled={ocupado}
-          onChange={(itens) =>
-            void executar('alterar', async () => {
-              await api.reordenarCadastro(
-                'observacoes',
-                itens.map((i) => i.id)
-              )
-              reload()
-            })
-          }
-        >
-          {(data ?? []).map((o) => (
-            <ItemObservacao
-              key={o.id}
-              obs={o}
-              onChange={reload}
-              ocupado={ocupado}
-              executar={executar}
-            />
-          ))}
-        </ListaOrdenavel>
-        {data && data.length === 0 && <EmptyState title="Nenhuma observação cadastrada" />}
-      </div>
-    </Card>
-  )
-}
-
-function ItemObservacao({
-  obs,
-  onChange,
-  ocupado,
-  executar
-}: {
-  obs: ObservacaoPadrao
-  onChange: () => void
-  ocupado: boolean
-  executar: ExecutarMutacao<'alterar'>
-}): JSX.Element {
-  const [texto, setTexto] = useState(obs.texto)
-  const [editando, setEditando] = useState(false)
-
-  const salvar = (): void => {
-    void executar('alterar', async () => {
-      const atualizado = await api.observacoes.update(obs.id, { texto })
-      if (!atualizado) throw new Error('A observação não foi encontrada.')
-      setEditando(false)
-      onChange()
-    })
-  }
-
-  return (
-    <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-[minmax(0,1fr)_220px] md:items-start">
-      <div className="min-w-0">
-        {editando ? (
-          <Textarea
-            value={texto}
-            onChange={(e) => setTexto(e.target.value)}
-            className="min-h-[96px]"
-            autoFocus
-            disabled={ocupado}
-          />
-        ) : (
-          <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">
-            {obs.texto}
-          </p>
-        )}
-      </div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-1">
-        <Checkbox
-          label="Incluir automaticamente"
-          checked={obs.padrao}
-          disabled={ocupado}
-          onChange={(v) => {
-            void executar('alterar', async () => {
-              const atualizado = await api.observacoes.update(obs.id, { padrao: v })
-              if (!atualizado) throw new Error('A observação não foi encontrada.')
-              onChange()
-            })
-          }}
-        />
-        <Select
-          value={obs.aplicacao}
-          aria-label="Aplicação da observação"
-          disabled={ocupado}
-          onChange={(e) => {
-            const aplicacao = e.target.value as ObservacaoPadrao['aplicacao']
-            void executar('alterar', async () => {
-              const atualizado = await api.observacoes.update(obs.id, { aplicacao })
-              if (!atualizado) throw new Error('A observação não foi encontrada.')
-              onChange()
-            })
-          }}
-        >
-          {aplicacoes.map((a) => (
-            <option key={a.valor} value={a.valor}>
-              {a.rotulo}
-            </option>
-          ))}
-        </Select>
-        <div className="flex flex-wrap gap-2">
-          {editando ? (
-            <>
-              <Button
-                icon={Save}
-                type="button"
-                size="sm"
-                onClick={salvar}
-                disabled={ocupado || !texto.trim()}
-              >
-                Salvar
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setTexto(obs.texto)
-                  setEditando(false)
-                }}
-                disabled={ocupado}
-              >
-                Cancelar
-              </Button>
-            </>
-          ) : (
-            <Button
-              icon={Pencil}
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setEditando(true)}
-              disabled={ocupado}
-            >
-              Editar
-            </Button>
-          )}
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            aria-label="Excluir observação"
-            disabled={ocupado}
-            onClick={() => {
-              void executar('alterar', async () => {
-                await api.observacoes.remove(obs.id)
-                onChange()
-              })
-            }}
-          >
-            <AppIcon icon={Trash2} />
-          </Button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ------------------------------------------------------------- Pagamentos
-function SecaoPagamentos(): JSX.Element {
-  const { data, error: erroCarga, reload } = useAsync(() => api.pagamentos.list(), [])
-  const [novo, setNovo] = useState('')
-  const { ocupado, erro, executar } = useMutacao<'alterar'>()
-
-  const adicionar = (): void => {
-    if (!novo.trim()) return
-    void executar('alterar', async () => {
-      await api.pagamentos.create({ texto: novo.trim(), padrao: false, aplicacao: 'ambos' })
-      setNovo('')
-      reload()
-    })
-  }
-
-  return (
-    <Card className="p-6">
-      <SectionTitle
-        title="Formas de pagamento padrão"
-        description="Defina onde o texto pode ser usado e se ele entra automaticamente em documentos novos"
-      />
-      {erroCarga && (
-        <Mensagem className="mb-4">
-          Não foi possível carregar as formas de pagamento. {erroCarga}
-        </Mensagem>
-      )}
-      {erro && (
-        <Mensagem className="mb-4">
-          Não foi possível alterar as formas de pagamento. {erro}
-        </Mensagem>
-      )}
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row">
-        <Textarea
-          value={novo}
-          onChange={(e) => setNovo(e.target.value)}
-          placeholder="Ex.: Via Pix para a chave…"
-          className="min-h-[80px] flex-1"
-          disabled={ocupado}
-        />
-        <Button
-          icon={Plus}
-          type="button"
-          onClick={adicionar}
-          className="shrink-0 self-start"
-          disabled={ocupado || !novo.trim()}
-        >
-          {ocupado ? 'Salvando…' : 'Adicionar'}
-        </Button>
-      </div>
-      <div className="space-y-2">
-        <ListaOrdenavel
-          itens={data ?? []}
-          disabled={ocupado}
-          onChange={(itens) =>
-            void executar('alterar', async () => {
-              await api.reordenarCadastro(
-                'pagamentos',
-                itens.map((i) => i.id)
-              )
-              reload()
-            })
-          }
-        >
-          {(data ?? []).map((p) => (
-            <ItemPagamento
-              key={p.id}
-              pag={p}
-              onChange={reload}
-              ocupado={ocupado}
-              executar={executar}
-            />
-          ))}
-        </ListaOrdenavel>
-        {data && data.length === 0 && <EmptyState title="Nenhuma forma de pagamento cadastrada" />}
-      </div>
-    </Card>
-  )
-}
-
-function ItemPagamento({
-  pag,
-  onChange,
-  ocupado,
-  executar
-}: {
-  pag: FormaPagamentoPadrao
-  onChange: () => void
-  ocupado: boolean
-  executar: ExecutarMutacao<'alterar'>
-}): JSX.Element {
-  const [texto, setTexto] = useState(pag.texto)
-  const [editando, setEditando] = useState(false)
-
-  const salvar = (): void => {
-    void executar('alterar', async () => {
-      const atualizado = await api.pagamentos.update(pag.id, { texto })
-      if (!atualizado) throw new Error('A forma de pagamento não foi encontrada.')
-      setEditando(false)
-      onChange()
-    })
-  }
-
-  return (
-    <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-[minmax(0,1fr)_220px] md:items-start">
-      <div className="min-w-0">
-        {editando ? (
-          <Textarea
-            value={texto}
-            onChange={(e) => setTexto(e.target.value)}
-            className="min-h-[96px]"
-            autoFocus
-            disabled={ocupado}
-          />
-        ) : (
-          <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">
-            {pag.texto}
-          </p>
-        )}
-      </div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-1">
-        <Checkbox
-          label="Incluir automaticamente"
-          checked={pag.padrao}
-          disabled={ocupado}
-          onChange={(v) => {
-            void executar('alterar', async () => {
-              const atualizado = await api.pagamentos.update(pag.id, { padrao: v })
-              if (!atualizado) throw new Error('A forma de pagamento não foi encontrada.')
-              onChange()
-            })
-          }}
-        />
-        <Select
-          value={pag.aplicacao}
-          aria-label="Aplicação da forma de pagamento"
-          disabled={ocupado}
-          onChange={(e) => {
-            const aplicacao = e.target.value as FormaPagamentoPadrao['aplicacao']
-            void executar('alterar', async () => {
-              const atualizado = await api.pagamentos.update(pag.id, { aplicacao })
-              if (!atualizado) throw new Error('A forma de pagamento não foi encontrada.')
-              onChange()
-            })
-          }}
-        >
-          {aplicacoes.map((a) => (
-            <option key={a.valor} value={a.valor}>
-              {a.rotulo}
-            </option>
-          ))}
-        </Select>
-        <div className="flex flex-wrap gap-2">
-          {editando ? (
-            <>
-              <Button
-                icon={Save}
-                type="button"
-                size="sm"
-                onClick={salvar}
-                disabled={ocupado || !texto.trim()}
-              >
-                Salvar
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setTexto(pag.texto)
-                  setEditando(false)
-                }}
-                disabled={ocupado}
-              >
-                Cancelar
-              </Button>
-            </>
-          ) : (
-            <Button
-              icon={Pencil}
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setEditando(true)}
-              disabled={ocupado}
-            >
-              Editar
-            </Button>
-          )}
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            aria-label="Excluir forma de pagamento"
-            disabled={ocupado}
-            onClick={() => {
-              void executar('alterar', async () => {
-                await api.pagamentos.remove(pag.id)
-                onChange()
-              })
-            }}
-          >
-            <AppIcon icon={Trash2} />
-          </Button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// -------------------------------------------------------------------- IA local
-/**
- * Origem do modelo usado no botão "Sugerir com IA" do editor. Tudo roda na
- * própria máquina: ou o modelo que veio no instalador, ou um Ollama já instalado.
- */
 function SecaoIA(): JSX.Element {
   const { data, error: erroCarga } = useAsync(() => api.ia.get(), [])
   const [form, setForm] = useState<ConfigIA | null>(null)
@@ -1007,7 +636,7 @@ function SecaoIA(): JSX.Element {
   }
 
   return (
-    <form onSubmit={salvar} className="space-y-5">
+    <form id="config-ia" onSubmit={salvar} className="space-y-5">
       <Card className="p-6">
         <SectionTitle
           title="Revisão de textos com IA local"
@@ -1068,7 +697,7 @@ function SecaoIA(): JSX.Element {
 // ------------------------------------------------------------------ Numeração
 function SecaoNumeracao(): JSX.Element {
   return (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+    <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
       <PainelNumeracao
         titulo="Numeração dos orçamentos"
         documento="orçamento"
@@ -1108,7 +737,7 @@ function PainelNumeracao({
   const [ok, setOk] = useState(false)
 
   useEffect(() => {
-    if (data) setProximo(data.proximoNumero)
+    if (data) setProximo(data.proximoBloco ?? data.proximoNumero)
   }, [data])
 
   if (!data || proximo === null)
@@ -1144,17 +773,23 @@ function PainelNumeracao({
           title={titulo}
           description={
             data.usaReservas
-              ? 'Na nuvem, os números vêm de faixas exclusivas deste computador. A alteração manual fica indisponível para evitar duplicidades.'
+              ? data.proximoBloco !== undefined
+                ? 'Ajusta o início das próximas faixas da empresa. Números já distribuídos continuam válidos; Ordem e ID interno são automáticos.'
+                : 'Números vêm de faixas exclusivas. Conecte com o protocolo atualizado para ajustar faixas futuras.'
               : `Define o número que o próximo ${documento} vai receber. Números já utilizados não são reutilizados.`
           }
         />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field
-            label="Próximo número"
+            label={
+              data.proximoBloco !== undefined
+                ? 'Início da próxima faixa da empresa'
+                : 'Próximo número'
+            }
             hint={
               data.usaReservas
                 ? data.proximoNumero > 0
-                  ? 'Próximo número reservado neste computador.'
+                  ? `Próximo número deste computador: ${data.proximoNumero}. ${data.minimoProximo ? `Novo início deve ser pelo menos ${data.minimoProximo}.` : ''}`
                   : 'Sincronize para reservar novos números. Você ainda pode salvar rascunhos.'
                 : `Números já usados são recusados para não haver dois ${documento}s com o mesmo número.`
             }
@@ -1162,10 +797,10 @@ function PainelNumeracao({
             <NumberField
               value={proximo}
               onChange={definir}
-              min={1}
+              min={data.minimoProximo ?? 1}
               max={999999}
               step={1}
-              disabled={ocupado || data.usaReservas}
+              disabled={ocupado || (data.usaReservas && data.proximoBloco === undefined)}
             />
           </Field>
           <div className="space-y-2 self-start md:pt-7">
@@ -1195,7 +830,7 @@ function PainelNumeracao({
           <Mensagem className="mt-4">Não foi possível definir o próximo número. {erro}</Mensagem>
         )}
 
-        {!data.usaReservas && (
+        {(!data.usaReservas || data.proximoBloco !== undefined) && (
           <div className="mt-5 flex justify-end">
             <BotaoSalvar salvando={operacao === 'salvar'} ok={ok} disabled={ocupado} />
           </div>

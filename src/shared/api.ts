@@ -53,6 +53,8 @@ export interface InfoNumeracao {
   totalDocumentos: number
   /** A numeração oficial vem das reservas exclusivas do computador. */
   usaReservas?: boolean
+  proximoBloco?: number
+  minimoProximo?: number
 }
 
 export type SugestaoObservacaoEntrada =
@@ -101,6 +103,7 @@ export interface AppApi {
     remove(id: string): Promise<void>
   }
   colaboracao: {
+    acompanhar(tipo: import('./evolucao').TipoDocumento, id: string, ativo: boolean): Promise<void>
     membros(): Promise<import('./evolucao').MembroEmpresa[]>
     vincularMembro(email: string, nome: string): Promise<import('./evolucao').MembroEmpresa[]>
     ativarMembro(usuarioId: string, ativo: boolean): Promise<import('./evolucao').MembroEmpresa[]>
@@ -126,6 +129,10 @@ export interface AppApi {
   }
   reordenarCadastro(tipo: 'servicos' | 'observacoes' | 'pagamentos', ids: string[]): Promise<void>
   recibos: {
+    alterarNumero(
+      id: string,
+      numero: number
+    ): Promise<ResultadoNumeracao & { recibo?: import('./types').Recibo }>
     numeracao(): Promise<InfoNumeracao>
     definirProximoNumero(numero: number): Promise<ResultadoNumeracao>
     list(): Promise<import('./types').Recibo[]>
