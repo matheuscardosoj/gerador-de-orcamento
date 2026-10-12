@@ -10,9 +10,10 @@ const { Database } = sqlite
 assert.ok(process.argv[2] && process.argv[3], 'Informe o banco de origem e o executável.')
 const origem = resolve(process.argv[2]),
   executablePath = resolve(process.argv[3])
+const versao = process.argv[4] ?? '1.5.0-rc.1'
 const pasta = resolve('output/backups-corrigidos', `base-atual-${Date.now()}`)
 const perfil = join(pasta, 'exportacao'),
-  destino = join(pasta, 'Dados atuais rc.2 - compatível 1.4.0.gdo-backup')
+  destino = join(pasta, `Base atual - compatível ${versao}.gdo-backup`)
 mkdirSync(join(perfil, 'data'), { recursive: true })
 const hash = (b) => createHash('sha256').update(b).digest('hex')
 const bytes = readFileSync(origem)
@@ -22,13 +23,23 @@ assert.equal(
   hash(bytes),
   'A origem mudou durante a cópia; repita com as edições concluídas.'
 )
-const locais = new Set(['reservas', 'fila_nuvem', 'sincronizacao', 'conflitos_nuvem'])
+const locais = new Set([
+  'reservas',
+  'fila_nuvem',
+  'sincronizacao',
+  'conflitos_nuvem',
+  'edicoes_documento'
+])
 const chaveLocal = (k) =>
   [
     'computadorId',
     'sessaoNuvem',
     'nuvem',
     'usuarioNuvem',
+    'contextoNuvem',
+    'empresaNuvem',
+    'membrosCache',
+    'pedidosEdicaoCache',
     'cursorNuvem',
     'ultimaNuvem',
     'erroNuvem',
@@ -37,7 +48,9 @@ const chaveLocal = (k) =>
     'idOrigemDados'
   ].includes(k) ||
   k.startsWith('estado:') ||
-  k.startsWith('transferencia:')
+  k.startsWith('transferencia:') ||
+  k.startsWith('computadorUsuario:') ||
+  k.startsWith('numeracaoNuvem:')
 function ler(caminho) {
   const db = new Database(caminho)
   try {
@@ -53,6 +66,15 @@ function ler(caminho) {
   }
 }
 const antes = ler(join(perfil, 'data/banco.db'))
+const isolada = new Database(join(perfil, 'data/banco.db'))
+try {
+  for (const r of isolada.all('SELECT chave FROM configuracoes'))
+    if (chaveLocal(r.chave) && r.chave !== 'idOrigemDados')
+      isolada.run('DELETE FROM configuracoes WHERE chave=?', [r.chave])
+  for (const t of locais) isolada.exec(`DELETE FROM ${t}`)
+} finally {
+  isolada.close()
+}
 const conferir = (depois) => {
   for (const [t, linhas] of Object.entries(antes)) {
     if (locais.has(t)) continue
@@ -74,9 +96,22 @@ try {
   }, destino)
   let page = await app.firstWindow()
   await page.getByRole('button', { name: 'Orçamentos', exact: true }).waitFor()
-  assert.equal(await page.evaluate(() => window.api.aplicativo.versao()), '1.4.0')
+  assert.equal(await page.evaluate(() => window.api.aplicativo.versao()), versao)
   await page.evaluate(() => window.api.dados.exportar())
   conferir(ler(destino))
+  const seguro = new Database(destino)
+  try {
+    assert.equal(
+      seguro.get(
+        "SELECT count(*) AS n FROM configuracoes WHERE chave IN ('sessaoNuvem','nuvem','computadorId','contextoNuvem')"
+      ).n,
+      0
+    )
+    assert.equal(seguro.get('SELECT count(*) AS n FROM edicoes_documento').n, 0)
+    assert.equal(seguro.get('SELECT count(*) AS n FROM reservas').n, 0)
+  } finally {
+    seguro.close()
+  }
   await app.close()
   app = undefined
   const restauracao = join(pasta, 'restauracao')

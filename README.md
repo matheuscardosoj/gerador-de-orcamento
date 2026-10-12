@@ -70,6 +70,12 @@ o app tenta o Ollama automaticamente.
 
 ## Status
 
+**Candidato 1.5.0-rc.1** — usuários vinculados à empresa, Supabase Broadcast privado,
+edição temporária e preparação offline, rascunhos com comparação de três versões,
+conciliação financeira separada, IDs internos permanentes e ordem visual. SQLite
+esquema 9 e protocolo de nuvem 2; todos os computadores devem ser atualizados após
+a migração. O candidato é desenvolvido na branch `claude`; `main` mantém a entrega estável.
+
 **Versão 1.4.1** — nuvem organizada em tabelas de domínio, migração transacional,
 integridade financeira e histórico preservado. Inclui o esquema atualizado e o
 guia para consultar os dados no Supabase; mantém compatibilidade com a 1.4.0.
@@ -112,7 +118,10 @@ copiada em **Configurações → Nuvem / Sincronização**.
 Atualize com o mesmo usuário do Windows para preservar a base existente. Confira os
 dados migrados e publique-os em um projeto remoto vazio. Nos outros computadores,
 baixe a base da empresa. Clientes, catálogo, configurações comerciais, documentos,
-recebimentos, imagens e versões são compartilhados por um projeto/usuário por empresa.
+recebimentos, imagens e versões são compartilhados por um projeto por empresa,
+com logins individuais vinculados em Configurações → Usuários. Para uma nuvem já
+conectada, execute `schema-colaboracao.sql` inteiro com os aplicativos fechados;
+não publique novamente a base existente.
 IA e preferências do computador permanecem locais. Sessão protegida pelo Windows;
 o instalador não contém credenciais administrativas.
 

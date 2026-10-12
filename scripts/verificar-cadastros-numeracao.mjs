@@ -17,9 +17,29 @@ const app = await electron.launch({
 const erros = []
 try {
   const page = await app.firstWindow()
+  const aguardarConsulta = async (consulta, argumento) => {
+    const limite = Date.now() + 5000
+    while (!(await page.evaluate(consulta, argumento))) {
+      assert.ok(Date.now() < limite, 'A consulta assíncrona não confirmou o resultado esperado.')
+      await new Promise((r) => setTimeout(r, 50))
+    }
+  }
   page.on('pageerror', (e) => erros.push(e.message))
   await page.getByRole('button', { name: 'Cadastros', exact: true }).click()
-  const clientesAntes = await page.evaluate(() => window.api.clientes.list())
+  let clientesAntes = await page.evaluate(() => window.api.clientes.list())
+  if (!clientesAntes.length) {
+    await page.evaluate(() =>
+      window.api.clientes.create({
+        nome: 'Cliente de validação',
+        tipoPessoa: 'pf',
+        tratamento: '',
+        ativo: true
+      })
+    )
+    await page.getByRole('button', { name: 'Orçamentos', exact: true }).click()
+    await page.getByRole('button', { name: 'Cadastros', exact: true }).click()
+    clientesAntes = await page.evaluate(() => window.api.clientes.list())
+  }
   const servicosAntes = await page.evaluate(() => window.api.servicos.list())
   assert.ok(servicosAntes.length >= 2)
   const medidas = []
@@ -105,25 +125,44 @@ try {
   })
   await page.mouse.up()
   const movidos = [ids[1], ids[0], ...ids.slice(2)]
-  await page.waitForFunction(
+  await aguardarConsulta(
     async (esperados) =>
       JSON.stringify((await window.api.servicos.list()).map((s) => s.id)) ===
       JSON.stringify(esperados),
     movidos
   )
+  await page.waitForFunction(
+    (nome) =>
+      document.querySelector('tbody tr')?.textContent.includes(nome) &&
+      !document.querySelector('button[aria-label="Arrastar para reordenar"]')?.disabled,
+    servicosAntes[1].nome
+  )
   await alcas.first().focus()
   await page.keyboard.press('Space')
+  await page.locator('button[data-arrastando="true"]').waitFor()
+  // O sensor instala a escuta de teclado no próximo turno; aguarda o render real.
+  await page.evaluate(
+    () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+  )
   await page.keyboard.press('ArrowDown')
   await page.keyboard.press('Escape')
+  await page.locator('button[data-arrastando="true"]').waitFor({ state: 'detached' })
   assert.deepEqual(
     (await page.evaluate(() => window.api.servicos.list())).map((s) => s.id),
     movidos
   )
   await alcas.first().focus()
   await page.keyboard.press('Space')
+  await page.locator('button[data-arrastando="true"]').waitFor()
+  await page.evaluate(
+    () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+  )
   await page.keyboard.press('ArrowDown')
+  await page.waitForFunction(() =>
+    document.querySelectorAll('tbody tr')[1]?.style.outline.includes('2px')
+  )
   await page.keyboard.press('Space')
-  await page.waitForFunction(
+  await aguardarConsulta(
     async (esperados) =>
       JSON.stringify((await window.api.servicos.list()).map((s) => s.id)) ===
       JSON.stringify(esperados),
@@ -138,15 +177,13 @@ try {
   await page.getByRole('button', { name: 'Limpar filtros', exact: true }).click()
 
   await page.getByRole('button', { name: 'Configurações', exact: true }).click()
-  await page.getByRole('tab', { name: 'Numeração', exact: true }).click()
+  await page.getByRole('tab', { name: 'Numeração dos documentos', exact: true }).click()
   const painel = page
     .getByRole('heading', { name: 'Numeração dos recibos', exact: true })
     .locator('xpath=ancestor::form')
   await painel.getByLabel('Próximo número', { exact: true }).fill('120')
   await painel.getByRole('button', { name: 'Salvar alterações', exact: true }).click()
-  await page.waitForFunction(
-    async () => (await window.api.recibos.numeracao()).proximoNumero === 120
-  )
+  await aguardarConsulta(async () => (await window.api.recibos.numeracao()).proximoNumero === 120)
   const estadoAntes = await page.evaluate(() => window.api.recibos.list())
   assert.equal(estadoAntes.length, 0)
   const recibo = await page.evaluate(() =>

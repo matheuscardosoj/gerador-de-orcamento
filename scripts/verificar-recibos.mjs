@@ -11,7 +11,8 @@ mkdirSync(documentos, { recursive: true })
 const logoPng = `data:image/png;base64,${readFileSync('build/logo-vs.png').toString('base64')}`
 const logoJpeg = `data:image/jpeg;base64,${(await sharp('build/logo-vs.png').resize(420, 120, { fit: 'contain', background: '#fff' }).flatten({ background: '#fff' }).jpeg().toBuffer()).toString('base64')}`
 const app = await electron.launch({
-  args: ['.'],
+  executablePath: process.argv[2] ? resolve(process.argv[2]) : undefined,
+  args: process.argv[2] ? [] : ['.'],
   env: { ...process.env, GERADOR_USER_DATA_DIR: join(saida, 'perfil') }
 })
 const resultados = []
@@ -92,10 +93,10 @@ try {
     await page.getByRole('button', { name: 'Orçamentos', exact: true }).click()
     await page.getByRole('button', { name: 'Recibos', exact: true }).click()
     await page.getByLabel('Buscar recibos').fill('Busca sem resultados')
-    await page.getByText('Nenhum recibo encontrado', { exact: true }).waitFor()
+    await page.getByText('Nenhum documento encontrado', { exact: true }).waitFor()
     await page.getByRole('button', { name: 'Limpar filtros', exact: true }).click()
     await page
-      .getByLabel('Filtrar estado dos recibos')
+      .getByLabel('Filtrar estado', { exact: true })
       .selectOption(caso === 1 ? 'pendente' : 'recebido')
     await page.getByLabel('Buscar recibos').fill(nomes[caso])
     await page.screenshot({ path: join(saida, `lista-${caso + 1}.png`), fullPage: true })

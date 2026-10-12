@@ -80,6 +80,13 @@ const erros = [],
   medidas = []
 try {
   const page = await app.firstWindow()
+  const aguardarConsulta = async (consulta, argumento) => {
+    const limite = Date.now() + 5000
+    while (!(await page.evaluate(consulta, argumento))) {
+      assert.ok(Date.now() < limite, 'A consulta assíncrona não confirmou o resultado esperado.')
+      await new Promise((r) => setTimeout(r, 50))
+    }
+  }
   page.on('pageerror', (e) => erros.push(e.message))
   await page.getByRole('button', { name: 'Configurações', exact: true }).click()
   await page.getByRole('heading', { name: 'Dados do cabeçalho', exact: true }).waitFor()
@@ -241,7 +248,7 @@ try {
   )
   await campo.fill('Outra edição do rascunho')
   await page.getByRole('button', { name: 'Salvar', exact: true }).click()
-  await page.waitForFunction(
+  await aguardarConsulta(
     async (id) =>
       (await window.api.rascunhos.list('orcamento', id)).some(
         (r) => r.documento.introducao === 'Outra edição do rascunho'
