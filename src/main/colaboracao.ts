@@ -105,10 +105,24 @@ export async function controlarEdicao(
   const atual = get('SELECT * FROM edicoes_documento WHERE tipo=? AND documento_id=?', [tipo, id])
   if (['offline', 'liberar', 'transferir', 'recuperar'].includes(acao)) {
     const status = await sincronizarNuvem()
-    if (status.pendentes || status.erro || status.conflitos.length)
+    const conflitoPreservado =
+      acao === 'recuperar' &&
+      status.conflitos.length > 0 &&
+      status.erro ===
+        'Há alterações em conflito preservadas para conciliação. Os demais dados continuam sincronizando.'
+    if (
+      (status.erro && !conflitoPreservado) ||
+      ((status.pendentes || status.conflitos.length) && acao !== 'recuperar')
+    )
       throw new Error(
         'Conclua a sincronização ou preserve os rascunhos antes de alterar a autorização.'
       )
+    if (acao === 'recuperar' && (status.pendentes || status.conflitos.length)) {
+      const { preservarConflitos } = await import('./rascunhos')
+      preservarConflitos(
+        all('SELECT DISTINCT entidade FROM fila_nuvem').map((l) => texto(l.entidade))
+      )
+    }
     if (acao === 'offline') {
       const { orcamentosRepo, relatoriosRepo } = await import('./repositories')
       const { recibosRepo } = await import('./recibos')

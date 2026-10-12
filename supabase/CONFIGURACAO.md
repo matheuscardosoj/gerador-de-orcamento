@@ -1,78 +1,94 @@
-# Configurar a nuvem da empresa
+# Nuvem da empresa — versão 1.5
 
-Use um projeto Supabase por empresa e o mesmo usuário de e-mail e senha nos computadores que compartilharão os dados. Cada usuário autenticado acessa sua própria base. Preferências do computador e configuração da IA permanecem locais.
+Use um projeto Supabase por empresa. Cada pessoa pode ter seu próprio login, vinculado à mesma empresa em **Configurações → Usuários**. Todos os membros ativos têm acesso completo; não é possível remover o último membro ativo. Preferências dos históricos e configuração da IA permanecem locais.
 
-## Atualizar uma nuvem que já está conectada
+## Atualizar a base que você já usa
 
-O novo esquema organiza os registros em tabelas de domínio. Ele é compatível com a sincronização da **versão 1.4.0**; o banco SQLite local continua no esquema 8.
+### Sua base já está no Supabase
 
-1. Sincronize todos os computadores, resolva pendências/conflitos e exporte um backup atualizado em **Dados e backup**. Termine as edições e feche os aplicativos enquanto executar a mudança.
-2. Guarde também a exportação remota verificada e teste a migração dessa cópia. O script `scripts/verificar-migracao-relacional.mjs` exercita PostgreSQL isolado e compara conteúdo, revisões e sequências; não usa contas reais.
-3. Abra uma **nova consulta no SQL Editor** e execute o **novo `schema.sql` completo**, fornecido com esta atualização. Não use a cópia do esquema antigo que estava no instalador original. Não escolha publicar novamente nem apague tabelas manualmente.
-4. O script converte os registros existentes dentro de uma transação, valida os vínculos/pagamentos e compara todos os conteúdos. Uma falha cancela a mudança inteira. Depois da conferência, retira a tabela genérica anterior. Não renumera documentos nem modifica snapshots antigos. Executar novamente preserva os dados e as revisões.
-5. Reabra os aplicativos, sincronize e confira ausência de falhas/pendências. Compare novamente os registros locais/remotos e teste o download em um perfil separado.
+1. Sincronize todos os computadores, resolva pendências e exporte um backup em **Dados e backup**. Salve as edições e feche todos os aplicativos.
+2. Guarde uma exportação remota verificada. O ensaio `scripts/verificar-migracao-colaboracao.mjs` compara essa cópia em PostgreSQL isolado, incluindo documentos, valores, imagens, versões e reservas.
+3. No SQL Editor do projeto existente, execute **schema-colaboracao.sql inteiro**, incluído com a atualização. O botão **Copiar configuração do banco** fornece esse script. Não publique novamente a base nem apague tabelas.
+4. A migração transacional preserva números oficiais, chaves técnicas, pagamentos, imagens e versões. A conta atual torna-se o primeiro membro. Documentos ativos recebem IDs internos de 1 em diante por tipo, ordenados por data, criação, número original e chave técnica. Reexecutar não reinicia os IDs.
+5. Atualize **todos os computadores para 1.5** antes de editar. Gravações antigas são bloqueadas pelo servidor para proteger edição e pagamentos. O SQLite local migra automaticamente para o esquema 9, com backup verificado anterior à mudança.
+6. Abra a versão atualizada com o mesmo usuário do Windows. A base e a sessão existentes continuam na pasta de dados. Confira **0 alterações aguardando envio**, ausência de conflitos e **Tempo real conectado**. Confira documentos e IDs nos históricos.
 
-## Onde consultar os dados no painel
+Um erro no SQL deve reverter a transação. Não execute novamente o esquema antigo após concluir a migração. Restauração local e restauração da nuvem são operações distintas: preserve os backups e investigue o erro antes de publicar dados.
 
-Em **Table Editor → public**, abra a tabela pelo nome:
+### Sua base ainda é somente local
 
-| Tabela                                                                       | Conteúdo                                                                  |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `clientes`                                                                   | Nome, PF/PJ, CPF/CNPJ opcional, telefone, e-mail e endereço               |
-| `servicos`                                                                   | Catálogo de serviços e sua ordem                                          |
-| `orcamentos`, `itens_orcamento`, `materiais_orcamento`, `textos_orcamento`   | Propostas, valores, serviços, materiais e condições                       |
-| `relatorios`, `itens_relatorio`, `lancamentos_relatorio`, `textos_relatorio` | Serviços executados, adiantamentos, reembolsos e saldo                    |
-| `recibos`, `recebimentos`                                                    | Recibos/cobranças ativos e lançamentos financeiros, incluindo estornos    |
-| `imagens`, `anexos_orcamento`, `anexos_relatorio`                            | Base64 e vínculos de fotos, sem Storage                                   |
-| `documentos`, `versoes_documentos`, `imagens_versoes`                        | Responsável, dados congelados, histórico e referências às imagens antigas |
-| `observacoes_padrao`, `formas_pagamento_padrao`, `configuracoes_empresa`     | Padrões comerciais e configuração da empresa                              |
-| `computadores`, `reservas_numeros`                                           | Computadores conectados e números reservados/utilizados                   |
+1. Exporte um backup da base com suas últimas edições, incluindo o candidato que você já usa. Feche o app e atualize no mesmo usuário do Windows. Não restaure um backup antigo sobre a base atual.
+2. A migração local cria backup verificado e preserva documentos. Confira clientes, empresa/logo, valores, fotos, recibos e versões. Exporte uma cópia atualizada.
+3. Prepare um projeto Supabase **vazio**. No computador com a base correta, escolha **Publicar os dados locais em uma nuvem vazia**. Preserva números oficiais e arquivos de documentos excluídos. Não selecione baixar uma base vazia sobre seus dados.
+4. Aguarde e confira documentos e versões. Nos demais computadores, escolha **Baixar a base da empresa**. Dados locais anteriores ficam em backup antes do download.
 
-O registro permanente em `documentos` preserva documentos excluídos; eles não reaparecem nas tabelas de documentos ativos. O vínculo de um pagamento com esse registro permanece válido mesmo após excluir/estornar o recibo.
+## Projeto e contas
 
-Os controles de sincronização ficam no schema **`sincronizacao`**. `gdo_entities` agora é uma **consulta compatível**, que monta os dados a partir das tabelas; não é uma segunda base. JSON continua sendo usado para cálculos, configurações e snapshots históricos, preservando campos opcionais.
+1. Entre no [painel Supabase](https://supabase.com/dashboard), crie o projeto da empresa e escolha região próxima. Guarde a senha do banco separadamente.
+2. Execute **schema-colaboracao.sql completo** em uma nova consulta no SQL Editor, com **Run**. Não é necessário Storage: imagens ficam em Base64 nas tabelas.
+3. Em **Authentication → Users**, crie e confirme a primeira conta com e-mail e senha. A senha da conta será digitada no app; não é a senha administrativa do banco.
+4. Copie a URL HTTPS e a chave pública **publishable**. Não use chave secret, service_role ou senha do banco no app. Consulte os [tipos de chave](https://supabase.com/docs/guides/getting-started/api-keys).
+5. Conecte o primeiro computador e publique a base em uma nuvem vazia. Não use esse modo para substituir uma nuvem já conectada.
+6. Para outra pessoa, crie e confirme sua conta em Authentication. No app, um membro atual abre **Configurações → Usuários**, vincula seu e-mail e nome. Essa pessoa conecta com a mesma URL/chave pública e seu próprio login, escolhendo baixar a base.
+7. O script configura leitura do canal privado por membros ativos. Em **Realtime → Settings**, prefira somente canais privados. Não é necessário adicionar as tabelas a uma publicação Postgres Changes: o app usa Broadcast. Consulte [Broadcast para mudanças](https://supabase.com/docs/guides/realtime/subscribing-to-database-changes) e [autorização Realtime](https://supabase.com/docs/guides/realtime/authorization).
 
-Faça as edições pelo aplicativo para registrar versões e manter números, pagamentos e sincronização consistentes. As conexões do aplicativo têm leitura por empresa; gravações passam pelas operações transacionais autorizadas.
+## Onde estão os dados
 
-## Você já usa uma versão antiga nesta máquina
+Em **Table Editor → public**, consulte:
 
-1. Abra a versão atual do aplicativo e vá a **Configurações → Dados e backup**. Exporte uma cópia de segurança e guarde esse arquivo em outra pasta ou dispositivo. Termine as edições abertas e feche o aplicativo.
-2. Instale a atualização **1.4.0** com o mesmo usuário do Windows usado na versão antiga. Seus dados ficam na pasta de dados do usuário, separada da instalação. Abra o aplicativo atualizado: ele cria e verifica um backup anterior à migração, calcula o espaço necessário e atualiza a base local automaticamente. Imagens existentes são convertidas para texto sem recompressão, e documentos recebem sua primeira versão registrada. O histórico anterior à atualização não pode ser reconstruído.
-3. Antes de conectar a nuvem, confira clientes, cadastro da empresa e logo, propostas, relatórios, valores e fotos. Exporte um novo backup já na versão atualizada. Continue usando **a mesma base local que você já possui**; não escolha baixar uma base vazia sobre seus dados.
-4. Crie o projeto Supabase vazio seguindo a seção abaixo. Na primeira conexão **deste computador**, escolha **Publicar os dados locais em uma nuvem vazia**. Essa opção envia a base migrada, preservando documentos, imagens e números já usados. Não é necessário copiar registros ou fotos manualmente nem criar Storage.
-5. Aguarde a sincronização terminar com **0 alterações aguardando envio** e sem falhas. Depois confira os documentos em outro computador com a opção **Baixar a base da empresa**. O computador original continua responsável pelos documentos que publicou; você pode transferir essa responsabilidade pela linha do tempo.
+| Tabelas                                                              | Conteúdo                                                |
+| -------------------------------------------------------------------- | ------------------------------------------------------- |
+| empresas, membros_empresa                                            | Empresa e pessoas vinculadas                            |
+| clientes, servicos                                                   | Clientes e catálogo; apenas nome obrigatório no cliente |
+| orcamentos, itens_orcamento, materiais_orcamento, textos_orcamento   | Propostas, valores e condições                          |
+| relatorios, itens_relatorio, lancamentos_relatorio, textos_relatorio | Serviços executados, adiantamentos, reembolsos e saldo  |
+| recibos, recebimentos                                                | Cobranças, recibos e lançamentos, incluindo estornos    |
+| imagens, anexos_orcamento, anexos_relatorio                          | Imagens em texto e referências                          |
+| documentos, versoes_documentos, imagens_versoes                      | Registros permanentes, snapshots e fotos das versões    |
+| identificadores_documento, numeros_emitidos                          | IDs internos e números oficiais protegidos              |
+| computadores, dispositivos_usuarios, reservas_numeros                | Dispositivos e números reservados/utilizados            |
+| edicoes_documento, pedidos_edicao, auditoria_colaboracao             | Controle de edição, solicitações e autoria              |
+| observacoes_padrao, formas_pagamento_padrao, configuracoes_empresa   | Padrões comerciais                                      |
 
-Se a atualização pedir mais espaço ou encontrar erro no banco/backup, resolva o aviso antes de publicar. Se o projeto remoto já possuir dados, a publicação será recusada: use um projeto vazio para esta migração. Restaurar ou mesclar um backup local é uma operação distinta da publicação na nuvem.
+Detalhes do transporte ficam no schema **sincronizacao**. **gdo_entities** é uma consulta que reconstrói dados a partir das tabelas, sem outra cópia das imagens. Edite pelo app para manter versões, números e pagamentos consistentes.
 
-## Criar o projeto e conectar os computadores
+## Identificação
 
-### Se você está usando o candidato rc.2
+- **Ordem:** posição na consulta do histórico; acompanha filtros, ordenação e paginação.
+- **ID interno:** atribuído pelo servidor por empresa e tipo. Permanente, não editável, não reutilizado. Exclusões futuras podem deixar lacunas. Um documento offline fica pendente até sincronizar.
+- **Nº do documento:** identificação entregue ao cliente. **Numeração dos documentos** controla faixas futuras; correção de rascunho usa reserva do próprio computador. Números emitidos ficam protegidos mesmo ao voltar ao estado de rascunho.
+- **Chave técnica:** mantém os vínculos e fica oculta.
 
-Exporte um backup **da base atual do rc.2**, incluindo suas últimas edições. Guarde também um backup da instalação antiga antes da atualização. Na versão final, restaure o backup do rc.2 em **Configurações → Dados e backup → Restaurar**, confira documentos, valores, imagens e preferências e só então publique essa base na nuvem vazia. Não use uma cópia anterior à revisão do candidato se quiser levar as alterações mais recentes. A restauração não conecta nem publica automaticamente no Supabase.
+Números abandonados e reservas distribuídas não são reutilizados. Alterar a sequência futura não modifica documentos existentes.
 
-### Preparar o projeto
+## Atualizações e edição
 
-1. Entre em [Supabase Dashboard](https://supabase.com/dashboard), crie uma organização no plano **Free** e um projeto para sua empresa. Escolha a região mais próxima. Guarde a senha do banco separadamente.
-2. Abra **SQL Editor**, crie uma consulta e cole o conteúdo de `schema.sql`. O aplicativo oferece **Configurações → Nuvem / Sincronização → Como configurar minha empresa na nuvem → Copiar configuração do banco**. Execute com **Run**. O script pode ser executado novamente para atualizar as funções; não apaga a base.
-3. Em **Authentication → Users → Add user**, crie o usuário da empresa com e-mail e senha. Confirme o e-mail no painel (auto confirm). Essa senha será usada no aplicativo; ela não é a senha do banco nem o login administrativo do painel. Depois de criar a conta, você pode desabilitar novos cadastros públicos em Authentication.
-4. No painel **Connect** ou em **Settings → API Keys**, copie a URL HTTPS do projeto e a chave **publishable**, normalmente começando com `sb_publishable_`. Projetos antigos também podem usar a chave pública `anon`. [Tipos de chave e localização no painel](https://supabase.com/docs/guides/getting-started/api-keys).
-5. No computador que já tem seus dados, preencha URL, chave pública, e-mail e senha em **Nuvem / Sincronização**. Escolha **Publicar os dados locais em uma nuvem vazia**. A publicação exige uma base remota vazia e preserva os números já utilizados. Não coloque uma chave `secret`, `service_role` ou senha do banco no aplicativo.
-6. Nos outros computadores, instale o aplicativo e preencha os mesmos dados. Escolha **Baixar a base da empresa**. Os dados locais anteriores serão guardados em backup antes de serem substituídos. Aguarde **0 alterações aguardando envio** e ausência de falhas.
+Ao salvar, a operação entra na fila local e é enviada imediatamente. Após confirmação do banco, um aviso pequeno no canal privado dispara consultas nos demais computadores. Texto ainda sendo digitado não é transmitido. A meta é aparecer em até dois segundos com conexão estável; a latência depende da rede e do serviço.
 
-## Conferência da conexão real
+Históricos/cadastros atualizam preservando preferências. Documento aberto sem alterações locais atualiza automaticamente; com alterações não salvas, mostra aviso e preserva o formulário. Reconexão, reinício e renovação da sessão recuperam mudanças. Há consulta incremental de segurança a cada cinco minutos e retentativas breves após falha transitória.
 
-Crie um cliente de teste no primeiro computador e sincronize. Confirme que aparece no segundo. Crie uma proposta com uma foto, confirme sua prévia no segundo computador e consulte a linha do tempo. Desconecte a internet no computador responsável, salve uma alteração, feche/reabra o aplicativo e reconecte: a fila deve continuar presente e a alteração deve chegar ao outro computador uma única vez. Para transferir a edição, sincronize os dois, use **Versões e transferência**, escolha o destino e confirme a sincronização no novo responsável.
+O bloqueio online dura 120 segundos e renova a cada 30 enquanto o editor está aberto. Use **solicitar edição**, **liberar**, **transferir** ou **recuperar controle**. Outra pessoa pode guardar uma cópia de trabalho sem sobrescrever o documento da empresa.
 
-Confirme um pagamento parcial em um relatório de teste, sincronize e confira no segundo computador o recibo e o saldo. O recibo e o pagamento são enviados juntos. Ao terminar, cancele o recibo de teste antes de excluir seu relatório. Números utilizados continuam reservados e não serão reaproveitados.
+Antes de perder a internet, use **Preparar offline**. Sincroniza conteúdo, fotos e dependências, guarda a revisão de partida e reserva autorização exclusiva de usuário/computador para emissão e operações financeiras. Relatório e recibos relacionados são protegidos em conjunto. Cada computador recebe blocos de 20 números por tipo, repondo quando restam cinco.
 
-## Capacidade, offline e backups
+Recuperar controle revoga a geração anterior no servidor. Um computador desconectado descobre a revogação ao reconectar; seu trabalho fica como rascunho para comparar ou copiar. Reservas não voltam a ficar disponíveis.
 
-O plano Free oferece **500 MB de banco por projeto**; projetos gratuitos com pouca atividade podem ser pausados. Consulte [limites do plano](https://supabase.com/docs/guides/platform/billing-on-supabase) e [pausa de projetos](https://supabase.com/docs/guides/platform/free-project-pausing). Informações verificadas em 11/10/2026; o fornecedor pode alterar os limites.
+## Conflitos e pagamentos
 
-Fotos e logos ficam no banco em texto Base64, sem Storage. Base64 acrescenta cerca de um terço ao tamanho original. As novas fotos são comprimidas e compartilhadas entre documentos/versões. O aplicativo alerta em 80% e 90% do limite; não apaga versões automaticamente.
+Compare o rascunho com a base e com a versão atual. Mudanças independentes de conteúdo são combinadas; disputas no mesmo campo exigem escolha. Alterações de preço são comparadas em conjunto para manter quantidade, valor e cálculo coerentes. Retomar versão antiga cria nova revisão, preservando as posteriores.
 
-Cada computador recebe blocos de 20 números por tipo e solicita mais quando restam cinco. Sem reserva ou com fotos necessárias ausentes, o documento continua como rascunho. Só o responsável pode editar definitivamente e emitir offline. Uma transferência interrompida mantém o bloqueio até confirmação online.
+Pagamentos, estornos e quitação não são restaurados por uma versão textual. Use **Revisar recebimentos** no editor para conferir operações e escolher reaplicar o que continua pendente ou arquivar a intenção local. Valores/vínculos divergentes bloqueiam reaplicação; operações já confirmadas não são contabilizadas novamente. Backup, rascunho e auditoria preservam o trabalho anterior.
 
-Faça backups em **Configurações → Dados e backup**. A cópia inclui imagens, versões, recibos e pagamentos, mas não transporta sessão, identidade do computador ou reservas offline. Restaure em um perfil local separado; a restauração não publica nem substitui automaticamente a nuvem. Documentos pertencentes ao computador anterior podem ser consultados ou copiados para criar documentos novos.
+## Capacidade e backups
 
-Se o projeto estiver pausado, reative-o no painel e sincronize. Se houver conflito, preserve a edição desejada criando uma cópia e use a conciliação apresentada no aplicativo. A adoção dos dados remotos cria antes um backup e concilia juntos o relatório e seus recibos/pagamentos vinculados.
+O plano Free oferece 500 MB de banco; pouca atividade pode pausar projetos. Limites podem mudar: consulte [capacidade](https://supabase.com/docs/guides/platform/billing-on-supabase) e [pausa](https://supabase.com/docs/guides/platform/free-project-pausing).
+
+Base64 acrescenta cerca de um terço aos bytes originais. Fotos novas são comprimidas/deduplicadas. O app alerta em 80% e 90% e não apaga versões automaticamente.
+
+Backups incluem documentos, imagens, versões, recebimentos, rascunhos, IDs conhecidos e preferências locais. Não transportam sessão, dispositivo, bloqueios ou autorização offline. Restaurar não publica nem substitui automaticamente a nuvem. Guarde a cópia anterior à migração e teste restauração em perfil separado.
+
+## Conferência entre computadores
+
+Use dois logins vinculados e dois computadores atualizados. Salve uma alteração e confira o outro histórico; teste documento limpo e formulário alterado. Teste solicitação, transferência, preparação offline, reconexão e conciliação. Faça pagamentos de teste em base separada para evitar consumo de números e registros financeiros na empresa.
+
+Se o canal estiver indisponível, fila e recuperação periódica continuam. Se o projeto estiver pausado, reative-o no painel. Para confirmar toda a base na nuvem, confira zero pendências, ausência de erros/conflitos e comparação de documentos, valores, versões, imagens e recebimentos.

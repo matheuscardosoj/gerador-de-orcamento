@@ -1,5 +1,73 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import { api } from './api'
+import type {
+  EmpresaConfig,
+  ParametrosFinanceiros,
+  Cliente,
+  ServicoCatalogo,
+  ObservacaoPadrao,
+  FormaPagamentoPadrao
+} from '@shared/types'
+type CadastrosEditor = {
+  empresa: EmpresaConfig
+  parametros: ParametrosFinanceiros
+  clientes: Cliente[]
+  servicos: ServicoCatalogo[]
+  observacoesPadrao: ObservacaoPadrao[]
+  pagamentosPadrao: FormaPagamentoPadrao[]
+}
+export function useCadastrosAtualizados<T extends CadastrosEditor>(
+  setDados: Dispatch<SetStateAction<T | null>>
+): void {
+  useEffect(() => {
+    let ativo = true,
+      pedido = 0
+    const cancelar = api.eventos.observarDados((e) => {
+      if (
+        !e.entidades.some((n) =>
+          [
+            'clientes',
+            'servicos',
+            'observacoes_padrao',
+            'pagamentos_padrao',
+            'configuracoes'
+          ].includes(n.split(':')[0])
+        )
+      )
+        return
+      const atual = ++pedido
+      void Promise.all([
+        api.empresa.get(),
+        api.parametros.get(),
+        api.clientes.list(),
+        api.servicos.list(),
+        api.observacoes.list(),
+        api.pagamentos.list()
+      ])
+        .then(([empresa, parametros, clientes, servicos, observacoesPadrao, pagamentosPadrao]) => {
+          if (ativo && pedido === atual)
+            setDados((d) =>
+              d
+                ? {
+                    ...d,
+                    empresa,
+                    parametros,
+                    clientes,
+                    servicos,
+                    observacoesPadrao,
+                    pagamentosPadrao
+                  }
+                : d
+            )
+        })
+        .catch(() => undefined)
+    })
+    return () => {
+      ativo = false
+      cancelar()
+    }
+  }, [setDados])
+}
 
 interface AsyncState<T> {
   data: T | undefined

@@ -200,6 +200,12 @@ export function criarMockApi(): AppApi {
       remove: async () => {}
     },
     colaboracao: {
+      revisarRecebimentos: async () => {
+        throw new Error('Disponível no aplicativo desktop.')
+      },
+      conciliarRecebimentos: async () => {
+        throw new Error('Disponível no aplicativo desktop.')
+      },
       acompanhar: async () => {},
       membros: async () => [],
       vincularMembro: async () => {

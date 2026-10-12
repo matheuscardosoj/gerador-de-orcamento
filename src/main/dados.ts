@@ -100,6 +100,15 @@ function validar(caminho: string): void {
         'fila_nuvem',
         'conflitos_nuvem'
       )
+    if (versao >= 9)
+      obrigatorias.push(
+        'identificadores_documento',
+        'numeros_emitidos',
+        'bases_documento',
+        'edicoes_documento',
+        'rascunhos_compartilhados',
+        'auditoria_colaboracao'
+      )
     const faltantes = obrigatorias.filter(
       (nome) =>
         !fonte.get("SELECT 1 AS existe FROM sqlite_master WHERE type = 'table' AND name = ?", [
@@ -184,7 +193,7 @@ function limparAutorizacoesDaCopia(destino: string): void {
   const copia = new Database(destino)
   try {
     copia.exec(
-      "DELETE FROM configuracoes WHERE chave IN ('computadorId','sessaoNuvem','nuvem','usuarioNuvem','contextoNuvem','empresaNuvem','cursorNuvem','ultimaNuvem','erroNuvem','bytesNuvem') OR chave LIKE 'estado:%' OR chave LIKE 'transferencia:%' OR chave LIKE 'computadorUsuario:%';"
+      "DELETE FROM configuracoes WHERE chave IN ('computadorId','sessaoNuvem','nuvem','usuarioNuvem','contextoNuvem','empresaNuvem','cursorNuvem','ultimaNuvem','erroNuvem','bytesNuvem','membrosCache','pedidosEdicaoCache') OR chave LIKE 'estado:%' OR chave LIKE 'transferencia:%' OR chave LIKE 'computadorUsuario:%' OR chave LIKE 'numeracaoNuvem:%';"
     )
     if (temTabela(copia, 'reservas'))
       copia.exec(
@@ -578,6 +587,7 @@ function mesclar(fonte: Database): Resumo {
       .map((x) => `${x.tipo}:${x.id}`)
   )
   const referenciasRelatorio = new Map<string, Map<string, string>>()
+  const referenciasOrcamento = new Map<string, Map<string, string>>()
   const chaveDocumento = (id: unknown): string => `${origem.id}:${String(id)}`
   const documentoLocalDaMesmaOrigem = (tipo: 'orcamento' | 'relatorio', id: unknown): boolean => {
     if (!mesmaOrigem) return false
@@ -688,6 +698,7 @@ function mesclar(fonte: Database): Resumo {
     const preparado = novosIdsOrcamento(
       itensOrcamento(fonte, String(x.id), servicos, observacoes, pagamentos)
     )
+    referenciasOrcamento.set(String(x.id), preparado.referencias)
     const ocupado = get('SELECT id FROM orcamentos WHERE numero = ?', [x.numero])
     const desejado = ocupado ? undefined : Number(x.numero)
     const novo = orcamentosRepo.create(
@@ -897,6 +908,103 @@ function mesclar(fonte: Database): Resumo {
           })
         ]
       )
+    }
+  }
+  if (temTabela(fonte, 'numeros_emitidos')) {
+    for (const x of linhas(fonte, 'SELECT * FROM numeros_emitidos')) {
+      const destino = destinoDocumento(String(x.tipo), String(x.documento_id))
+      if (!destino) continue
+      const tipo = String(x.tipo),
+        tabela =
+          tipo === 'orcamento' ? 'orcamentos' : tipo === 'relatorio' ? 'relatorios' : 'recibos'
+      const numero = get(`SELECT numero FROM ${tabela} WHERE id=?`, [destino])?.numero
+      if (Number(numero) > 0)
+        run('INSERT OR IGNORE INTO numeros_emitidos VALUES (?,?,?,?)', [
+          tipo,
+          destino,
+          numero ?? null,
+          x.criado_em
+        ])
+    }
+  }
+  if (mesmaOrigem && temTabela(fonte, 'identificadores_documento')) {
+    for (const x of linhas(fonte, 'SELECT * FROM identificadores_documento')) {
+      const destino = destinoDocumento(String(x.tipo), String(x.documento_id))
+      if (destino !== x.documento_id) continue
+      if (
+        get('SELECT 1 FROM identificadores_documento WHERE tipo=? AND documento_id=?', [
+          x.tipo,
+          destino
+        ])
+      )
+        continue
+      run('INSERT INTO identificadores_documento VALUES (?,?,?,?,?)', [
+        x.tipo,
+        destino,
+        x.id_interno,
+        x.usuario_criador,
+        x.alterado_por
+      ])
+    }
+  }
+  if (temTabela(fonte, 'rascunhos_compartilhados')) {
+    for (const x of linhas(fonte, 'SELECT * FROM rascunhos_compartilhados')) {
+      const chave = `${origem.id}:${x.id}`
+      if (
+        get("SELECT 1 FROM importacoes_documentos WHERE tipo='rascunho' AND origem_id=?", [chave])
+      )
+        continue
+      const tipo = String(x.tipo),
+        origemDoc = String(x.documento_id),
+        destino = destinoDocumento(tipo, origemDoc)
+      if (!destino) continue
+      if (mesmaOrigem && get('SELECT 1 FROM rascunhos_compartilhados WHERE id=?', [x.id])) continue
+      const adaptar = (json: unknown): string => {
+        const d = JSON.parse(String(json))
+        if (destino === origemDoc) return JSON.stringify(d)
+        d.id = destino
+        delete d.idInterno
+        delete d.usuarioCriador
+        delete d.alteradoPor
+        d.clienteId = clientes.get(d.clienteId) ?? null
+        if (d.clienteSnapshot) d.clienteSnapshot.id = d.clienteId
+        const referencias =
+          tipo === 'relatorio'
+            ? referenciasRelatorio.get(origemDoc)
+            : referenciasOrcamento.get(origemDoc)
+        for (const item of d.itensServico ?? []) {
+          item.id = referencias?.get(item.id) ?? item.id
+          item.servicoId = servicos.get(item.servicoId) ?? null
+        }
+        for (const item of [...(d.adiantamentos ?? []), ...(d.reembolsos ?? [])])
+          item.id = referencias?.get(item.id) ?? item.id
+        for (const foto of d.anexos ?? []) {
+          if (foto.itemServicoId) foto.itemServicoId = referencias?.get(foto.itemServicoId) ?? null
+          if (foto.lancamentoId) foto.lancamentoId = referencias?.get(foto.lancamentoId) ?? null
+        }
+        for (const item of d.observacoes ?? [])
+          item.origemPadraoId = observacoes.get(item.origemPadraoId) ?? null
+        for (const item of d.pagamentos ?? [])
+          item.origemPadraoId = pagamentos.get(item.origemPadraoId) ?? null
+        if (d.origemTipo && d.origemId) d.origemId = destinoDocumento(d.origemTipo, d.origemId)
+        return JSON.stringify(d)
+      }
+      const id = mesmaOrigem ? String(x.id) : novoId()
+      run('INSERT INTO rascunhos_compartilhados VALUES (?,?,?,?,?,?,?,?,?,?,?)', [
+        id,
+        tipo,
+        destino,
+        x.usuario,
+        x.computador,
+        destino === origemDoc ? x.base_revisao : 0,
+        adaptar(x.base),
+        adaptar(x.documento),
+        x.criado_em,
+        x.atualizado_em,
+        x.estado
+      ])
+      run("INSERT INTO importacoes_documentos VALUES ('rascunho',?,?)", [chave, id])
+      r.importados.rascunhos = (r.importados.rascunhos ?? 0) + 1
     }
   }
   if (get('PRAGMA foreign_key_check'))

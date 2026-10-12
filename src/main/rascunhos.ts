@@ -160,9 +160,21 @@ export async function compararRascunho(
   if (!ultima) throw new Error('A versão remota não contém um snapshot para comparação.')
   const remoto = JSON.parse(String(ultima.documento)) as Documento
   remoto.idInterno = envelope.identificador?.id_interno ?? null
+  const conteudoLocal = structuredClone(r.documento)
+  // Conteúdo e financeiro têm fluxos diferentes. Uma comparação textual mantém
+  // os lançamentos e estados atuais da empresa, inclusive se o rascunho é antigo.
+  if ('totais' in remoto && 'totais' in conteudoLocal) {
+    conteudoLocal.adiantamentos = remoto.adiantamentos
+    conteudoLocal.reembolsos = remoto.reembolsos
+    conteudoLocal.status = remoto.status
+  }
+  if ('quitacao' in remoto && 'quitacao' in conteudoLocal) {
+    conteudoLocal.status = remoto.status
+    conteudoLocal.adiantamentoId = remoto.adiantamentoId
+  }
   const resultado = conciliarDocumento(
     prepararSnapshot(r.base),
-    prepararSnapshot(r.documento),
+    prepararSnapshot(conteudoLocal),
     prepararSnapshot(remoto),
     escolhas
   )
@@ -204,7 +216,7 @@ export async function aplicarRascunho(
     throw new Error(
       'Recibos confirmados são preservados. Use cancelamento/substituição, sem desfazer pagamentos por uma versão textual.'
     )
-  if (financeiroAlterado(r.base, r.documento))
+  if (financeiroAlterado(comparacao.remoto, comparacao.documento))
     throw new Error(
       'Mudanças de estado, recebimentos e estornos precisam das operações financeiras próprias. Preserve o rascunho e trate o pagamento separadamente.'
     )

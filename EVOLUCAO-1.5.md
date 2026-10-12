@@ -202,3 +202,14 @@ estorno após revogação, auditoria UI/responsividade e bloqueio de alteraçõe
 backup/mesclagem de tabelas v9, cópia atualizada da base (17/4/3 ativos e 54 versões na
 última leitura), pacote/guia v2 e candidato 1.5.0-rc.1. Não fazer migração real nem merge
 main nem versão final antes da revisão e autorização desta nova entrega.
+
+### Validação final da colaboração e autorização de migração
+
+- O usuário autorizou explicitamente a migração real em 12/10/2026, confirmou o login no painel Supabase e fechou o aplicativo anterior. Isso substitui a restrição anterior de aguardar autorização para migrar. Merge em main e versão final 1.5 continuam pendentes de autorização específica; preparar candidato na claude.
+- Conciliação financeira implementada: revisar intenções pendentes, detectar valor/vínculo divergente, verificar revisão atual, arquivar com backup/auditoria ou reaplicar em novas transações. Confirmação e estorno offline após revogação testados sem dupla contabilização; conteúdo textual separado dos saldos.
+- Socket WebSocket local real com SDK oficial passou: aviso em menos de dois segundos, avisos duplicados e recuperação de evento perdido na reconexão. Corrigida renovação do token do canal. Retentativas breves após falhas transitórias, interrompidas no encerramento e sem repetição automática de conflitos.
+- Backup/restauração/mesclagem do esquema 9 preservam rascunhos, referências e IDs da mesma origem; não transportam autorização, sessão ou identidade. Testes atualizados passaram.
+- Interface Electron em cópia da base atual: nove abas de configurações em 1024/1440/2560, ações fixas da tabela, espaçamentos de logo/assinatura, atualização limpa, proteção de edição concorrente e recibo novo não salvo. Vinte tabelas comerciais iguais antes/depois; zero erros JavaScript. Evidência em output/playwright/colaboracao-1791822236575.
+- Auditoria remota real antes da migração: 73 entidades; 10 clientes, 4 serviços, 17 propostas, 4 relatórios, 3 recibos, 4 recebimentos, 15 imagens, 54 versões, 102 vínculos históricos de imagens, 138 reservas; zero diferenças, pendências ou conflitos. Base e sessão originais protegidas guardadas em output ignorado; sessão existente renovada sem alterar dados comerciais.
+- Ensaio PostgreSQL da exportação atual: 23 tabelas originais integralmente iguais após migração e reexecução; IDs por data de 1 em diante, números e reservas intactos; leitura do canal privado isolada e gravação legada bloqueada. Evidência output/playwright/migracao-colaboracao-1791822014730.
+- Verificação completa anterior à retentativa: 185 testes/32 arquivos, lint/formato/tipos/build; dois testes adicionais de retentativa passaram. Restam pacote candidato, migração autorizada do projeto real, conferência após migração/canal real, publicação GitHub privada e entrega. Validação em dois computadores físicos/logins reais ainda depende de um segundo usuário; ensaios automatizados usam dois perfis/logins isolados.

@@ -15,3 +15,10 @@ release/
 resources/
 .claude/
 .playwright-cli/
+# Bases, backups e credenciais nunca pertencem ao repositório remoto.
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.gdo-backup
+.env.*

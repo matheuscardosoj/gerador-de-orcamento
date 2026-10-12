@@ -1,5 +1,31 @@
 import { expect, it } from 'vitest'
 import { conciliarDocumento, snapshotRascunho } from './conciliacao'
+it('não mistura quantidade e preço de duas alterações financeiras concorrentes no mesmo serviço', () => {
+  const item = {
+    id: 's',
+    descricao: 'Serviço',
+    quantidade: 1,
+    valorUnitario: 100,
+    valorTotal: 100,
+    calculo: null
+  }
+  const base = { itensServico: [item] },
+    local = { itensServico: [{ ...item, quantidade: 2, valorTotal: 200 }] },
+    remoto = {
+      itensServico: [
+        { ...item, valorUnitario: 150, valorTotal: 150, descricao: 'Descrição revisada' }
+      ]
+    }
+  const disputa = conciliarDocumento(base, local, remoto)
+  expect(disputa.conflitos).toMatchObject([{ caminho: 'itensServico.s.preco', financeiro: true }])
+  const resolvido = conciliarDocumento(base, local, remoto, { 'itensServico.s.preco': 'local' })
+  expect(resolvido.documento.itensServico[0]).toMatchObject({
+    descricao: 'Descrição revisada',
+    quantidade: 2,
+    valorUnitario: 100,
+    valorTotal: 200
+  })
+})
 it('combina mudanças independentes e preserva identidade e número atuais', () => {
   const b = { id: 'a', numero: 4, descricao: 'Original', observacao: '', versao: 1 }
   const resultado = conciliarDocumento(

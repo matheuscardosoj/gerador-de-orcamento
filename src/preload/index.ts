@@ -26,6 +26,9 @@ const api: AppApi = {
     remove: (id) => invoke('rascunhos.remove', id) as never
   },
   colaboracao: {
+    revisarRecebimentos: (tipo, id) => invoke('colaboracao.revisarRecebimentos', tipo, id) as never,
+    conciliarRecebimentos: (revisao, acao) =>
+      invoke('colaboracao.conciliarRecebimentos', revisao, acao) as never,
     acompanhar: (tipo, id, ativo) => invoke('colaboracao.acompanhar', tipo, id, ativo) as never,
     membros: () => invoke('colaboracao.membros') as never,
     vincularMembro: (email, nome) => invoke('colaboracao.vincularMembro', email, nome) as never,

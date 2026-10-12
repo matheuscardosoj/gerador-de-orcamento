@@ -16,6 +16,7 @@ import {
   Plus
 } from 'lucide-react'
 import { api } from '../lib/api'
+import { useCadastrosAtualizados } from '../lib/hooks'
 import { useBloqueioEdicao, useNav } from '../lib/nav'
 import { PageShell } from '../ui/layout'
 import {
@@ -81,6 +82,7 @@ function errosDoGrupo(erros: ErroValidacao[], grupo: string): ErroValidacao[] {
 export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): JSX.Element {
   const { navegar } = useNav()
   const [dados, setDados] = useState<Dados | null>(null)
+  useCadastrosAtualizados(setDados)
   const [orc, setOrc] = useState<Orcamento | null>(null)
   const [ocupado, setOcupado] = useState<'salvar' | 'pdf' | 'docx' | 'relatorio' | null>(null)
   const [erro, setErro] = useState<string | null>(null)

@@ -2,6 +2,15 @@
 
 Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
+## 1.5.0-rc.1 — 2026-10-12
+
+- Empresas com vários logins, autoria por usuário/computador e canal privado Supabase Broadcast após salvar; recuperação incremental e fila persistente.
+- Ordem visual e ID interno permanente nos históricos, preservando números oficiais e chaves técnicas. Faixas futuras transacionais e proteção dos números emitidos.
+- Bloqueios temporários, solicitações, liberação, transferência, preparação offline e recuperação com revogação das gerações antigas.
+- Rascunhos e comparação de base/local/remoto; revisão financeira separada para evitar dupla contabilização ou restauração de pagamentos por texto.
+- Configurações padronizadas com cabeçalho, largura, tabelas, filtros, ações e modais; proteção de recibos novos não salvos ao navegar.
+- Migração SQLite 9 e protocolo de nuvem 2 com backups verificados; gravações de aplicativos antigos bloqueadas no servidor. Guia atualizado incluído no candidato.
+
 ## 1.4.1 — 2026-10-12
 
 - Cadastros de clientes e catálogo usando a largura, cabeçalho, tabelas, ações e espaçamentos dos históricos. Busca, filtros de clientes e arraste de serviços preservado por mouse/teclado, com rolagem horizontal em janelas menores.

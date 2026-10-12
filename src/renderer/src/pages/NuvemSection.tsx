@@ -52,11 +52,11 @@ export function NuvemSection(): JSX.Element {
     <Card className="p-6">
       <SectionTitle
         title="Nuvem da empresa"
-        description="Dados compartilhados com os computadores conectados à mesma conta"
+        description="Dados compartilhados com os usuários e computadores da empresa"
       />
       <p className="mb-4 text-sm text-slate-600">
-        Use o mesmo projeto Supabase e a mesma conta em todos os computadores desta empresa. Cada
-        empresa configura seu próprio projeto. Plano gratuito: 500 MB de banco; pouca atividade pode
+        Use o mesmo projeto Supabase nos computadores desta empresa. Cada pessoa pode usar seu
+        próprio login, vinculado em Usuários. Plano gratuito: 500 MB de banco; pouca atividade pode
         pausar o projeto.
       </p>
       <details className="mb-4 rounded-lg border border-slate-200 p-4 text-sm text-slate-600">
@@ -85,11 +85,14 @@ export function NuvemSection(): JSX.Element {
           </li>
           <li>
             Abra o SQL Editor do projeto, crie uma consulta, cole a configuração copiada pelo botão
-            abaixo e execute com Run. Não é necessário criar um Storage.
+            abaixo e execute o script inteiro com Run. Se já existe uma nuvem conectada, sincronize
+            e feche todos os aplicativos antes da atualização. A versão 1.5 exige o novo protocolo:
+            atualize todos os computadores. Não é necessário criar um Storage.
           </li>
           <li>
-            Em Authentication → Users, adicione o usuário da empresa com e-mail e senha e confirme o
-            e-mail. Essa é a conta usada em todos os computadores; a senha do banco é diferente.
+            Em Authentication → Users, crie e confirme a primeira conta com e-mail e senha. A conta
+            atual continua vinculada após a migração. Para adicionar outra pessoa, crie sua conta no
+            painel e vincule o e-mail em Configurações → Usuários. A senha do banco é diferente.
           </li>
           <li>
             Copie a URL do projeto e a chave pública publishable no painel de conexão / API Keys.
@@ -101,9 +104,10 @@ export function NuvemSection(): JSX.Element {
             aguarde a sincronização.
           </li>
           <li>
-            Faça a primeira sincronização online. Ela reserva números para emitir offline. Para
-            transferir a edição definitiva de um documento, use “Versões e transferência” com os
-            computadores sincronizados.
+            Faça a primeira sincronização online. No editor, use os controles de edição para
+            solicitar, liberar ou transferir. Antes de se desconectar, use “Preparar offline” para
+            baixar as dependências e reservar a autorização de emissão. Os números oficiais já
+            utilizados são preservados; o ID interno é atribuído pelo servidor.
           </li>
         </ol>
         <Button
@@ -123,8 +127,8 @@ export function NuvemSection(): JSX.Element {
             : 'Copiar configuração do banco'}
         </Button>
         <p className="mt-3 text-xs text-slate-500">
-          A configuração fornecida não contém senhas. As permissões restringem os dados ao usuário
-          autenticado da empresa.
+          A configuração fornecida não contém senhas. As permissões restringem os dados aos membros
+          ativos da empresa, e os avisos de atualização usam um canal privado.
         </p>
       </details>
       {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
@@ -143,7 +147,7 @@ export function NuvemSection(): JSX.Element {
             onChange={(e) => setC({ ...c, chavePublica: e.target.value })}
           />
         </Field>
-        <Field label="E-mail da conta da empresa">
+        <Field label="E-mail do usuário">
           <Input
             type="email"
             value={c.email}

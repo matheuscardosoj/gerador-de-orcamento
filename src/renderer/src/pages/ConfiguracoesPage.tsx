@@ -237,7 +237,7 @@ function SecaoEmpresa(): JSX.Element {
       <Card className="p-6">
         <SectionTitle
           title="Dados do cabeçalho"
-          description="Aparecem no topo de todos os orçamentos"
+          description="Cabeçalho das propostas, relatórios e recibos"
         />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field label="Nome fantasia (destaque)">
@@ -280,70 +280,75 @@ function SecaoEmpresa(): JSX.Element {
           </Field>
         </div>
 
-        <SectionTitle title="Logo e assinatura" description="Logo do cabeçalho e faixa do rodapé" />
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <span className="block text-sm font-medium text-slate-700">Logo</span>
-            <div className="flex items-center gap-4">
-              <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-                {form.logoDataUrl ? (
-                  <img
-                    src={form.logoDataUrl}
-                    alt="Logo"
-                    className="max-h-full max-w-full object-contain"
-                  />
-                ) : (
-                  <span className="text-xs text-slate-400">sem logo</span>
-                )}
-              </div>
-              <div className="flex flex-col gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={trocarLogo}
-                  disabled={ocupado}
-                >
-                  {operacao === 'logo' ? 'Selecionando…' : 'Selecionar imagem…'}
-                </Button>
-                {form.logoDataUrl && (
+        <div className="mt-6 border-t border-slate-200 pt-6">
+          <SectionTitle
+            title="Logo e assinatura"
+            description="Logo do cabeçalho e faixa do rodapé"
+          />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <span className="block text-sm font-medium text-slate-700">Logo</span>
+              <div className="flex items-center gap-4">
+                <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                  {form.logoDataUrl ? (
+                    <img
+                      src={form.logoDataUrl}
+                      alt="Logo"
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-xs text-slate-400">sem logo</span>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
                   <Button
                     type="button"
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    onClick={() => set({ logoDataUrl: null })}
+                    onClick={trocarLogo}
                     disabled={ocupado}
                   >
-                    Remover
+                    {operacao === 'logo' ? 'Selecionando…' : 'Selecionar imagem…'}
                   </Button>
-                )}
+                  {form.logoDataUrl && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => set({ logoDataUrl: null })}
+                      disabled={ocupado}
+                    >
+                      Remover
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-          <Field label="Texto da assinatura / rodapé">
-            <Input
-              value={form.textoAssinatura}
-              onChange={(e) => set({ textoAssinatura: e.target.value })}
-            />
-          </Field>
-          <Field label="Cor da faixa do rodapé">
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={form.corFaixaRodape}
-                onChange={(e) => set({ corFaixaRodape: e.target.value })}
-                className="h-9 w-14 cursor-pointer rounded border border-slate-300"
-              />
+            <Field label="Texto da assinatura / rodapé">
               <Input
-                value={form.corFaixaRodape}
-                onChange={(e) => set({ corFaixaRodape: e.target.value })}
-                className="w-32"
+                value={form.textoAssinatura}
+                onChange={(e) => set({ textoAssinatura: e.target.value })}
               />
-            </div>
-          </Field>
+            </Field>
+            <Field label="Cor da faixa do rodapé">
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={form.corFaixaRodape}
+                  onChange={(e) => set({ corFaixaRodape: e.target.value })}
+                  className="h-9 w-14 cursor-pointer rounded border border-slate-300"
+                />
+                <Input
+                  value={form.corFaixaRodape}
+                  onChange={(e) => set({ corFaixaRodape: e.target.value })}
+                  className="w-32"
+                />
+              </div>
+            </Field>
+          </div>
         </div>
 
-        <div className="mt-6">
+        <div className="mt-6 border-t border-slate-200 pt-6">
           <SectionTitle
             title="Dados do cliente nos novos documentos"
             description="O nome sempre aparece. Você pode mudar estes campos em cada proposta, relatório ou recibo."

@@ -7,5 +7,5 @@ export function copiarInstalacaoNuvem(): void {
   const pasta = app.isPackaged
     ? join(process.resourcesPath, 'supabase')
     : join(app.getAppPath(), 'supabase')
-  clipboard.writeText(readFileSync(join(pasta, 'schema.sql'), 'utf8'))
+  clipboard.writeText(readFileSync(join(pasta, 'schema-colaboracao.sql'), 'utf8'))
 }

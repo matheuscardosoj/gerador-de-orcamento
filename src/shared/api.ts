@@ -103,6 +103,14 @@ export interface AppApi {
     remove(id: string): Promise<void>
   }
   colaboracao: {
+    revisarRecebimentos(
+      tipo: import('./evolucao').TipoDocumento,
+      id: string
+    ): Promise<import('./evolucao').RevisaoRecebimentos>
+    conciliarRecebimentos(
+      revisao: import('./evolucao').RevisaoRecebimentos,
+      acao: 'reaplicar' | 'arquivar'
+    ): Promise<void>
     acompanhar(tipo: import('./evolucao').TipoDocumento, id: string, ativo: boolean): Promise<void>
     membros(): Promise<import('./evolucao').MembroEmpresa[]>
     vincularMembro(email: string, nome: string): Promise<import('./evolucao').MembroEmpresa[]>

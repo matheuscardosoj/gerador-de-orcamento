@@ -1,5 +1,10 @@
-import { expect, it } from 'vitest'
-import { AgendadorSincronizacao } from '../tempo-real'
+import { afterEach, expect, it, vi } from 'vitest'
+import { AgendadorSincronizacao, iniciarTempoReal, pararTempoReal } from '../tempo-real'
+
+afterEach(() => {
+  pararTempoReal()
+  vi.useRealTimers()
+})
 
 it('recupera uma mudança que chega durante a consulta, sem consultas paralelas', async () => {
   let chamadas = 0,
@@ -34,4 +39,42 @@ it('não inicia novas consultas depois de parar e libera a fila após falha', as
   fila.parar()
   await fila.solicitar()
   expect(chamadas).toBe(2)
+})
+
+it('reenvia após falha transitória sem esperar cinco minutos e cancela ao encerrar', async () => {
+  vi.useFakeTimers()
+  const sincronizar = vi
+    .fn()
+    .mockResolvedValueOnce({ erro: 'Sem internet' })
+    .mockResolvedValue({ erro: null })
+  iniciarTempoReal({
+    configuracao: () => ({ url: '', chavePublica: '', email: '' }),
+    identidade: () => null,
+    sincronizar,
+    renovar: async () => {},
+    estado: () => {}
+  })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(sincronizar).toHaveBeenCalledTimes(1)
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(sincronizar).toHaveBeenCalledTimes(2)
+  pararTempoReal()
+  await vi.advanceTimersByTimeAsync(5 * 60000)
+  expect(sincronizar).toHaveBeenCalledTimes(2)
+})
+
+it('não repete tentativas automáticas de um conflito que precisa de decisão', async () => {
+  vi.useFakeTimers()
+  const sincronizar = vi
+    .fn()
+    .mockResolvedValue({ erro: 'Há alterações em conflito preservadas para conciliação.' })
+  iniciarTempoReal({
+    configuracao: () => ({ url: '', chavePublica: '', email: '' }),
+    identidade: () => null,
+    sincronizar,
+    renovar: async () => {},
+    estado: () => {}
+  })
+  await vi.advanceTimersByTimeAsync(10000)
+  expect(sincronizar).toHaveBeenCalledTimes(1)
 })

@@ -14,6 +14,7 @@ let sql: typeof import('./sqlite'),
   dados: typeof import('../dados'),
   recibos: typeof import('../recibos'),
   versoes: typeof import('../versoes')
+let rascunhos: typeof import('../rascunhos')
 let relId = '',
   reciboId = '',
   computador = '',
@@ -34,6 +35,7 @@ beforeAll(async () => {
   dados = await import('../dados')
   recibos = await import('../recibos')
   versoes = await import('../versoes')
+  rascunhos = await import('../rascunhos')
 })
 afterAll(() => {
   sql.fecharBanco()
@@ -103,6 +105,30 @@ it('inclui pagamentos, versões e imagens, retirando sessão, identidade e reser
   ])
   sql.run("INSERT INTO configuracoes VALUES ('sessaoNuvem','\"credencial de teste\"')")
   sql.run("INSERT INTO reservas VALUES ('orcamento',999,0)")
+  const trabalho = rascunhos.criarRascunho('relatorio', relId, {
+    ...repos.relatoriosRepo.get(relId)!,
+    introducao: 'Texto local preservado'
+  })
+  sql.run('INSERT INTO identificadores_documento VALUES (?,?,?,?,?)', [
+    'relatorio',
+    relId,
+    1,
+    'usuario-teste',
+    'usuario-teste'
+  ])
+  sql.run('INSERT INTO edicoes_documento VALUES (?,?,?,?,?,?,?,?)', [
+    'relatorio',
+    relId,
+    'usuario-teste',
+    computador,
+    1,
+    null,
+    1,
+    0
+  ])
+  sql.run(
+    "INSERT INTO configuracoes VALUES ('membrosCache','[]'),('pedidosEdicaoCache','[]'),('numeracaoNuvem:relatorio','{}')"
+  )
   dados.exportarDadosPara(backup)
   const copia = new Database(backup)
   expect(
@@ -113,6 +139,25 @@ it('inclui pagamentos, versões e imagens, retirando sessão, identidade e reser
   expect(copia.get('SELECT count(*) AS n FROM reservas')).toEqual({ n: 0 })
   expect(copia.get('SELECT count(*) AS n FROM recebimentos')).toEqual({ n: 1 })
   expect(copia.get('SELECT count(*) AS n FROM versoes')).toEqual({ n: numeroVersoes })
+  expect(copia.get('SELECT count(*) AS n FROM edicoes_documento')).toEqual({ n: 0 })
+  expect(
+    copia.get('SELECT id_interno FROM identificadores_documento WHERE tipo=? AND documento_id=?', [
+      'relatorio',
+      relId
+    ])
+  ).toEqual({ id_interno: 1 })
+  expect(copia.get('SELECT id FROM rascunhos_compartilhados')).toEqual({ id: trabalho.id })
+  expect(
+    copia.get(
+      "SELECT count(*) AS n FROM configuracoes WHERE chave IN ('membrosCache','pedidosEdicaoCache','numeracaoNuvem:relatorio')"
+    )
+  ).toEqual({ n: 0 })
+  expect(
+    copia.get('SELECT numero FROM numeros_emitidos WHERE tipo=? AND documento_id=?', [
+      'recibo',
+      reciboId
+    ])?.numero
+  ).toBe(recibo.numero)
   copia.close()
   expect(versoes.computadorId()).toBe(computador)
 })
@@ -135,6 +180,11 @@ it('restaura em outro computador preservando o saldo e bloqueando autorização 
   expect(recibos.recibosRepo.get(reciboId)?.status).toBe('recebido')
   expect(sql.get('SELECT count(*) AS n FROM versoes')?.n).toBe(numeroVersoes)
   expect(sql.get('SELECT count(*) AS n FROM imagens')?.n).toBe(1)
+  expect(repos.relatoriosRepo.get(relId)?.idInterno).toBe(1)
+  expect(rascunhos.listarRascunhos('relatorio', relId)[0].documento).toMatchObject({
+    id: relId,
+    introducao: 'Texto local preservado'
+  })
   expect(
     JSON.parse(
       String(sql.get("SELECT valor FROM configuracoes WHERE chave='historico:orcamento'")?.valor)
@@ -163,10 +213,17 @@ it('mescla em um perfil independente sem duplicar pagamentos ao repetir a import
   const pagamento = sql.get('SELECT * FROM recebimentos')!
   expect(pagamento.relatorio_id).toBe(rel.id)
   expect(repos.relatoriosRepo.get(rel.id)?.adiantamentos[0].id).toBe(pagamento.adiantamento_id)
+  const rascunho = rascunhos.listarRascunhos('relatorio', rel.id)[0]
+  expect(rascunho.documento).toMatchObject({ id: rel.id, introducao: 'Texto local preservado' })
+  expect(rascunho.base.id).toBe(rel.id)
+  expect((rascunho.documento as import('@shared/types').Relatorio).itensServico[0].id).toBe(
+    repos.relatoriosRepo.get(rel.id)?.itensServico[0].id
+  )
   dados.importarDadosDe(backup, 'mesclar')
   expect(sql.get('SELECT count(*) AS n FROM recebimentos')?.n).toBe(1)
   expect(sql.get('SELECT count(*) AS n FROM recibos')?.n).toBe(1)
   expect(sql.get('SELECT count(*) AS n FROM imagens')?.n).toBe(1)
+  expect(rascunhos.listarRascunhos('relatorio', rel.id)).toHaveLength(1)
   expect(versoes.listarVersoes('relatorio', rel.id).length).toBeGreaterThan(1)
 })
 

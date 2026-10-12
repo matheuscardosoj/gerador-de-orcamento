@@ -1,4 +1,5 @@
 import { recibosRepo } from './recibos'
+import { revisarRecebimentos, conciliarRecebimentos } from './conciliacao-financeira'
 import {
   listarRascunhos,
   obterRascunho,
@@ -110,6 +111,9 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
   'rascunhos.copiar': (id) => copiarRascunho(String(id)),
   'rascunhos.remove': (id) => descartarRascunho(String(id)),
   'colaboracao.membros': () => membrosEmpresa(),
+  'colaboracao.revisarRecebimentos': (tipo, id) => revisarRecebimentos(tipo as never, String(id)),
+  'colaboracao.conciliarRecebimentos': (revisao, acao) =>
+    conciliarRecebimentos(revisao as never, acao as never),
   'colaboracao.acompanhar': (tipo, id, ativo) =>
     acompanharEdicao(tipo as never, String(id), ativo === true),
   'colaboracao.vincularMembro': (email, nome) => vincularMembro(String(email), String(nome)),

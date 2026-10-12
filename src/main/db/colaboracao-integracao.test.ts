@@ -91,6 +91,12 @@ beforeAll(async () => {
         result = (await pg.query('SELECT * FROM edicoes_documento')).rows
       else if (u.pathname === '/rest/v1/pedidos_edicao')
         result = (await pg.query('SELECT * FROM pedidos_edicao')).rows
+      else if (u.pathname === '/rest/v1/recibos')
+        result = (
+          await pg.query("SELECT id FROM recibos WHERE origem_tipo='relatorio' AND origem_id=$1", [
+            u.searchParams.get('origem_id')?.slice(3)
+          ])
+        ).rows
       else if (u.pathname === '/rest/v1/reservas_numeros')
         result = (
           await pg.query(
@@ -241,4 +247,139 @@ it('compara o trabalho offline com a base de partida e aplica só após liberar 
   })
   expect(rascunhos.obterRascunho(r.id).estado).toBe('aplicado')
   expect(sql.get('SELECT count(*) AS n FROM recebimentos')?.n).toBe(0)
+})
+it('revisa confirmação e estorno após revogação sem dupla contabilização', async () => {
+  await perfil('a')
+  const financeiro = await import('../conciliacao-financeira')
+  const p = repos.orcamentosRepo.create({
+    data: '2026-10-12',
+    destinatario: 'Cliente financeiro',
+    formato: 'carta',
+    titulo: 'Proposta',
+    itensServico: [
+      {
+        id: randomUUID(),
+        descricao: 'Serviço',
+        unidade: 'un',
+        quantidade: 1,
+        valorUnitario: 1000,
+        valorTotal: 1000
+      }
+    ],
+    materiais: [],
+    observacoes: [],
+    pagamentos: [],
+    anexos: [],
+    valorTotal: 1000,
+    status: 'rascunho'
+  })
+  const rel = repos.relatoriosRepo.criarDeOrcamento(p.id)!
+  const recibo = recibos.recibosRepo.create({
+    data: '2026-10-12',
+    destinatario: 'Cliente financeiro',
+    descricao: 'Serviço',
+    valor: 200,
+    local: 'Rio Verde',
+    formaPagamento: 'Pix',
+    status: 'pendente',
+    quitacao: 'parcial',
+    observacao: '',
+    origemTipo: 'relatorio',
+    origemId: rel.id
+  })
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  await colaboracao.controlarEdicao('recibo', recibo.id, 'offline')
+  offline = true
+  recibos.recibosRepo.confirmar(recibo.id)
+  expect(repos.relatoriosRepo.get(rel.id)?.totais.saldo).toBe(800)
+  offline = false
+  await perfil('b')
+  await nuvem.sincronizarNuvem()
+  await colaboracao.controlarEdicao('relatorio', rel.id, 'recuperar')
+  await perfil('a')
+  await nuvem.sincronizarNuvem()
+  expect(nuvem.statusNuvem().conflitos.length).toBeGreaterThan(0)
+  let revisao = await financeiro.revisarRecebimentos('relatorio', rel.id)
+  expect(revisao.operacoes).toMatchObject([{ valor: 200, acao: 'confirmar', situacao: 'pendente' }])
+  await colaboracao.controlarEdicao('relatorio', rel.id, 'recuperar')
+  await financeiro.conciliarRecebimentos(revisao, 'reaplicar')
+  expect(repos.relatoriosRepo.get(rel.id)?.totais.saldo).toBe(800)
+  expect(recibos.recibosRepo.get(recibo.id)?.status).toBe('recebido')
+  expect(
+    sql.get('SELECT count(*) AS n FROM recebimentos WHERE recibo_id=? AND estornado=0', [recibo.id])
+      ?.n
+  ).toBe(1)
+  // Preparar novamente reserva o conjunto; o estorno offline também recebe uma operação nova.
+  await colaboracao.controlarEdicao('recibo', recibo.id, 'offline')
+  offline = true
+  recibos.recibosRepo.cancelar(recibo.id)
+  offline = false
+  await perfil('b')
+  await nuvem.sincronizarNuvem()
+  await colaboracao.controlarEdicao('relatorio', rel.id, 'recuperar')
+  await perfil('a')
+  await nuvem.sincronizarNuvem()
+  revisao = await financeiro.revisarRecebimentos('recibo', recibo.id)
+  expect(revisao.operacoes).toMatchObject([{ acao: 'estornar', situacao: 'pendente' }])
+  await colaboracao.controlarEdicao('relatorio', rel.id, 'recuperar')
+  await financeiro.conciliarRecebimentos(revisao, 'reaplicar')
+  expect(repos.relatoriosRepo.get(rel.id)?.totais.saldo).toBe(1000)
+  expect(sql.get('SELECT count(*) AS n FROM recebimentos WHERE recibo_id=?', [recibo.id])?.n).toBe(
+    1
+  )
+  expect(
+    sql.get('SELECT estornado FROM recebimentos WHERE recibo_id=?', [recibo.id])?.estornado
+  ).toBe(1)
+  expect(
+    sql.get("SELECT count(*) AS n FROM auditoria_colaboracao WHERE acao='recebimentos:reaplicar'")
+      ?.n
+  ).toBe(2)
+  expect((await financeiro.revisarRecebimentos('recibo', recibo.id)).operacoes).toEqual([])
+})
+it('preserva um recebimento divergente e arquiva só pendências locais com revisão explícita', async () => {
+  const financeiro = await import('../conciliacao-financeira')
+  const r = recibos.recibosRepo.create({
+    data: '2026-10-12',
+    destinatario: 'Cliente avulso',
+    descricao: 'Serviço avulso',
+    valor: 150,
+    local: 'Rio Verde',
+    formaPagamento: 'Pix',
+    status: 'pendente',
+    quitacao: 'parcial',
+    observacao: ''
+  })
+  await nuvem.sincronizarNuvem()
+  await colaboracao.controlarEdicao('recibo', r.id, 'offline')
+  offline = true
+  recibos.recibosRepo.confirmar(r.id)
+  offline = false
+  await perfil('b')
+  await nuvem.sincronizarNuvem()
+  await colaboracao.controlarEdicao('recibo', r.id, 'recuperar')
+  const atual = recibos.recibosRepo.get(r.id)!
+  recibos.recibosRepo.update(r.id, { valor: 200, versao: atual.versao })
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  await perfil('a')
+  await nuvem.sincronizarNuvem()
+  const revisao = await financeiro.revisarRecebimentos('recibo', r.id)
+  expect(revisao.operacoes).toMatchObject([{ valor: 150, situacao: 'divergente' }])
+  await expect(financeiro.conciliarRecebimentos(revisao, 'reaplicar')).rejects.toThrow(
+    'divergências financeiras'
+  )
+  await expect(
+    financeiro.conciliarRecebimentos({ ...revisao, revisoes: {} }, 'arquivar')
+  ).rejects.toThrow('mudaram desde a revisão')
+  await financeiro.conciliarRecebimentos(revisao, 'arquivar')
+  expect(recibos.recibosRepo.get(r.id)).toMatchObject({ valor: 200, status: 'pendente' })
+  expect(sql.get('SELECT count(*) AS n FROM recebimentos WHERE recibo_id=?', [r.id])?.n).toBe(0)
+  expect(
+    rascunhos
+      .listarRascunhos('recibo', r.id)
+      .some((r) => (r.documento as import('@shared/types').Recibo).valor === 150)
+  ).toBe(true)
+  const auditoria = sql.get(
+    "SELECT dados FROM auditoria_colaboracao WHERE acao='recebimentos:arquivar'"
+  )!
+  expect(JSON.parse(String(auditoria.dados)).recebimentosOriginais[0].valor).toBe(150)
 })

@@ -24,6 +24,7 @@ const ignorados = new Set([
   'totais'
 ])
 const financeiros = new Set([
+  'preco',
   'valor',
   'valorTotal',
   'valorUnitario',
@@ -77,7 +78,17 @@ export function conciliarDocumento<T>(
     if (igual(r, b) || igual(l, r)) return l
     if (objeto(b) && objeto(l) && objeto(r)) {
       const resultado: Record<string, unknown> = {}
+      const camposPreco = ['quantidade', 'valorUnitario', 'valorTotal', 'calculo']
+      const preco = (v: Record<string, unknown>) =>
+        Object.fromEntries(camposPreco.filter((k) => k in v).map((k) => [k, v[k]]))
+      const disputaPreco =
+        caminho.startsWith('itensServico.') &&
+        'quantidade' in b &&
+        !igual(preco(b), preco(l)) &&
+        !igual(preco(b), preco(r)) &&
+        !igual(preco(l), preco(r))
       for (const k of new Set([...Object.keys(b), ...Object.keys(l), ...Object.keys(r)])) {
+        if (disputaPreco && camposPreco.includes(k)) continue
         if (!caminho && ignorados.has(k)) {
           if (r[k] !== undefined) resultado[k] = r[k]
           continue
@@ -85,6 +96,8 @@ export function conciliarDocumento<T>(
         const v = unir(b[k], l[k], r[k], caminho ? `${caminho}.${k}` : k)
         if (v !== undefined) resultado[k] = v
       }
+      if (disputaPreco)
+        Object.assign(resultado, disputar(preco(b), preco(l), preco(r), `${caminho}.preco`))
       return resultado
     }
     if (listaIds(b) && listaIds(l) && listaIds(r)) {

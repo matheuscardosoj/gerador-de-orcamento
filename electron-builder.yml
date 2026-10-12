@@ -25,6 +25,7 @@ extraResources:
     to: supabase
     filter:
       - schema.sql
+      - schema-colaboracao.sql
       - CONFIGURACAO.md
   # Runtime de IA (llama-server.exe + modelo GGUF), baixado por `npm run ia`.
   - from: resources/ia

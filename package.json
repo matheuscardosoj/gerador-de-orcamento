@@ -1,6 +1,6 @@
 {
   "name": "gerador-de-orcamento",
-  "version": "1.4.1",
+  "version": "1.5.0-rc.1",
   "description": "Gerador de Orçamentos - VS Prestadora de Serviços",
   "main": "./out/main/index.js",
   "author": "VS Prestadora de Serviços",
@@ -47,6 +47,7 @@
     "@types/node": "^22.10.7",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
+    "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "5.2.0",
     "autoprefixer": "^10.4.20",
     "electron": "44.0.0",
@@ -69,7 +70,8 @@
     "typescript": "^5.7.3",
     "typescript-eslint": "8.68.0",
     "vite": "7.3.6",
-    "vitest": "4.1.11"
+    "vitest": "4.1.11",
+    "ws": "^8.22.0"
   },
   "allowScripts": {
     "electron@44.0.0": true,

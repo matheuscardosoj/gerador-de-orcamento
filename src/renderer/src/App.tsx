@@ -31,7 +31,7 @@ const itens: Array<{ nome: Rota['nome']; label: string; icon: LucideIcon }> = [
 function Sidebar(): JSX.Element {
   const { rota, navegar } = useNav()
   // Recarrega o nome da empresa ao trocar de tela (reflete edições nas Configurações).
-  const { data: empresa } = useAsync(() => api.empresa.get(), [rota.nome])
+  const { data: empresa } = useAsync(() => api.empresa.get(), [rota.nome], ['configuracoes'])
   const { data: versao } = useAsync(() => api.aplicativo.versao(), [])
   const [nuvem, setNuvem] = useState<StatusNuvem | null>(null)
   useEffect(() => {
@@ -116,20 +116,20 @@ function Sidebar(): JSX.Element {
 }
 
 function Conteudo(): JSX.Element {
-  const { rota } = useNav()
+  const { rota, revisaoRota } = useNav()
   switch (rota.nome) {
     case 'historico':
       return <HistoricoPage />
     case 'editor':
-      return <EditorOrcamentoPage orcamentoId={rota.orcamentoId} />
+      return <EditorOrcamentoPage key={rota.orcamentoId ?? 'novo'} orcamentoId={rota.orcamentoId} />
     case 'historicoRelatorios':
       return <HistoricoRelatoriosPage />
     case 'editorRelatorio':
-      return <EditorRelatorioPage relatorioId={rota.relatorioId} />
+      return <EditorRelatorioPage key={rota.relatorioId ?? 'novo'} relatorioId={rota.relatorioId} />
     case 'recibos':
       return (
         <RecibosPage
-          key={rota.reciboId ?? rota.origem?.id ?? 'lista'}
+          key={`${revisaoRota}:${rota.reciboId ?? rota.origem?.id ?? 'lista'}`}
           reciboId={rota.reciboId}
           origemDocumento={rota.origem}
         />

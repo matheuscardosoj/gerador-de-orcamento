@@ -6,6 +6,7 @@ import { DadosClienteDocumento, LinhaTempo } from '../components/DocumentoExtras
 import { useEffect, useMemo, useState } from 'react'
 import { X, ArrowLeft, Eye, FileDown, Save, Plus } from 'lucide-react'
 import { api } from '../lib/api'
+import { useCadastrosAtualizados } from '../lib/hooks'
 import { PageShell } from '../ui/layout'
 import {
   Button,
@@ -49,6 +50,7 @@ const agora = (): string => new Date().toISOString()
 export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): JSX.Element {
   const { navegar } = useNav()
   const [dados, setDados] = useState<Base | null>(null)
+  useCadastrosAtualizados(setDados)
   const [rel, setRel] = useState<Relatorio | null>(null)
   const [ocupado, setOcupado] = useState<'salvar' | 'pdf' | 'docx' | null>(null)
   const [erro, setErro] = useState<string | null>(null)

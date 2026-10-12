@@ -1,4 +1,8 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import {
+  createClient,
+  type SupabaseClient,
+  type SupabaseClientOptions
+} from '@supabase/supabase-js'
 import type { ConfigNuvem, StatusNuvem } from '@shared/types'
 import { avisarDados, observarDados } from './eventos'
 
@@ -36,6 +40,7 @@ interface Opcoes {
   sincronizar: () => Promise<unknown>
   estado: (estado: EstadoTempoReal, erro: string | null) => void
   renovar: () => Promise<void>
+  criarCliente?: (config: ConfigNuvem, opcoes: SupabaseClientOptions<'public'>) => SupabaseClient
 }
 let pararAtual: (() => void) | null = null
 export function pararTempoReal(): void {
@@ -48,7 +53,32 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
   let chave = '',
     tokenAtual = '',
     encerrado = false
-  const agendador = new AgendadorSincronizacao(opcoes.sincronizar)
+  let repeticao: ReturnType<typeof setTimeout> | null = null
+  let tentativas = 0
+  const repetir = (): void => {
+    if (encerrado || repeticao || tentativas >= 5) return
+    const espera = [1000, 3000, 10000, 30000, 30000][tentativas++]
+    repeticao = setTimeout(() => {
+      repeticao = null
+      solicitar()
+    }, espera)
+  }
+  const agendador = new AgendadorSincronizacao(async () => {
+    try {
+      const resultado = await opcoes.sincronizar()
+      const erro = (resultado as { erro?: string } | null)?.erro
+      if (erro && !/conflito|concilia/i.test(erro)) repetir()
+      else {
+        tentativas = 0
+        if (repeticao) clearTimeout(repeticao)
+        repeticao = null
+      }
+      return resultado
+    } catch (e) {
+      repetir()
+      throw e
+    }
+  })
   const solicitar = (): void => {
     void agendador.solicitar().catch(() => undefined)
   }
@@ -74,10 +104,14 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
       return
     }
     if (cliente) await cliente.removeAllChannels()
-    cliente = createClient(config.url, config.chavePublica, {
+    const configuracaoCliente = {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      accessToken: async () => opcoes.identidade()?.token ?? config.chavePublica,
       realtime: { params: { eventsPerSecond: 5 } }
-    })
+    }
+    cliente =
+      opcoes.criarCliente?.(config, configuracaoCliente) ??
+      createClient(config.url, config.chavePublica, configuracaoCliente)
     chave = novaChave
     tokenAtual = identidade.token
     await cliente.realtime.setAuth(identidade.token)
@@ -120,6 +154,7 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
   const seguranca = setInterval(solicitar, 5 * 60 * 1000)
   pararAtual = () => {
     encerrado = true
+    if (repeticao) clearTimeout(repeticao)
     clearInterval(vigilancia)
     clearInterval(seguranca)
     removerObservador()

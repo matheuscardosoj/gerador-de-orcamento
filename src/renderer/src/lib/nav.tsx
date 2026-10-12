@@ -21,6 +21,7 @@ export type Rota =
 
 interface NavContexto {
   rota: Rota
+  revisaoRota: number
   navegar: (rota: Rota) => void
   registrarBloqueio: (bloqueio: (() => boolean) | null) => void
   executarComConfirmacao: (acao: () => void) => void
@@ -30,6 +31,7 @@ const Ctx = createContext<NavContexto | null>(null)
 
 export function NavProvider({ children }: { children: ReactNode }): JSX.Element {
   const [rota, setRota] = useState<Rota>({ nome: 'historico' })
+  const [revisaoRota, setRevisaoRota] = useState(0)
   const [pendente, setPendente] = useState<{ executar: () => void } | null>(null)
   const bloqueio = useRef<(() => boolean) | null>(null)
   const registrarBloqueio = useCallback((proximo: (() => boolean) | null) => {
@@ -40,7 +42,11 @@ export function NavProvider({ children }: { children: ReactNode }): JSX.Element 
     else acao()
   }, [])
   const navegar = useCallback(
-    (proxima: Rota) => executarComConfirmacao(() => setRota(proxima)),
+    (proxima: Rota) =>
+      executarComConfirmacao(() => {
+        setRota(proxima)
+        setRevisaoRota((r) => r + 1)
+      }),
     [executarComConfirmacao]
   )
   const descartar = (): void => {
@@ -51,7 +57,7 @@ export function NavProvider({ children }: { children: ReactNode }): JSX.Element 
     destino?.executar()
   }
   return (
-    <Ctx.Provider value={{ rota, navegar, registrarBloqueio, executarComConfirmacao }}>
+    <Ctx.Provider value={{ rota, revisaoRota, navegar, registrarBloqueio, executarComConfirmacao }}>
       {children}
       <ConfirmDialog
         open={pendente !== null}

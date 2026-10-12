@@ -116,3 +116,18 @@ export interface ComparacaoRascunho {
   documento: Documento
   conflitos: import('./conciliacao').ConflitoCampo[]
 }
+export interface RevisaoRecebimentos {
+  tipo: TipoDocumento
+  documentoId: string
+  revisoes: Record<string, number>
+  operacoes: Array<{
+    reciboId: string
+    numero: number
+    cliente: string
+    valor: number
+    acao: 'confirmar' | 'estornar'
+    situacao: 'pendente' | 'aplicada' | 'divergente'
+    detalhe: string
+    excluir?: boolean
+  }>
+}

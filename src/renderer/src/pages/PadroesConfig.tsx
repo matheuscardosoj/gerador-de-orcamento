@@ -124,12 +124,14 @@ export function PadroesConfig({
             <col className="w-44" />
             <col className="w-28" />
           </colgroup>
-          <thead className="bg-slate-50 text-left text-xs text-slate-500">
+          <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase text-slate-500">
             <tr>
               <th className="px-4 py-3">Texto</th>
               <th className="px-4 py-3">Aplicação</th>
               <th className="px-4 py-3">Inclusão automática</th>
-              <th className="px-4 py-3 text-right">Ações</th>
+              <th className="sticky right-0 z-[2] bg-slate-50 px-4 py-3 text-right shadow-[-1px_0_0_0_#e2e8f0]">
+                Ações
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -146,7 +148,7 @@ export function PadroesConfig({
               }
             >
               {lista.map((item) => (
-                <tr key={item.id} className="h-[62px] hover:bg-slate-50">
+                <tr key={item.id} className="group/linha-historico h-[62px] hover:bg-slate-50">
                   <td className="px-4 py-3">
                     <p
                       className="line-clamp-2 whitespace-pre-wrap break-words text-slate-700"
@@ -176,7 +178,7 @@ export function PadroesConfig({
                       }
                     />
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="sticky right-0 z-[1] bg-white px-4 py-3 shadow-[-1px_0_0_0_#e2e8f0] group-hover/linha-historico:bg-slate-50">
                     <TableActions>
                       <IconButton
                         icon={Pencil}

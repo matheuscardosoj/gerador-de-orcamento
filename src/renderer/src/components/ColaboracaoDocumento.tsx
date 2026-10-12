@@ -16,9 +16,11 @@ import type {
   ControleEdicao,
   StatusNuvem,
   RascunhoCompartilhado,
-  ComparacaoRascunho
+  ComparacaoRascunho,
+  RevisaoRecebimentos
 } from '@shared/evolucao'
 import { compararDocumentos } from '@shared/comparacao-documentos'
+import { formatMoeda } from '@shared/format'
 import { api } from '../lib/api'
 import { useNav } from '../lib/nav'
 import { Button, Card, SectionTitle, Modal, Field, Select, Mensagem, Badge } from '../ui/primitives'
@@ -31,6 +33,7 @@ const rotuloCampo = (campo: string): string =>
       (p) =>
         ({
           descricao: 'Descrição',
+          preco: 'Preço e cálculo do serviço',
           observacao: 'Observação',
           observacaoInterna: 'Anotação interna',
           introducao: 'Introdução',
@@ -80,6 +83,10 @@ export function ColaboracaoDocumento({
     [ocupado, setOcupado] = useState(false)
   const [rascunhos, setRascunhos] = useState<RascunhoCompartilhado[]>([])
   const [comparacao, setComparacao] = useState<ComparacaoRascunho | null>(null)
+  const [recebimentos, setRecebimentos] = useState<RevisaoRecebimentos | null>(null)
+  const [confirmarFinanceiro, setConfirmarFinanceiro] = useState<'reaplicar' | 'arquivar' | null>(
+    null
+  )
   const [escolhas, setEscolhas] = useState<Record<string, 'local' | 'remoto'>>({})
   const [recuperar, setRecuperar] = useState(false),
     [destino, setDestino] = useState('')
@@ -160,6 +167,8 @@ export function ColaboracaoDocumento({
     void executar(async () => {
       setRascunhos(await api.rascunhos.list(tipo, documento.id))
       setComparacao(null)
+      setRecebimentos(null)
+      setConfirmarFinanceiro(null)
       setAberto(true)
       if (status?.protocolo === 2) setComputadores(await api.nuvem.dispositivos())
     })
@@ -483,6 +492,125 @@ export function ColaboracaoDocumento({
           )}
           {status?.protocolo === 2 && (
             <div className="space-y-4 border-t border-slate-200 pt-5">
+              {(tipo === 'recibo' || tipo === 'relatorio') && (
+                <>
+                  <SectionTitle
+                    title="Recebimentos pendentes"
+                    description="Revise operações que não receberam confirmação da nuvem. A conciliação de textos não altera pagamentos."
+                  />
+                  <Button
+                    variant="outline"
+                    disabled={ocupado}
+                    onClick={() =>
+                      void executar(async () =>
+                        setRecebimentos(
+                          await api.colaboracao.revisarRecebimentos(tipo, documento.id)
+                        )
+                      )
+                    }
+                  >
+                    Revisar recebimentos
+                  </Button>
+                  {recebimentos && (
+                    <>
+                      {recebimentos.operacoes.length ? (
+                        <DataTableViewport minWidth="700px">
+                          <thead className="bg-slate-50 text-left text-xs text-slate-500">
+                            <tr>
+                              <th className="w-24 px-4 py-3">Recibo</th>
+                              <th className="w-32 px-4 py-3">Operação</th>
+                              <th className="w-32 px-4 py-3">Valor</th>
+                              <th className="px-4 py-3">Conferência</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {recebimentos.operacoes.map((o) => (
+                              <tr key={o.reciboId}>
+                                <td className="px-4 py-3">{o.numero}</td>
+                                <td className="px-4 py-3">
+                                  {o.acao === 'confirmar'
+                                    ? 'Recebimento'
+                                    : o.excluir
+                                      ? 'Estorno e exclusão'
+                                      : 'Estorno'}
+                                </td>
+                                <td className="px-4 py-3">{formatMoeda(o.valor)}</td>
+                                <td className="px-4 py-3">
+                                  <p className="font-medium text-slate-700">{o.cliente}</p>
+                                  <p className="mt-1 text-slate-500">{o.detalhe}</p>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </DataTableViewport>
+                      ) : (
+                        <p className="text-sm text-slate-500">
+                          Não há recebimentos pendentes neste conjunto.
+                        </p>
+                      )}
+                      {!!recebimentos.operacoes.length && (
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            disabled={
+                              ocupado ||
+                              recebimentos.operacoes.some((o) => o.situacao === 'divergente')
+                            }
+                            onClick={() => setConfirmarFinanceiro('reaplicar')}
+                          >
+                            Confirmar operações revisadas
+                          </Button>
+                          <Button
+                            variant="outline"
+                            disabled={ocupado}
+                            onClick={() => setConfirmarFinanceiro('arquivar')}
+                          >
+                            Arquivar pendências locais
+                          </Button>
+                        </div>
+                      )}
+                      {confirmarFinanceiro && (
+                        <Mensagem tom="aviso">
+                          <p className="mb-3">
+                            {confirmarFinanceiro === 'reaplicar'
+                              ? 'As operações serão refeitas sobre o saldo atual, com autorização e nova transação. O que a nuvem já confirmou não será contabilizado novamente.'
+                              : 'As operações locais ainda não confirmadas serão arquivadas com backup, rascunhos e registro de auditoria. Os pagamentos confirmados na empresa permanecem iguais. Se houve recebimento físico divergente, prepare um novo recibo após revisar.'}{' '}
+                            As alterações de conteúdo locais ficarão em rascunhos para comparação
+                            separada.
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              disabled={ocupado || sujo}
+                              onClick={() =>
+                                void executar(async () => {
+                                  await api.colaboracao.conciliarRecebimentos(
+                                    recebimentos,
+                                    confirmarFinanceiro
+                                  )
+                                  setRecebimentos(null)
+                                  setConfirmarFinanceiro(null)
+                                  setAviso(
+                                    'Operações conferidas; os registros originais foram preservados.'
+                                  )
+                                  const d = await (tipo === 'recibo'
+                                    ? api.recibos.get(documento.id)
+                                    : api.relatorios.get(documento.id))
+                                  if (d) onAbrir(d)
+                                  setAberto(false)
+                                })
+                              }
+                            >
+                              Confirmar revisão financeira
+                            </Button>
+                            <Button variant="outline" onClick={() => setConfirmarFinanceiro(null)}>
+                              Voltar
+                            </Button>
+                          </div>
+                        </Mensagem>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
               <SectionTitle
                 title="Controle da edição"
                 description="A emissão offline é exclusiva. Recuperar revoga a autorização anterior; alterações de computadores desconectados serão conciliadas quando retornarem."
