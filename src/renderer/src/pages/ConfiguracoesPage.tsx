@@ -441,6 +441,7 @@ function SecaoParametros(): JSX.Element {
           <Field label="Custo de contratação (R$)" hint="Por funcionário (exames, admissão)">
             <NumberField
               value={form.custoContratacao}
+              format="money"
               onChange={(v) => set({ custoContratacao: v })}
               min={0}
             />
@@ -480,6 +481,7 @@ function SecaoParametros(): JSX.Element {
           <Field label="Preço do combustível padrão (R$/l)">
             <NumberField
               value={form.precoCombustivelPadrao}
+              format="money"
               onChange={(v) => set({ precoCombustivelPadrao: v })}
               min={0}
             />
@@ -487,6 +489,7 @@ function SecaoParametros(): JSX.Element {
           <Field label="Valor da refeição padrão (R$)">
             <NumberField
               value={form.valorRefeicaoPadrao}
+              format="money"
               onChange={(v) => set({ valorRefeicaoPadrao: v })}
               min={0}
             />

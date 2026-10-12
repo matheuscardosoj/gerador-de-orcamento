@@ -22,6 +22,7 @@ import {
   Input,
   Mensagem,
   Modal,
+  NumericInput,
   Select
 } from '../ui/primitives'
 import { DataTableFrame, Pagination, SortableHeader, TableActions } from '../ui/dataTable'
@@ -351,23 +352,21 @@ export function HistoricoDocumentos({
           />
         </Field>
         <Field label="Valor mínimo">
-          <Input
+          <NumericInput
             disabled={!carregadas}
-            type="number"
-            min="0"
-            step="0.01"
+            format="money"
+            min={0}
             value={pref.minimo}
-            onChange={(e) => mudar({ minimo: e.target.value })}
+            onValueChange={(minimo) => mudar({ minimo })}
           />
         </Field>
         <Field label="Valor máximo">
-          <Input
+          <NumericInput
             disabled={!carregadas}
-            type="number"
-            min="0"
-            step="0.01"
+            format="money"
+            min={0}
             value={pref.maximo}
-            onChange={(e) => mudar({ maximo: e.target.value })}
+            onValueChange={(maximo) => mudar({ maximo })}
           />
         </Field>
         {tipo === 'relatorio' && (

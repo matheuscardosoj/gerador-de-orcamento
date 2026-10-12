@@ -104,12 +104,14 @@ try {
               decorativo: el.getAttribute('aria-hidden'),
               foco: el.getAttribute('focusable')
             })),
-          rotulosAninhados: document.querySelectorAll('label label').length
+          rotulosAninhados: document.querySelectorAll('label label').length,
+          numerosNativos: document.querySelectorAll('input[type=number]').length
         }
       })
       assert.ok(medidas.excessoPagina <= 1, `${nome}: rolagem horizontal na página`)
       assert.ok(medidas.excessoConteudo <= 1, `${nome}: rolagem horizontal no conteúdo`)
       assert.equal(medidas.rotulosAninhados, 0, `${nome}: rótulos aninhados`)
+      assert.equal(medidas.numerosNativos, 0, `${nome}: campo numérico sem máscara`)
       for (const t of medidas.titulos) {
         assert.equal(t.fonte, '18px', `${nome}: título ${t.titulo}`)
         assert.equal(t.peso, '600', `${nome}: título ${t.titulo}`)

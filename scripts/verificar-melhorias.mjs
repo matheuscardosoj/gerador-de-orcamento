@@ -16,14 +16,18 @@ let app = await lancar()
 const erros = []
 let resultado
 async function arrastar(page, de, ate) {
-  await de.scrollIntoViewIfNeeded()
-  const a = await de.boundingBox(),
-    b = await ate.boundingBox()
-  assert.ok(a && b)
+  await ate.scrollIntoViewIfNeeded()
+  await de.hover()
+  const a = await de.boundingBox()
+  const b = await ate.boundingBox()
+  assert.ok(a)
+  assert.ok(b)
   await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2)
   await page.mouse.down()
   await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2 + 8, { steps: 3 })
+  await page.waitForSelector('[data-arrastando="true"]')
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 15 })
+  await page.waitForTimeout(100)
   await page.mouse.up()
   // O sensor remove a captura do clique após o fim do gesto.
   await page.waitForTimeout(120)
@@ -33,6 +37,12 @@ try {
     dialog.showMessageBoxSync = () => 1
   })
   let page = await app.firstWindow()
+  await app.evaluate(({ BrowserWindow }) => {
+    const janela = BrowserWindow.getAllWindows()[0]
+    janela.unmaximize()
+    janela.setContentSize(1440, 1200)
+  })
+  await page.waitForFunction(() => innerWidth === 1440 && innerHeight === 1200)
   page.on('pageerror', (e) => erros.push(e.message))
   await page.getByRole('button', { name: 'Orçamentos', exact: true }).waitFor()
   const ids = await page.evaluate(async () => {
@@ -125,7 +135,7 @@ try {
     await page.getByLabel('Nome ou razão social', { exact: true }).inputValue(),
     'São João'
   )
-  assert.equal(Number(await page.getByLabel('Valor', { exact: true }).inputValue()), 3500)
+  assert.equal(await page.getByLabel('Valor', { exact: true }).inputValue(), '3.500,00')
   assert.equal((await page.evaluate(() => window.api.recibos.list())).length, antes.n)
   await page.getByRole('button', { name: 'Voltar à lista', exact: true }).click()
   await page.getByRole('heading', { name: 'Alterações não salvas', exact: true }).waitFor()
@@ -137,7 +147,7 @@ try {
     .getByRole('button', { name: 'Gerar recibo / cobrança do relatório Nº 1', exact: true })
     .click()
   await page.getByLabel('Nome ou razão social', { exact: true }).waitFor()
-  assert.equal(Number(await page.getByLabel('Valor', { exact: true }).inputValue()), 3500)
+  assert.equal(await page.getByLabel('Valor', { exact: true }).inputValue(), '3.500,00')
   await page.getByRole('button', { name: 'Orçamentos', exact: true }).click()
   await page.getByRole('button', { name: 'Descartar alterações', exact: true }).click()
   await page.getByLabel('Buscar orçamentos').fill(' JOAO corte 000001 3500,00 ')
@@ -240,16 +250,26 @@ try {
     await bloco.getByRole('button', { name: adicionar, exact: true }).click()
     const linhas = bloco.getByRole('button', { name: 'Arrastar para reordenar' })
     assert.equal(await linhas.count(), 2)
-    const descricoes = bloco.locator('input:not([type=number]):not([type=checkbox])')
+    const descricoes = bloco.locator('input:not([data-number-input]):not([type=checkbox])')
     await descricoes.nth(0).fill('Primeiro item')
     await descricoes.nth(1).fill('Segundo item')
     if (titulo === 'Outros custos e repasses') {
-      await bloco.locator('input[type=number]').nth(0).fill('10')
-      await bloco.locator('input[type=number]').nth(1).fill('20')
+      await bloco.locator('input[data-number-input]').nth(0).fill('10')
+      await bloco.locator('input[data-number-input]').nth(1).fill('20')
     }
     const preco = await calculo.getByText('Preço final', { exact: true }).locator('..').innerText()
     await arrastar(page, linhas.nth(0), linhas.nth(1))
-    assert.equal(await descricoes.nth(1).inputValue(), 'Primeiro item')
+    if ((await descricoes.nth(1).inputValue()) !== 'Primeiro item') {
+      await page.screenshot({ path: join(pasta, 'falha-arraste-calculo.png') })
+      console.log(
+        JSON.stringify({
+          titulo,
+          caixas: await Promise.all((await linhas.all()).map((l) => l.boundingBox())),
+          anuncios: await page.locator('[role=status]').allTextContents()
+        })
+      )
+    }
+    assert.equal(await descricoes.nth(1).inputValue(), 'Primeiro item', `Ordem de ${titulo}`)
     assert.equal(
       await calculo.getByText('Preço final', { exact: true }).locator('..').innerText(),
       preco

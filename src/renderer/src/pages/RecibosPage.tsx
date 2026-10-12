@@ -29,15 +29,20 @@ import type {
 import { dataCivilHoje, formatMoeda } from '@shared/format'
 import { gerarHtmlRecibo } from '@shared/documento/recibo-template'
 import { vincularRecibo } from '@shared/recibo-rascunho'
+import {
+  errosConfirmacaoRecibo,
+  localPagamentoSugerido,
+  type ErrosRecibo
+} from '@shared/validacao-recibo'
 import { PreviaDocumentoModal } from '../components/PreviaDocumentoModal'
-const vazio = (): Recibo => ({
+const vazio = (empresa?: EmpresaConfig | null): Recibo => ({
   id: '',
   numero: 0,
   data: dataCivilHoje(),
   destinatario: '',
   descricao: '',
   valor: 0,
-  local: '',
+  local: localPagamentoSugerido(empresa),
   formaPagamento: 'Pix',
   status: 'rascunho',
   quitacao: 'parcial',
@@ -62,6 +67,7 @@ export function RecibosPage({
   const [r, setR] = useState<Recibo | null>(null)
   const [salvo, setSalvo] = useState('')
   const [erro, setErro] = useState('')
+  const [errosCampos, setErrosCampos] = useState<ErrosRecibo>({})
   const [ocupado, setOcupado] = useState(false)
   const [previa, setPrevia] = useState(false)
   const [confirmacao, setConfirmacao] = useState<'receber' | 'cancelar' | null>(null)
@@ -125,6 +131,9 @@ export function RecibosPage({
   }, [r?.origemTipo, r?.origemId])
   const set = (p: Partial<Recibo>): void => {
     if (r) setR({ ...r, ...p })
+    setErrosCampos((atuais) =>
+      Object.fromEntries(Object.entries(atuais).filter(([campo]) => !(campo in p)))
+    )
   }
   const executar = async (acao: () => Promise<void>): Promise<void> => {
     if (ocupado) return
@@ -133,7 +142,11 @@ export function RecibosPage({
     try {
       await acao()
     } catch (e) {
-      setErro(String(e))
+      setErro(
+        String(e)
+          .replace(/^Error:\s*/, '')
+          .replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, '')
+      )
     } finally {
       setOcupado(false)
     }
@@ -151,10 +164,31 @@ export function RecibosPage({
     executarComConfirmacao(() => {
       setR(null)
       setSalvo('')
+      setErrosCampos({})
+      setErro('')
       navegar({ nome: 'recibos' })
     })
   }
   const somenteLeitura = r?.status === 'recebido' || r?.status === 'cancelado'
+  const confirmarRecebimento = (): void => {
+    if (!r) return
+    const local = r.local.trim() || localPagamentoSugerido(r.empresaSnapshot ?? empresa)
+    const atualizado = { ...r, local }
+    const erros = errosConfirmacaoRecibo(atualizado)
+    setR(atualizado)
+    setErrosCampos(erros)
+    if (Object.keys(erros).length) {
+      setErro('Revise os campos indicados antes de confirmar o recebimento.')
+      requestAnimationFrame(() => {
+        const campo = document.querySelector<HTMLElement>(`[name="${Object.keys(erros)[0]}"]`)
+        campo?.focus()
+        campo?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      })
+      return
+    }
+    setErro('')
+    setConfirmacao('receber')
+  }
   const exportar = (formato: 'pdf' | 'docx'): void => {
     if (!r?.id) return
     void executar(async () => {
@@ -212,8 +246,10 @@ export function RecibosPage({
           <Button
             icon={Plus}
             onClick={() => {
+              setErrosCampos({})
+              setErro('')
               const d = {
-                ...vazio(),
+                ...vazio(empresa),
                 camposCliente:
                   empresa?.camposClientePadrao ?? (['documento'] as Recibo['camposCliente'])
               }
@@ -277,25 +313,47 @@ export function RecibosPage({
                     ))}
                 </Select>
               </Field>
-              <Field label="Nome ou razão social">
+              <Field label="Nome ou razão social" error={errosCampos.destinatario}>
                 <Input
+                  name="destinatario"
                   value={r.destinatario}
                   onChange={(e) =>
                     set({ destinatario: e.target.value, clienteId: null, clienteSnapshot: null })
                   }
                 />
               </Field>
-              <Field label="Data do documento / pagamento">
-                <Input type="date" value={r.data} onChange={(e) => set({ data: e.target.value })} />
-              </Field>
-              <Field label="Local do pagamento">
-                <Input value={r.local} onChange={(e) => set({ local: e.target.value })} />
-              </Field>
-              <Field label="Valor">
-                <NumberField min={0} value={r.valor} onChange={(valor) => set({ valor })} />
-              </Field>
-              <Field label="Forma de pagamento">
+              <Field label="Data do documento / pagamento" error={errosCampos.data}>
                 <Input
+                  name="data"
+                  type="date"
+                  value={r.data}
+                  onChange={(e) => set({ data: e.target.value })}
+                />
+              </Field>
+              <Field
+                label="Local do pagamento"
+                error={errosCampos.local}
+                hint="Confira a cidade e UF onde o pagamento foi recebido."
+              >
+                <Input
+                  name="local"
+                  placeholder="Ex.: Rio Verde - GO"
+                  value={r.local}
+                  onChange={(e) => set({ local: e.target.value })}
+                />
+              </Field>
+              <Field label="Valor" error={errosCampos.valor}>
+                <NumberField
+                  name="valor"
+                  format="money"
+                  min={0}
+                  value={r.valor}
+                  onChange={(valor) => set({ valor })}
+                />
+              </Field>
+              <Field label="Forma de pagamento" error={errosCampos.formaPagamento}>
+                <Input
+                  name="formaPagamento"
                   value={r.formaPagamento}
                   onChange={(e) => set({ formaPagamento: e.target.value })}
                 />
@@ -398,9 +456,11 @@ export function RecibosPage({
               <div className="md:col-span-2">
                 <Field
                   label="Serviço prestado"
+                  error={errosCampos.descricao}
                   hint="Use um resumo do serviço; os detalhes podem ficar na proposta ou no relatório de origem."
                 >
                   <Textarea
+                    name="descricao"
                     value={r.descricao}
                     onChange={(e) => set({ descricao: e.target.value })}
                   />
@@ -435,11 +495,7 @@ export function RecibosPage({
             <SectionTitle title="Pagamento e emissão" />
             <div className="flex flex-wrap gap-2">
               {r.status !== 'recebido' && r.status !== 'cancelado' && (
-                <Button
-                  icon={HandCoins}
-                  disabled={ocupado}
-                  onClick={() => setConfirmacao('receber')}
-                >
+                <Button icon={HandCoins} disabled={ocupado} onClick={confirmarRecebimento}>
                   Confirmar recebimento
                 </Button>
               )}
@@ -497,7 +553,11 @@ export function RecibosPage({
         danger={confirmacao !== 'receber'}
         description={
           confirmacao === 'receber'
-            ? 'Confirme somente se o valor foi efetivamente recebido. O saldo do relatório vinculado será atualizado uma única vez.'
+            ? `Recebimento de ${formatMoeda(r?.valor ?? 0)} de ${r?.destinatario ?? ''}, em ${r?.local ?? ''}. Confirme somente se o valor foi efetivamente recebido. ${
+                r?.origemTipo === 'relatorio' && r.origemId
+                  ? 'O saldo do relatório vinculado será atualizado uma única vez.'
+                  : 'Este recibo registrará o pagamento sem exigir ou alterar um relatório.'
+              }`
             : 'O documento será preservado. Um novo recebimento criado por este recibo será estornado; adiantamentos preexistentes serão mantidos.'
         }
         onCancel={() => setConfirmacao(null)}

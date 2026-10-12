@@ -595,6 +595,7 @@ function LancamentosCard({
                 <Field error={erroDoCampo(`${campo}.${indice}.valor`)}>
                   <NumberField
                     value={x.valor}
+                    format="money"
                     min={0}
                     aria-label={`Valor de ${titulo.toLowerCase()} ${indice + 1}`}
                     onChange={(valor) => upd(x.id, { valor })}

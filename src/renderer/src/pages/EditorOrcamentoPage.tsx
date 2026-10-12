@@ -539,6 +539,7 @@ function DadosGeraisCard({
         <Field label="Prazo (dias)" hint="Opcional">
           <NumberField
             value={orc.prazoDias ?? 0}
+            step={1}
             onChange={(v) => set({ prazoDias: v || null })}
             min={0}
           />
@@ -901,7 +902,7 @@ function ServicoManualModal({
             <Input value={unidade} onChange={(e) => setUnidade(e.target.value)} />
           </Field>
           <Field label="Valor unitário">
-            <NumberField value={valorUnitario} onChange={setValorUnitario} min={0} />
+            <NumberField format="money" value={valorUnitario} onChange={setValorUnitario} min={0} />
           </Field>
         </div>
         <div className="flex justify-end text-sm text-slate-600">

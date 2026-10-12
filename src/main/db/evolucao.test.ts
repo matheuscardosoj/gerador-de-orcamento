@@ -127,6 +127,39 @@ it('confirma recebimentos uma vez e estorna somente o lançamento criado pelo re
   recibos.recibosRepo.cancelar(r.id)
   expect(repos.relatoriosRepo.get(rel.id)?.totais.saldo).toBe(1000)
 })
+it('confirma e estorna recibos avulsos e de propostas sem exigir ou modificar relatórios', () => {
+  const p = proposta()
+  const quantidade = sql.get('SELECT COUNT(*) AS n FROM relatorios')?.n
+  for (const origem of [undefined, p.id]) {
+    const criado = novoRecibo()
+    const r = recibos.recibosRepo.update(criado.id, {
+      origemTipo: origem ? 'orcamento' : undefined,
+      origemId: origem,
+      valor: 203.45
+    })!
+    expect(recibos.recibosRepo.confirmar(r.id).status).toBe('recebido')
+    recibos.recibosRepo.confirmar(r.id)
+    const lancamento = sql.get('SELECT * FROM recebimentos WHERE recibo_id=?', [r.id])!
+    expect(lancamento.relatorio_id).toBeNull()
+    expect(lancamento.valor).toBe(203.45)
+    expect(sql.get('SELECT COUNT(*) AS n FROM recebimentos WHERE recibo_id=?', [r.id])?.n).toBe(1)
+    recibos.recibosRepo.cancelar(r.id)
+    expect(sql.get('SELECT estornado FROM recebimentos WHERE recibo_id=?', [r.id])?.estornado).toBe(
+      1
+    )
+  }
+  expect(sql.get('SELECT COUNT(*) AS n FROM relatorios')?.n).toBe(quantidade)
+  expect(repos.orcamentosRepo.get(p.id)?.valorTotal).toBe(p.valorTotal)
+})
+it('falha de validação não registra pagamentos nem versões de recebimento', () => {
+  const r = novoRecibo()
+  recibos.recibosRepo.update(r.id, { status: 'rascunho', local: '' })
+  const antes = versoes.listarVersoes('recibo', r.id).length
+  expect(() => recibos.recibosRepo.confirmar(r.id)).toThrow('local do pagamento')
+  expect(recibos.recibosRepo.get(r.id)?.status).toBe('rascunho')
+  expect(sql.get('SELECT COUNT(*) AS n FROM recebimentos WHERE recibo_id=?', [r.id])?.n).toBe(0)
+  expect(versoes.listarVersoes('recibo', r.id)).toHaveLength(antes)
+})
 it('cria outra proposta a partir de uma versão com foto sem duplicar o ativo', async () => {
   const p = proposta()
   repos.orcamentosRepo.update(p.id, {

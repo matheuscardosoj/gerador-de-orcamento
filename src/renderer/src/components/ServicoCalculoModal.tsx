@@ -328,6 +328,7 @@ function MaoDeObraBloco({ e, set }: BlocoProps): JSX.Element {
                 <Field label="Funcionários">
                   <NumberField
                     value={g.qtdFuncionarios}
+                    step={1}
                     onChange={(v) => upd(g.id, { qtdFuncionarios: v })}
                     min={0}
                   />
@@ -351,7 +352,12 @@ function MaoDeObraBloco({ e, set }: BlocoProps): JSX.Element {
                         : 'Valor por func.'
                   }
                 >
-                  <NumberField value={g.valor} onChange={(v) => upd(g.id, { valor: v })} min={0} />
+                  <NumberField
+                    format="money"
+                    value={g.valor}
+                    onChange={(v) => upd(g.id, { valor: v })}
+                    min={0}
+                  />
                 </Field>
               </div>
               <div className="mt-2 border-t border-slate-100 pt-2">
@@ -376,6 +382,7 @@ function MaoDeObraBloco({ e, set }: BlocoProps): JSX.Element {
                     >
                       <NumberField
                         value={g.salarioCarteira ?? 0}
+                        format="money"
                         onChange={(v) => upd(g.id, { salarioCarteira: v })}
                         min={0}
                       />
@@ -484,6 +491,7 @@ function AlimentacaoBloco({
                 <Field label="Valor por refeição">
                   <NumberField
                     value={a.valorRefeicao}
+                    format="money"
                     onChange={(v) => upd(a.id, { valorRefeicao: v })}
                     min={0}
                   />
@@ -542,7 +550,12 @@ function FerramentasBloco({ e, set }: BlocoProps): JSX.Element {
                 <option value="insumo">Insumo</option>
                 <option value="manutencao">Manutenção</option>
               </Select>
-              <NumberField value={f.valor} onChange={(v) => upd(f.id, { valor: v })} min={0} />
+              <NumberField
+                format="money"
+                value={f.valor}
+                onChange={(v) => upd(f.id, { valor: v })}
+                min={0}
+              />
               <div className="flex items-center gap-1">
                 <ModoSelect value={f.modo} onChange={(m) => upd(f.id, { modo: m })} />
                 <IconButton
@@ -626,6 +639,7 @@ function CombustivelBloco({
                   <Field label="Preço do litro">
                     <NumberField
                       value={c.precoLitro}
+                      format="money"
                       onChange={(v) => upd(c.id, { precoLitro: v })}
                       min={0}
                     />
@@ -709,6 +723,7 @@ function EstadiaBloco({ e, set }: BlocoProps): JSX.Element {
                     <Field label="Valor mensal">
                       <NumberField
                         value={s.valorMensal ?? 0}
+                        format="money"
                         onChange={(v) => upd(s.id, { valorMensal: v })}
                         min={0}
                       />
@@ -733,6 +748,7 @@ function EstadiaBloco({ e, set }: BlocoProps): JSX.Element {
                     <Field label="Valor por pessoa">
                       <NumberField
                         value={s.valorPorPessoa}
+                        format="money"
                         onChange={(v) => upd(s.id, { valorPorPessoa: v })}
                         min={0}
                       />
@@ -783,7 +799,12 @@ function AvulsosBloco({ e, set }: BlocoProps): JSX.Element {
                 onChange={(ev) => upd(a.id, { descricao: ev.target.value })}
               />
               <div>
-                <NumberField value={a.valor} onChange={(v) => upd(a.id, { valor: v })} min={0} />
+                <NumberField
+                  format="money"
+                  value={a.valor}
+                  onChange={(v) => upd(a.id, { valor: v })}
+                  min={0}
+                />
                 <div className="mt-2">
                   <Checkbox
                     checked={a.aplicarAcrescimo !== false}

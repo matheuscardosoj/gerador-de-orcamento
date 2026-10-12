@@ -3,7 +3,8 @@ import { all, get, run, texto, tx } from './db/sqlite'
 import { envolverDocumento, exigirResponsavel } from './versoes'
 import { numeroNuvem } from './numeros'
 import { relatoriosRepo } from './repositories'
-import { round2, normalizarDataCivil } from '@shared/format'
+import { round2 } from '@shared/format'
+import { errosConfirmacaoRecibo } from '@shared/validacao-recibo'
 import type { Recibo } from '@shared/types'
 
 function validar(r: Recibo): void {
@@ -12,20 +13,8 @@ function validar(r: Recibo): void {
   if (!['rascunho', 'pendente', 'recebido', 'cancelado'].includes(r.status))
     throw new Error('Estado de recibo inválido.')
   if (r.status === 'rascunho' || r.status === 'cancelado') return
-  if (
-    !r.destinatario.trim() ||
-    !r.descricao.trim() ||
-    !r.local.trim() ||
-    !r.formaPagamento.trim() ||
-    r.valor <= 0
-  )
-    throw new Error('Preencha cliente, serviço, valor, local e forma de pagamento.')
-  const data = normalizarDataCivil(r.data)
-  if (
-    !/^\d{4}-\d{2}-\d{2}$/.test(data) ||
-    new Date(`${data}T12:00:00Z`).toISOString().slice(0, 10) !== data
-  )
-    throw new Error('Data inválida.')
+  const erros = Object.values(errosConfirmacaoRecibo(r))
+  if (erros.length) throw new Error(erros.join(' '))
 }
 function gravar(r: Recibo): Recibo {
   r.valor = round2(r.valor)

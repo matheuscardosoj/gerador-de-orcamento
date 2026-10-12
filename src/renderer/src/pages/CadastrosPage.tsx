@@ -465,6 +465,7 @@ function ServicoModal({
           <Field label="Preço de referência (R$)" hint="Por unidade — opcional">
             <NumberField
               value={form.precoReferencia ?? 0}
+              format="money"
               onChange={(v) => set({ precoReferencia: v || null })}
             />
           </Field>

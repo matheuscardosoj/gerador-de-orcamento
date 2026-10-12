@@ -16,6 +16,13 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { X, type LucideIcon } from 'lucide-react'
+import {
+  formatarEntradaNumerica,
+  lerEntradaNumerica,
+  mascararNumeroEditavel,
+  prepararNumeroColado,
+  valorNumericoCanonico
+} from '@shared/entrada-numerica'
 
 export function cn(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(' ')
@@ -244,32 +251,166 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
   }
 )
 
-/** Input numérico controlado que emite number (ou 0). */
-export function NumberField({
+/** Campo com máscara brasileira; o valor externo permanece numérico/canônico. */
+export function NumericInput({
   value,
-  onChange,
+  onValueChange,
   className,
   step,
   min,
+  max,
+  format = 'number',
+  onFocus,
+  onBlur,
+  onKeyDown,
+  ...props
+}: {
+  value: number | string
+  onValueChange: (textoCanonico: string) => void
+  className?: string
+  step?: number
+  min?: number
+  max?: number
+  format?: 'number' | 'money'
+} & Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  'value' | 'onChange' | 'type' | 'max' | 'min' | 'step'
+>): JSX.Element {
+  const inteiro = step === 1
+  const negativo = min !== undefined && min < 0
+  const [editando, setEditando] = useState(false)
+  const [texto, setTexto] = useState('')
+  const input = useRef<HTMLInputElement>(null)
+  const cursor = useRef<number | null>(null)
+  const ultimo = useRef<number | string>(value === '' ? '' : Number(value))
+  useEffect(() => {
+    const atual = value === '' ? '' : Number(value)
+    if (editando && atual !== ultimo.current) {
+      setTexto(formatarEntradaNumerica(value, inteiro, format === 'money'))
+      ultimo.current = atual
+    }
+  }, [value, editando, inteiro, format])
+  useLayoutEffect(() => {
+    if (cursor.current !== null && input.current && document.activeElement === input.current) {
+      input.current.setSelectionRange(cursor.current, cursor.current)
+      cursor.current = null
+    }
+  }, [texto])
+  const numero = Number(value)
+  const erroFaixa =
+    value !== '' &&
+    (min !== undefined && numero < min
+      ? `Informe um número maior ou igual a ${formatarEntradaNumerica(min)}.`
+      : max !== undefined && numero > max
+        ? `Informe um número menor ou igual a ${formatarEntradaNumerica(max)}.`
+        : '')
+  useEffect(() => {
+    input.current?.setCustomValidity(erroFaixa || '')
+  }, [erroFaixa])
+  const alterar = (entrada: string, posicao: number): void => {
+    const raw = lerEntradaNumerica(entrada, { inteiro, negativo })
+    if (raw === null) return
+    const mascarado = mascararNumeroEditavel(raw)
+    const antes = (entrada.slice(0, posicao).match(/[\d,-]/g) ?? []).length
+    let novaPosicao = 0,
+      vistos = 0
+    while (novaPosicao < mascarado.length && vistos < antes) {
+      if (/[\d,-]/.test(mascarado[novaPosicao])) vistos++
+      novaPosicao++
+    }
+    cursor.current = novaPosicao
+    const canonico = valorNumericoCanonico(raw)
+    ultimo.current =
+      typeof value === 'number' ? Number(canonico || 0) : canonico === '' ? '' : Number(canonico)
+    setTexto(mascarado)
+    onValueChange(canonico)
+    if (mascarado === texto) {
+      input.current?.setSelectionRange(novaPosicao, novaPosicao)
+      cursor.current = null
+    }
+  }
+  const inserir = (conteudo: string): void => {
+    if (!input.current) return
+    const el = input.current
+    const inicio = el.selectionStart ?? 0
+    const fim = el.selectionEnd ?? inicio
+    alterar(el.value.slice(0, inicio) + conteudo + el.value.slice(fim), inicio + conteudo.length)
+  }
+  return (
+    <input
+      {...props}
+      ref={input}
+      type="text"
+      data-number-input="true"
+      inputMode={inteiro ? 'numeric' : 'decimal'}
+      aria-invalid={props['aria-invalid'] || !!erroFaixa || undefined}
+      value={editando ? texto : formatarEntradaNumerica(value, inteiro, format === 'money')}
+      onChange={(e) => alterar(e.target.value, e.target.selectionStart ?? e.target.value.length)}
+      onFocus={(e) => {
+        // Manter o mesmo texto evita perder a seleção ao focar um valor monetário.
+        setTexto(formatarEntradaNumerica(value, inteiro, format === 'money'))
+        cursor.current = null
+        ultimo.current = value === '' ? '' : Number(value)
+        setEditando(true)
+        e.target.select()
+        onFocus?.(e)
+      }}
+      onBlur={(e) => {
+        setEditando(false)
+        onBlur?.(e)
+      }}
+      onPaste={(e) => {
+        e.preventDefault()
+        inserir(prepararNumeroColado(e.clipboardData.getData('text')))
+      }}
+      onKeyDown={(e) => {
+        onKeyDown?.(e)
+        if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return
+        if (e.key === '.' && !inteiro) {
+          e.preventDefault()
+          inserir(',')
+          return
+        }
+        if (
+          e.key.length === 1 &&
+          (!/[\d,-]/.test(e.key) || (inteiro && e.key === ',') || (!negativo && e.key === '-'))
+        )
+          e.preventDefault()
+        const el = e.currentTarget
+        const inicio = el.selectionStart ?? 0
+        if (inicio === el.selectionEnd) {
+          if (e.key === 'Backspace' && el.value[inicio - 1] === '.')
+            el.setSelectionRange(inicio - 1, inicio - 1)
+          if (e.key === 'Delete' && el.value[inicio] === '.')
+            el.setSelectionRange(inicio + 1, inicio + 1)
+        }
+      }}
+      className={cn(fieldBase, className)}
+    />
+  )
+}
+
+/** Adapter para os cálculos existentes; limpar emite zero sem perder a edição vazia. */
+export function NumberField({
+  value,
+  onChange,
   ...props
 }: {
   value: number
   onChange: (n: number) => void
-  className?: string
   step?: number
   min?: number
-} & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'>): JSX.Element {
+  max?: number
+  format?: 'number' | 'money'
+} & Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  'value' | 'onChange' | 'type' | 'min' | 'max' | 'step'
+>): JSX.Element {
   return (
-    <input
-      type="number"
-      inputMode="decimal"
-      step={step ?? 'any'}
-      min={min}
-      value={Number.isFinite(value) ? value : 0}
-      onChange={(e) => onChange(e.target.value === '' ? 0 : Number(e.target.value))}
-      onFocus={(e) => e.target.select()}
-      className={cn(fieldBase, className)}
+    <NumericInput
       {...props}
+      value={value}
+      onValueChange={(texto) => onChange(Number(texto || 0))}
     />
   )
 }
@@ -293,10 +434,13 @@ export function Field({
   const errorId = error ? `${gerado}-error` : undefined
   const elementos = Children.toArray(children)
   const controles = elementos.filter(
-    (el) => isValidElement(el) && [Input, Textarea, Select, NumberField].includes(el.type as never)
+    (el) =>
+      isValidElement(el) &&
+      [Input, Textarea, Select, NumberField, NumericInput].includes(el.type as never)
   )
   const unico = controles.length === 1 && isValidElement(controles[0]) ? controles[0] : null
-  const rotulavel = unico && [Input, Textarea, Select, NumberField].includes(unico.type as never)
+  const rotulavel =
+    unico && [Input, Textarea, Select, NumberField, NumericInput].includes(unico.type as never)
   const idControle = rotulavel ? String((unico.props as { id?: string }).id ?? gerado) : undefined
   const descricoes = [
     String(

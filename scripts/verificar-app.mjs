@@ -87,7 +87,7 @@ try {
   const descricoes = page.getByPlaceholder('Descrição', { exact: true })
   await descricoes.nth(0).fill('Serviço próprio')
   await descricoes.nth(1).fill('Munck')
-  const custos = descricoes.locator('..').locator('input[type=number]')
+  const custos = descricoes.locator('..').locator('input[data-number-input]')
   await custos.nth(0).fill('1000')
   await custos.nth(1).fill('1600')
   await page.getByLabel('Aplicar acréscimo de lucro').nth(1).uncheck()

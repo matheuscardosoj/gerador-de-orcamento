@@ -4,6 +4,8 @@ Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
 ## 1.4.0-rc.2 — 2026-10-11
 
+- Confirmação de recibos identifica campos faltantes antes de salvar/registrar pagamento, sugere cidade/UF cadastrada e apresenta mensagens claras. Recibos avulsos/de propostas funcionam sem relatório; confirmação mostra cliente, valor e local.
+- Todos os campos numéricos usam texto com máscara brasileira, vírgula decimal, agrupamento de milhares, bloqueio de letras e preservação do cursor. Valores monetários, quantidades, percentuais, inteiros e filtros vazios mantêm seus contratos e cálculos.
 - Ícones padronizados por significado: recibos distintos dos demais documentos, edição/consulta, duplicação, cálculo, fotos, versões, recebimentos/estornos, backup e sincronização. Botões mantêm textos/dicas e usam traço e tamanhos consistentes.
 - Atalhos de recibo/cobrança nos históricos de propostas e relatórios, sem salvar ou registrar pagamentos ao abrir.
 - Históricos compartilhando busca por múltiplos termos, filtros, colunas selecionáveis/reordenáveis e preferências persistentes por computador.
@@ -15,7 +17,7 @@ Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 - Clientes com apenas PF/PJ, PF como padrão e somente nome obrigatório.
 - Proteção de recibos novos não salvos, foco estável, associação de rótulos a campos com botões e suporte a diálogos sobrepostos.
 - Esquema 8, backup verificado anterior à migração e preservação da identidade do perfil de destino na restauração.
-- Validação com 125 testes, executável real e cópia do backup do usuário. Merge e versão final continuam aguardando autorização; Supabase real será configurado depois da revisão.
+- Validação com 134 testes, executável real e cópia do backup do usuário. Merge e versão final continuam aguardando autorização; Supabase real será configurado depois da revisão.
 
 ## 1.4.0-rc.1 — 2026-10-11
 
