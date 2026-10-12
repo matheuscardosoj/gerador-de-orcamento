@@ -131,3 +131,37 @@ somente quando componentes estiverem integrados. Guia/extraResources/cópiaSQL d
 - Não comprova WebSocket nem meta de dois segundos: SDK é mockado neste teste para não
   contactar serviço externo. Restam teste local com socket real e validação Supabase
   real após revisão/configuração SQL; não afirmar essas etapas concluídas.
+
+### Rascunhos e conciliação (trabalho posterior a 780ae15)
+
+- `shared/conciliacao.ts`: merge de base/local/remoto, listas por ID e ordem separada,
+  escolhas explícitas para disputas, metadados técnicos sempre da versão atual. Cinco
+  testes passaram. Snapshots não repetem Base64, preservam hashes de imagens/logos.
+- `main/rascunhos.ts`: create/list/get/save/comparar/aplicar/copiar/remove e IPC/preload/
+  mocks ligados. Comparação consulta `gdo_documento_v2` diretamente e exige revisão
+  esperada na aplicação. Recibos confirmados e mudanças financeiras não podem ser
+  aplicados como texto; transações relacionadas pendentes também bloqueiam aplicação.
+- Antes de adotar remoto, aplicação exporta backup, preserva rascunho, limpa somente
+  fila/conflito do documento isolado, repõe versões canônicas e cria nova revisão.
+  Marca aplicado só depois de confirmação do envio; falha preserva o rascunho.
+- SQLite v9 agora também tem `bases_documento` com snapshot canônico aceito. Cache não
+  muda enquanto há fila do documento. Rascunho usa essa base (não o formulário pendente);
+  documentos inéditos usam primeira versão como base. Autorização permite continuar um
+  documento novo ainda não publicado; SQL aceita geração nula só na geração inicial,
+  para criador/PC iguais. Recuperação sempre invalida essas operações.
+- Novo teste integrado aplica rascunho de B após A liberar a edição, sem alterar número,
+  ID, valor, descrição nem criar recebimento. Quatro casos de integração passaram.
+- Reservas v2 agora são recuperadas do servidor por dispositivo; troca de login limpa
+  cache local para não usar reservas do usuário anterior. Teste REST adapta esse endpoint.
+- Tipos e lint passaram. Faltam interface de rascunhos e três editores, recuperação
+  automática do rascunho de operações em conflito e garantia do conjunto financeiro
+  offline no servidor (controle atual ainda tem verificação parcial de relacionados).
+
+Riscos/pontos seguintes: `financeiroAlterado` hoje bloqueia qualquer status em rascunho,
+inclusive propostas, deve limitar aos estados/operações financeiros apropriados; preparar
+offline deve verificar/deixar local imagens necessárias; proteger exportações e números
+emitidos e implementar controles de números futuros/drafts na UI; usuário solicita edição
+mas ainda falta mostrar pedido ao possuidor. Usuários e UI colaborativa não implementadas.
+Configurações só está com largura full e título Numeração dos documentos; restante das
+seções precisa conferência/padronização visual. UI antiga de transferir continua no LinhaTempo
+e precisa trocar pelo controle v2. Nenhum pacote novo, base real e SQL remoto intactos.

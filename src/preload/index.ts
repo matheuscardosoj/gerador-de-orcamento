@@ -15,6 +15,16 @@ function crud<T, C>(dominio: string): CrudApi<T, C> {
 }
 
 const api: AppApi = {
+  rascunhos: {
+    list: (tipo, id) => invoke('rascunhos.list', tipo, id) as never,
+    get: (id) => invoke('rascunhos.get', id) as never,
+    create: (tipo, id, documento) => invoke('rascunhos.create', tipo, id, documento) as never,
+    save: (id, documento) => invoke('rascunhos.save', id, documento) as never,
+    comparar: (id, escolhas) => invoke('rascunhos.comparar', id, escolhas) as never,
+    aplicar: (id, revisao, escolhas) => invoke('rascunhos.aplicar', id, revisao, escolhas) as never,
+    copiar: (id) => invoke('rascunhos.copiar', id) as never,
+    remove: (id) => invoke('rascunhos.remove', id) as never
+  },
   colaboracao: {
     membros: () => invoke('colaboracao.membros') as never,
     vincularMembro: (email, nome) => invoke('colaboracao.vincularMembro', email, nome) as never,

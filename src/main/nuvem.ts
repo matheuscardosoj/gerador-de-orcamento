@@ -271,6 +271,7 @@ export async function conectarNuvem(
     if (dono && dono !== s.user.id && contexto.protocolo < 2)
       throw new Error('Atualize a configuração do banco para usar logins individuais da empresa.')
     if (contexto.protocolo >= 2) {
+      if (dono && dono !== s.user.id) run('DELETE FROM reservas')
       const chave = `computadorUsuario:${s.user.id}`
       if (dono && dono !== s.user.id && !config<string>(chave)) salvar(chave, randomUUID())
       if (!config<string>(chave)) salvar(chave, computadorId())
@@ -428,7 +429,7 @@ function upsert(t: string, row: Record<string, unknown>): void {
     salvar(`estado:${t}:${id}`, JSON.stringify({ tabela: t, id, row }))
   }
 }
-type Remoto = {
+export type Remoto = {
   controle?: {
     tipo: TipoDocumento
     documento_id: string
@@ -550,6 +551,29 @@ function aplicar(e: Remoto): void {
     'INSERT INTO sincronizacao VALUES (?,?) ON CONFLICT(entidade) DO UPDATE SET revisao=excluded.revisao',
     [e.entidade, e.revisao]
   )
+}
+export async function consultarDocumentoRemoto(
+  tipo: TipoDocumento,
+  id: string
+): Promise<Remoto | null> {
+  if (protocoloNuvem() < 2)
+    throw new Error('A conciliação compartilhada exige o protocolo 2 da nuvem.')
+  return (await pedido('/rest/v1/rpc/gdo_documento_v2', {
+    p_tipo: tipo,
+    p_id: id
+  })) as Remoto | null
+}
+export function adotarDocumentoRemoto(e: Remoto): void {
+  if (!e.payload.tipo) throw new Error('Documento remoto inválido.')
+  if (get('SELECT 1 FROM fila_nuvem WHERE entidade=?', [e.entidade]))
+    throw new Error('Preserve e resolva as operações pendentes antes de adotar a versão remota.')
+  semRastreamento(() =>
+    tx(() => {
+      run('DELETE FROM versoes WHERE tipo=? AND documento_id=?', [e.payload.tipo, e.payload.id])
+      aplicar(e)
+    })
+  )
+  avisarDados({ origem: 'nuvem', entidades: [e.entidade], status: true })
 }
 export async function sincronizarNuvem(): Promise<StatusNuvem> {
   if (ocupado || conectando) return statusNuvem()
@@ -693,6 +717,26 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
         salvar('cursorNuvem', cursor)
       })
     )
+    if (protocoloNuvem() >= 2) {
+      const reservasRemotas = (await pedido(
+        `/rest/v1/reservas_numeros?select=tipo,numero,documento&dispositivo=eq.${computadorId()}`
+      )) as Array<{ tipo: TipoDocumento; numero: number; documento: string | null }>
+      tx(() => {
+        for (const r of reservasRemotas) {
+          if (
+            !tipos.includes(r.tipo) ||
+            !Number.isInteger(r.numero) ||
+            r.numero < 1 ||
+            r.numero > 999999
+          )
+            throw new Error('Reserva remota inválida.')
+          run(
+            'INSERT INTO reservas VALUES (?,?,?) ON CONFLICT(tipo,numero) DO UPDATE SET usado=MAX(usado,excluded.usado)',
+            [r.tipo, r.numero, r.documento ? 1 : 0]
+          )
+        }
+      })
+    }
     for (const tipo of tipos)
       if (statusNuvem().reservas[tipo] <= 5) {
         const minimo = Number(
@@ -743,6 +787,22 @@ export async function sincronizarNuvem(): Promise<StatusNuvem> {
   return statusNuvem()
 }
 function aplicarIdentificador(e: Remoto): void {
+  if (
+    e.payload.tipo &&
+    !e.payload.excluido &&
+    !get('SELECT 1 FROM fila_nuvem WHERE entidade=?', [e.entidade])
+  ) {
+    const versoes = e.payload.rows?.versoes ?? []
+    const ultima = [...versoes].sort((a, b) => Number(b.numero) - Number(a.numero))[0]
+    if (ultima && typeof ultima.documento === 'string') {
+      const d = JSON.parse(ultima.documento)
+      if (d.id !== e.payload.id) throw new Error('Snapshot remoto não corresponde ao documento.')
+      run(
+        'INSERT INTO bases_documento VALUES (?,?,?,?) ON CONFLICT(tipo,documento_id) DO UPDATE SET revisao=excluded.revisao,documento=excluded.documento',
+        [e.payload.tipo, e.payload.id, e.revisao, ultima.documento]
+      )
+    }
+  }
   const c = e.controle
   if (c) {
     if (

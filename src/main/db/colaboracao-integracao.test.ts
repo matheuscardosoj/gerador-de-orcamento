@@ -37,6 +37,7 @@ const config = {
 }
 let reciboId = '',
   offline = false
+let rascunhos: typeof import('../rascunhos')
 async function perfil(nome: string) {
   sql.fecharBanco()
   estado.perfil = join(raiz, nome)
@@ -60,6 +61,7 @@ beforeAll(async () => {
     'gdo_membros_v2',
     'gdo_edicao_v2',
     'gdo_numeracao_v2',
+    'gdo_documento_v2',
     'gdo_usage'
   ])
   vi.stubGlobal('fetch', async (url: string, options: RequestInit = {}) => {
@@ -87,6 +89,13 @@ beforeAll(async () => {
         ).rows
       else if (u.pathname === '/rest/v1/edicoes_documento')
         result = (await pg.query('SELECT * FROM edicoes_documento')).rows
+      else if (u.pathname === '/rest/v1/reservas_numeros')
+        result = (
+          await pg.query(
+            'SELECT tipo,numero,documento FROM reservas_numeros WHERE dispositivo=$1',
+            [u.searchParams.get('dispositivo')?.slice(3)]
+          )
+        ).rows
       else if (u.pathname === '/rest/v1/gdo_devices')
         result = (await pg.query('SELECT id,nome FROM gdo_devices')).rows
       else {
@@ -123,6 +132,7 @@ beforeAll(async () => {
   recibos = await import('../recibos')
   nuvem = await import('../nuvem')
   colaboracao = await import('../colaboracao')
+  rascunhos = await import('../rascunhos')
   await perfil('a')
 })
 afterAll(async () => {
@@ -145,8 +155,15 @@ it('publica, atribui ID no servidor e baixa a mesma empresa em outro login', asy
     observacao: ''
   })
   reciboId = r.id
+  // Criação e edição antes da primeira resposta: a operação mantém geração nula
+  // e só é aceita sob a primeira autorização do mesmo usuário/computador.
+  recibos.recibosRepo.update(r.id, {
+    observacao: 'Edição inicial antes de sincronizar',
+    versao: r.versao
+  })
   expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
   expect(recibos.recibosRepo.get(r.id)?.idInterno).toBe(1)
+  expect(recibos.recibosRepo.get(r.id)?.observacao).toBe('Edição inicial antes de sincronizar')
   await colaboracao.vincularMembro('b@example.com', 'Pessoa B')
   await perfil('b')
   const s = await nuvem.conectarNuvem({ ...config, email: 'b@example.com' }, 'teste', 'baixar')
@@ -198,4 +215,28 @@ it('mantém a geração do salvamento ao ficar offline e não usa a geração no
   expect(s.pendentes).toBeGreaterThan(0)
   expect(sql.get('SELECT geracao FROM fila_nuvem LIMIT 1')?.geracao).toBe(geracao)
   expect(recibos.recibosRepo.get(reciboId)?.observacao).toBe('Trabalho offline preservado')
+})
+it('compara o trabalho offline com a base de partida e aplica só após liberar a edição', async () => {
+  const r = rascunhos.criarRascunho('recibo', reciboId)
+  expect(r.base).toMatchObject({ observacao: 'Revisado pela pessoa B' })
+  expect(r.documento).toMatchObject({ observacao: 'Trabalho offline preservado' })
+  const comparacao = await rascunhos.compararRascunho(r.id)
+  expect(comparacao.conflitos).toEqual([])
+  expect(comparacao.documento).toMatchObject({ observacao: 'Trabalho offline preservado' })
+  await expect(rascunhos.aplicarRascunho(r.id, comparacao.revisaoRemota, {})).rejects.toThrow(
+    'outro usuário'
+  )
+  await perfil('a')
+  await colaboracao.controlarEdicao('recibo', reciboId, 'liberar')
+  await perfil('b')
+  const aplicado = await rascunhos.aplicarRascunho(r.id, comparacao.revisaoRemota, {})
+  expect(aplicado).toMatchObject({
+    idInterno: 1,
+    numero: 1,
+    valor: 100,
+    descricao: 'Serviço original',
+    observacao: 'Trabalho offline preservado'
+  })
+  expect(rascunhos.obterRascunho(r.id).estado).toBe('aplicado')
+  expect(sql.get('SELECT count(*) AS n FROM recebimentos')?.n).toBe(0)
 })

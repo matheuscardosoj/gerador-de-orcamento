@@ -216,7 +216,9 @@ BEGIN
     t:=split_part(x->>'entidade',':',1); id_doc:=substr(x->>'entidade',length(t)+2);
     IF t IN ('orcamento','relatorio','recibo') AND EXISTS(SELECT 1 FROM documentos WHERE empresa_id=e AND tipo=t AND documento_id=id_doc) THEN
       SELECT * INTO l FROM edicoes_documento WHERE empresa_id=e AND tipo=t AND documento_id=id_doc;
-      IF l.geracao IS NULL OR l.usuario_id<>auth.uid() OR l.dispositivo<>p_dispositivo OR l.geracao IS DISTINCT FROM (x->>'geracao')::bigint OR (NOT l.offline AND l.expira_em<=now()) THEN RAISE EXCEPTION 'Autorização de edição expirada ou revogada; preserve o rascunho e solicite edição'; END IF;
+      IF l.geracao IS NULL OR l.usuario_id<>auth.uid() OR l.dispositivo<>p_dispositivo OR
+        (l.geracao IS DISTINCT FROM (x->>'geracao')::bigint AND NOT (x->>'geracao' IS NULL AND l.geracao=1 AND EXISTS(SELECT 1 FROM identificadores_documento WHERE empresa_id=e AND tipo=t AND documento_id=id_doc AND usuario_criador=auth.uid()))) OR
+        (NOT l.offline AND l.expira_em<=now()) THEN RAISE EXCEPTION 'Autorização de edição expirada ou revogada; preserve o rascunho e solicite edição'; END IF;
     END IF;
   END LOOP;
   r:=gdo_batch(p_operacoes,p_dispositivo);
@@ -308,3 +310,12 @@ GRANT EXECUTE ON FUNCTION sincronizacao.membro(uuid) TO authenticated;
 REVOKE ALL ON FUNCTION public.gdo_empresa(),public.gdo_contexto_v2(boolean),public.gdo_dispositivo_v2(uuid,text),public.gdo_membros_v2(uuid,text,text,boolean),public.gdo_edicao_v2(text,text,uuid,text,bigint,uuid),public.gdo_alteracoes_v2(bigint,integer),public.gdo_batch_v2(jsonb,uuid),public.gdo_reserve_v2(text,uuid,integer),public.gdo_bootstrap_v2(uuid,jsonb),public.gdo_numeracao_v2(text,integer) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.gdo_empresa(),public.gdo_contexto_v2(boolean),public.gdo_dispositivo_v2(uuid,text),public.gdo_membros_v2(uuid,text,text,boolean),public.gdo_edicao_v2(text,text,uuid,text,bigint,uuid),public.gdo_alteracoes_v2(bigint,integer),public.gdo_batch_v2(jsonb,uuid),public.gdo_reserve_v2(text,uuid,integer),public.gdo_bootstrap_v2(uuid,jsonb),public.gdo_numeracao_v2(text,integer) TO authenticated;
 NOTIFY pgrst,'reload schema';
+CREATE OR REPLACE FUNCTION public.gdo_documento_v2(p_tipo text,p_id text) RETURNS jsonb
+LANGUAGE sql SECURITY DEFINER SET search_path=public,sincronizacao,pg_temp AS $$
+  SELECT to_jsonb(e)||jsonb_build_object('identificador',to_jsonb(i),'controle',to_jsonb(l)) FROM public.gdo_entities e
+  LEFT JOIN public.identificadores_documento i ON i.empresa_id=e.usuario AND i.tipo=p_tipo AND i.documento_id=p_id
+  LEFT JOIN public.edicoes_documento l ON l.empresa_id=e.usuario AND l.tipo=p_tipo AND l.documento_id=p_id
+  WHERE e.usuario=public.gdo_empresa() AND e.entidade=p_tipo||':'||p_id;
+$$;
+REVOKE ALL ON FUNCTION public.gdo_documento_v2(text,text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.gdo_documento_v2(text,text) TO authenticated;

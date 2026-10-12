@@ -73,6 +73,33 @@ export interface ResultadoImportacaoDados {
 }
 
 export interface AppApi {
+  rascunhos: {
+    list(
+      tipo?: import('./evolucao').TipoDocumento,
+      id?: string
+    ): Promise<import('./evolucao').RascunhoCompartilhado[]>
+    get(id: string): Promise<import('./evolucao').RascunhoCompartilhado>
+    create(
+      tipo: import('./evolucao').TipoDocumento,
+      id: string,
+      documento?: import('./evolucao').Documento
+    ): Promise<import('./evolucao').RascunhoCompartilhado>
+    save(
+      id: string,
+      documento: import('./evolucao').Documento
+    ): Promise<import('./evolucao').RascunhoCompartilhado>
+    comparar(
+      id: string,
+      escolhas?: Record<string, 'local' | 'remoto'>
+    ): Promise<import('./evolucao').ComparacaoRascunho>
+    aplicar(
+      id: string,
+      revisao: number,
+      escolhas: Record<string, 'local' | 'remoto'>
+    ): Promise<import('./evolucao').Documento>
+    copiar(id: string): Promise<import('./evolucao').Documento>
+    remove(id: string): Promise<void>
+  }
   colaboracao: {
     membros(): Promise<import('./evolucao').MembroEmpresa[]>
     vincularMembro(email: string, nome: string): Promise<import('./evolucao').MembroEmpresa[]>

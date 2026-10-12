@@ -1,5 +1,15 @@
 import { recibosRepo } from './recibos'
 import {
+  listarRascunhos,
+  obterRascunho,
+  criarRascunho,
+  salvarRascunho,
+  compararRascunho,
+  aplicarRascunho,
+  copiarRascunho,
+  descartarRascunho
+} from './rascunhos'
+import {
   membrosEmpresa,
   vincularMembro,
   ativarMembro,
@@ -84,6 +94,16 @@ async function selecionarLogo(): Promise<string | null> {
 // Mapa canal -> função. Registrado em loop via ipcMain.handle.
 // A geração de documentos (documentos.*) é registrada na Fase 5.
 const handlers: Record<string, (...args: unknown[]) => unknown> = {
+  'rascunhos.list': (tipo, id) => listarRascunhos(tipo as never, id as string | undefined),
+  'rascunhos.get': (id) => obterRascunho(String(id)),
+  'rascunhos.create': (tipo, id, documento) =>
+    criarRascunho(tipo as never, String(id), documento as never),
+  'rascunhos.save': (id, documento) => salvarRascunho(String(id), documento as never),
+  'rascunhos.comparar': (id, escolhas) => compararRascunho(String(id), escolhas as never),
+  'rascunhos.aplicar': (id, revisao, escolhas) =>
+    aplicarRascunho(String(id), Number(revisao), escolhas as never),
+  'rascunhos.copiar': (id) => copiarRascunho(String(id)),
+  'rascunhos.remove': (id) => descartarRascunho(String(id)),
   'colaboracao.membros': () => membrosEmpresa(),
   'colaboracao.vincularMembro': (email, nome) => vincularMembro(String(email), String(nome)),
   'colaboracao.ativarMembro': (usuario, ativo) => ativarMembro(String(usuario), ativo === true),

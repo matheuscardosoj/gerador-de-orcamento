@@ -108,3 +108,10 @@ export interface RascunhoCompartilhado {
   atualizadoEm: string
   estado: 'local' | 'conflito' | 'aplicado'
 }
+export interface ComparacaoRascunho {
+  rascunho: RascunhoCompartilhado
+  remoto: Documento | null
+  revisaoRemota: number
+  documento: Documento
+  conflitos: import('./conciliacao').ConflitoCampo[]
+}

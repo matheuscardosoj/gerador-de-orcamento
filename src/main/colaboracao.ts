@@ -86,6 +86,11 @@ export async function controlarEdicao(
 }
 export async function autorizarGravacao(tipo: TipoDocumento, id: string): Promise<void> {
   if (protocoloNuvem() < 2) return
+  if (
+    !get('SELECT 1 FROM sincronizacao WHERE entidade=?', [`${tipo}:${id}`]) &&
+    get('SELECT 1 FROM fila_nuvem WHERE entidade=?', [`${tipo}:${id}`])
+  )
+    return
   const controle = get('SELECT * FROM edicoes_documento WHERE tipo=? AND documento_id=?', [
     tipo,
     id

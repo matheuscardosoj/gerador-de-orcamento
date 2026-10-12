@@ -72,6 +72,11 @@ export function exigirResponsavel(tipo: TipoDocumento, id: string): void {
   const contextoLinha = get("SELECT valor FROM configuracoes WHERE chave='contextoNuvem'")
   const contexto = contextoLinha ? JSON.parse(texto(contextoLinha.valor)) : null
   if (contexto?.protocolo >= 2 && !suspenso) {
+    if (
+      !get('SELECT 1 FROM sincronizacao WHERE entidade=?', [`${tipo}:${id}`]) &&
+      get('SELECT 1 FROM fila_nuvem WHERE entidade=?', [`${tipo}:${id}`])
+    )
+      return
     const c = get('SELECT * FROM edicoes_documento WHERE tipo=? AND documento_id=?', [tipo, id])
     if (
       c?.usuario !== contexto.usuarioId ||

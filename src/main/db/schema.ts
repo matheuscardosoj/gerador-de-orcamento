@@ -297,6 +297,10 @@ const v9 = (d: Database): void => {
       usuario_criador TEXT, alterado_por TEXT,
       PRIMARY KEY(tipo,documento_id), UNIQUE(tipo,id_interno)
     );
+    CREATE TABLE bases_documento (
+      tipo TEXT NOT NULL,documento_id TEXT NOT NULL,revisao INTEGER NOT NULL,documento TEXT NOT NULL,
+      PRIMARY KEY(tipo,documento_id)
+    );
     CREATE TABLE edicoes_documento (
       tipo TEXT NOT NULL, documento_id TEXT NOT NULL, usuario TEXT NOT NULL,
       computador TEXT NOT NULL, geracao INTEGER NOT NULL, expira_em TEXT,

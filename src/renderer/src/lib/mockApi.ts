@@ -177,6 +177,28 @@ export function criarMockApi(): AppApi {
 
   return {
     eventos: { observarDados: () => () => {} },
+    rascunhos: {
+      list: async () => [],
+      get: async () => {
+        throw new Error('Disponível no aplicativo desktop.')
+      },
+      create: async () => {
+        throw new Error('Disponível no aplicativo desktop.')
+      },
+      save: async () => {
+        throw new Error('Disponível no aplicativo desktop.')
+      },
+      comparar: async () => {
+        throw new Error('Disponível no aplicativo desktop.')
+      },
+      aplicar: async () => {
+        throw new Error('Disponível no aplicativo desktop.')
+      },
+      copiar: async () => {
+        throw new Error('Disponível no aplicativo desktop.')
+      },
+      remove: async () => {}
+    },
     colaboracao: {
       membros: async () => [],
       vincularMembro: async () => {
