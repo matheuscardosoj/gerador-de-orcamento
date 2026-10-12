@@ -70,11 +70,12 @@ o app tenta o Ollama automaticamente.
 
 ## Status
 
-**Candidato 1.4.0-rc.2** — históricos configuráveis, listas por arraste e revisão
+**Versão 1.4.0** — históricos configuráveis, listas por arraste e revisão
 de textos com IA local, além de dados compartilhados e clientes com campos opcionais,
 recibos/cobranças, recebimentos, versões imutáveis e imagens deduplicadas.
-Versão final e merge dependem de aprovação. A conexão real Supabase será validada
-depois da criação do projeto da empresa.
+Inclui campos numéricos com máscara brasileira e composição clara do preço com
+custos sem lucro. A conexão real Supabase depende da configuração do projeto e do
+usuário da empresa; veja [o tutorial](supabase/CONFIGURACAO.md).
 
 **Versão 1.3.1** — erros associados aos campos de documentos, salvamentos resilientes
 nas configurações e bloqueio de operações concorrentes.

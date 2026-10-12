@@ -2,6 +2,14 @@
 
 Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
+## 1.4.0 — 2026-10-11
+
+- Consolida os recursos e correções dos candidatos rc.1 e rc.2: nuvem, versões, recibos, máscaras numéricas, históricos configuráveis, listas por arraste e revisão com IA local.
+- Composição do preço em sequência: custos com lucro, acréscimo de lucro, custos sem lucro, subtotal antes do imposto e preço final. Identifica os itens sem lucro e explica a incidência da nota.
+- Tela de cálculo mais ampla e responsiva, com campos rotulados, descrição em linha própria e opção de lucro sem texto apertado. Explicações genéricas para os diferentes tipos de serviço.
+- A primeira publicação inclui versões e estornos de documentos excluídos, preservando o histórico e os números utilizados.
+- Verificações de código, 141 testes e validação no Electron real de cálculos, espaçamentos, reordenação e exportações. A conexão real depende da configuração SQL e do usuário da empresa no Supabase.
+
 ## 1.4.0-rc.2 — 2026-10-11
 
 - Lixeira no histórico e editor de recibos, com confirmação de exclusão/estorno atômico para pagamentos recebidos. Preserva número, versões e lançamentos; atualiza a lista e sincroniza exclusões sem reutilizar números.

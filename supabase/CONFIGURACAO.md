@@ -14,10 +14,16 @@ Se a atualização pedir mais espaço ou encontrar erro no banco/backup, resolva
 
 ## Criar o projeto e conectar os computadores
 
+### Se você está usando o candidato rc.2
+
+Exporte um backup **da base atual do rc.2**, incluindo suas últimas edições. Guarde também um backup da instalação antiga antes da atualização. Na versão final, restaure o backup do rc.2 em **Configurações → Dados e backup → Restaurar**, confira documentos, valores, imagens e preferências e só então publique essa base na nuvem vazia. Não use uma cópia anterior à revisão do candidato se quiser levar as alterações mais recentes. A restauração não conecta nem publica automaticamente no Supabase.
+
+### Preparar o projeto
+
 1. Entre em [Supabase Dashboard](https://supabase.com/dashboard), crie uma organização no plano **Free** e um projeto para sua empresa. Escolha a região mais próxima. Guarde a senha do banco separadamente.
 2. Abra **SQL Editor**, crie uma consulta e cole o conteúdo de `schema.sql`. O aplicativo oferece **Configurações → Nuvem / Sincronização → Como configurar minha empresa na nuvem → Copiar configuração do banco**. Execute com **Run**. O script pode ser executado novamente para atualizar as funções; não apaga a base.
 3. Em **Authentication → Users → Add user**, crie o usuário da empresa com e-mail e senha. Confirme o e-mail no painel (auto confirm). Essa senha será usada no aplicativo; ela não é a senha do banco nem o login administrativo do painel. Depois de criar a conta, você pode desabilitar novos cadastros públicos em Authentication.
-4. No painel **Connect** ou nas configurações **API / API Keys**, copie a URL HTTPS do projeto e a chave **publishable**, normalmente começando com `sb_publishable_`. Projetos antigos também podem usar a chave pública `anon`. [Tipos de chave e localização no painel](https://supabase.com/docs/guides/getting-started/api-keys).
+4. No painel **Connect** ou em **Settings → API Keys**, copie a URL HTTPS do projeto e a chave **publishable**, normalmente começando com `sb_publishable_`. Projetos antigos também podem usar a chave pública `anon`. [Tipos de chave e localização no painel](https://supabase.com/docs/guides/getting-started/api-keys).
 5. No computador que já tem seus dados, preencha URL, chave pública, e-mail e senha em **Nuvem / Sincronização**. Escolha **Publicar os dados locais em uma nuvem vazia**. A publicação exige uma base remota vazia e preserva os números já utilizados. Não coloque uma chave `secret`, `service_role` ou senha do banco no aplicativo.
 6. Nos outros computadores, instale o aplicativo e preencha os mesmos dados. Escolha **Baixar a base da empresa**. Os dados locais anteriores serão guardados em backup antes de serem substituídos. Aguarde **0 alterações aguardando envio** e ausência de falhas.
 
