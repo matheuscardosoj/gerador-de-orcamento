@@ -1,6 +1,6 @@
 import { safeStorage } from 'electron'
 import { hostname } from 'os'
-import { all, get, run, texto, tx, db } from './db/sqlite'
+import { all, get, run, texto, tx, db, type Linha } from './db/sqlite'
 import {
   computadorId,
   enfileirar,
@@ -27,6 +27,11 @@ import {
 } from './pendencias-anteriores'
 import type { AtualizacaoNumeracaoPendente } from '@shared/evolucao'
 import { mensagemErro } from '@shared/erros'
+import {
+  adaptarExclusaoCadastroLegada,
+  criarPayloadCadastroSalvo
+} from '@shared/cadastros-sincronizacao'
+import { filaParaEnvio, marcarGrupo, temOperacaoAtiva, tentarNovamenteOperacao } from './fila-nuvem'
 
 let ocupado = false
 let sincronizacaoAtual: Promise<StatusNuvem> | null = null
@@ -266,7 +271,12 @@ export function statusNuvem(): StatusNuvem {
     autenticada: !!config<string>('sessaoNuvem'),
     computador: computadorId(),
     pendentes: filaAnterior().length,
-    pendenciasPreservadas: config<string[]>('operacoesAnterioresSuspensas')?.length ?? 0,
+    pendenciasPreservadas: Number(
+      get("SELECT COUNT(*) AS n FROM fila_nuvem WHERE estado='preservada'")?.n ?? 0
+    ),
+    falhas: all(
+      "SELECT id,entidade,erro FROM fila_nuvem WHERE estado='falha' GROUP BY grupo ORDER BY rowid"
+    ).map((l) => ({ id: texto(l.id), entidade: texto(l.entidade), detalhe: texto(l.erro) })),
     conflitos: all('SELECT id,entidade,detalhe FROM conflitos_nuvem').map((l) => ({
       id: texto(l.id),
       entidade: texto(l.entidade),
@@ -687,7 +697,7 @@ export async function consultarDocumentoRemoto(
 }
 export function adotarDocumentoRemoto(e: Remoto): void {
   if (!e.payload.tipo) throw new Error('Documento remoto inválido.')
-  if (get('SELECT 1 FROM fila_nuvem WHERE entidade=?', [e.entidade]))
+  if (temOperacaoAtiva(e.entidade))
     throw new Error('Preserve e resolva as operações pendentes antes de adotar a versão remota.')
   semRastreamento(() =>
     tx(() => {
@@ -764,6 +774,7 @@ export async function finalizarAtualizacaoNumeracao(revisao: string): Promise<St
 async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
   if (ocupado || conectando) return statusNuvem()
   ocupado = true
+  let erroEnvio: string | null = null
   try {
     if (!completa && config<AtualizacaoNumeracaoPendente>('atualizacaoNumeracaoPendente'))
       throw new Error(
@@ -774,7 +785,7 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
     if (completa && protocoloNuvem() >= 2) await reconhecerEmpresa()
     if (protocoloNuvem() < 2 && get('SELECT 1 FROM conflitos_nuvem LIMIT 1'))
       throw new Error('Resolva os conflitos antes de sincronizar novas alterações.')
-    const pendencias = filaAnterior()
+    const pendencias = filaParaEnvio()
     const grupos =
       protocoloNuvem() < 2
         ? [pendencias]
@@ -782,7 +793,10 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
             pendencias.filter((l) => texto(l.grupo) === grupo)
           )
     const bloqueadas = new Set(
-      all('SELECT entidade FROM conflitos_nuvem').map((l) => texto(l.entidade))
+      [
+        ...all('SELECT entidade FROM conflitos_nuvem'),
+        ...all("SELECT entidade FROM fila_nuvem WHERE estado IN ('falha','conflito')")
+      ].map((l) => texto(l.entidade))
     )
     for (const fila of grupos) {
       if (
@@ -790,54 +804,84 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
         (protocoloNuvem() >= 2 && fila.some((l) => bloqueadas.has(texto(l.entidade))))
       )
         continue
-      const result = (await pedido(
-        `/rest/v1/rpc/${protocoloNuvem() >= 2 ? (protocoloNuvem() >= 3 ? 'gdo_batch_v3' : 'gdo_batch_v2') : 'gdo_batch'}`,
-        {
-          p_operacoes: fila.map((l) => ({
-            id: l.id,
-            entidade: l.entidade,
-            base: l.base,
-            payload: JSON.parse(
-              texto(get('SELECT payload FROM fila_nuvem WHERE id=?', [l.id])?.payload ?? l.payload)
-            ),
-            geracao: l.geracao
-          })),
-          p_dispositivo: computadorId()
-        }
-      ).catch((e: unknown) => {
-        if (
-          protocoloNuvem() < 2 ||
-          !/Autorização.*(expirada|revogada)|Documento em edição|financeiro reservado|origem reservado/.test(
-            String(e)
-          )
-        )
-          throw e
-        const op =
-          fila.find((l) =>
-            ['orcamento', 'relatorio', 'recibo'].includes(texto(l.entidade).split(':')[0])
-          ) ?? fila[0]
-        run('INSERT OR REPLACE INTO conflitos_nuvem VALUES (?,?,?,?)', [
-          op.id,
-          op.entidade,
-          mensagemErro(e),
-          'null'
-        ])
-        return { ok: false, entidade: op.entidade, remoto: null }
-      })) as {
+      let result: {
         ok: boolean
         numeros?: Array<{ tipo: TipoDocumento; documentoId: string; numero: number }>
         resultados?: Array<{ entidade: string; revisao: number }>
         entidade?: string
         remoto?: Remoto
       }
+      try {
+        result = (await pedido(
+          `/rest/v1/rpc/${protocoloNuvem() >= 2 ? (protocoloNuvem() >= 3 ? 'gdo_batch_v3' : 'gdo_batch_v2') : 'gdo_batch'}`,
+          {
+            p_operacoes: fila.map((l) => ({
+              id: l.id,
+              entidade: l.entidade,
+              base: l.base,
+              payload: adaptarExclusaoCadastroLegada(
+                JSON.parse(
+                  texto(
+                    get('SELECT payload FROM fila_nuvem WHERE id=?', [l.id])?.payload ?? l.payload
+                  )
+                )
+              ),
+              geracao: l.geracao
+            })),
+            p_dispositivo: computadorId()
+          }
+        ).catch((e: unknown) => {
+          if (
+            protocoloNuvem() < 2 ||
+            !/Autorização.*(expirada|revogada)|Documento em edição|financeiro reservado|origem reservado/.test(
+              String(e)
+            )
+          )
+            throw e
+          const op =
+            fila.find((l) =>
+              ['orcamento', 'relatorio', 'recibo'].includes(texto(l.entidade).split(':')[0])
+            ) ?? fila[0]
+          run('INSERT OR REPLACE INTO conflitos_nuvem VALUES (?,?,?,?)', [
+            op.id,
+            op.entidade,
+            mensagemErro(e),
+            'null'
+          ])
+          return { ok: false, entidade: op.entidade, remoto: null }
+        })) as typeof result
+      } catch (e) {
+        const erro = e as { status?: number; codigo?: string; name?: string }
+        const temporaria =
+          erro.status === 401 ||
+          erro.status === 408 ||
+          erro.status === 429 ||
+          (erro.status ?? 0) >= 500 ||
+          /TimeoutError|AbortError/.test(erro.name ?? '') ||
+          /fetch failed|Failed to fetch|network|ENETUNREACH|ECONNRESET|ETIMEDOUT/i.test(String(e))
+        // Uma falha de transporte pode ocultar uma confirmação. Mantém a identidade
+        // da operação para reenvio idempotente; nunca cria uma operação substituta.
+        if (temporaria) {
+          erroEnvio = mensagemErro(e)
+          break
+        }
+        const detalhe = mensagemErro(e, descricaoOperacao(fila[0]))
+        marcarGrupo(fila, 'falha', detalhe)
+        for (const l of fila) bloqueadas.add(texto(l.entidade))
+        continue
+      }
       if (!result.ok) {
         const op = fila.find((l) => l.entidade === result.entidade) ?? fila[0]
         run('INSERT OR REPLACE INTO conflitos_nuvem VALUES (?,?,?,?)', [
           op.id,
           op.entidade,
-          'A base remota mudou. Suas alterações locais foram preservadas.',
+          result.remoto == null
+            ? texto(get('SELECT detalhe FROM conflitos_nuvem WHERE id=?', [op.id])?.detalhe) ||
+              'A autorização de edição mudou. Suas alterações locais foram preservadas para conferência.'
+            : 'A base remota mudou. Suas alterações locais foram preservadas.',
           JSON.stringify(result.remoto)
         ])
+        marcarGrupo(fila, 'conflito')
         if (protocoloNuvem() < 2)
           throw new Error('Conflito de sincronização. Compare as versões e escolha como continuar.')
         for (const l of fila) bloqueadas.add(texto(l.entidade))
@@ -887,13 +931,8 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
           const conhecido = Number(
             get('SELECT revisao FROM sincronizacao WHERE entidade=?', [e.entidade])?.revisao ?? 0
           )
-          const pendente = filaAnterior().some((l) => l.entidade === e.entidade)
-          if (pendente && e.revisao > conhecido)
-            if (protocoloNuvem() >= 2) continue
-            else
-              throw new Error(
-                'Há edições locais novas; sincronize novamente antes de baixar alterações.'
-              )
+          const pendente = temOperacaoAtiva(e.entidade)
+          if (pendente && e.revisao > conhecido) continue
           if (e.revisao > conhecido) aplicar(e)
         }
         salvar('cursorNuvem', cursor)
@@ -1022,9 +1061,12 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
     salvar('ultimaNuvem', new Date().toISOString())
     salvar(
       'erroNuvem',
-      bloqueadas.size
-        ? 'Há alterações em conflito preservadas para conciliação. Os demais dados continuam sincronizando.'
-        : null
+      erroEnvio ??
+        (all("SELECT id FROM fila_nuvem WHERE estado='falha'").length
+          ? 'Uma alteração não pôde ser enviada. Confira as operações abaixo; os demais dados continuam sincronizando.'
+          : bloqueadas.size
+            ? 'Há alterações em conflito preservadas para conciliação. Os demais dados continuam sincronizando.'
+            : null)
     )
     avisarDados({ origem: 'nuvem', entidades: [], status: true })
   } catch (e) {
@@ -1033,6 +1075,34 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
     ocupado = false
   }
   return statusNuvem()
+}
+function descricaoOperacao(op: Linha): string {
+  let payload: { row?: unknown; rows?: unknown; excluido?: boolean } = {}
+  try {
+    payload = JSON.parse(texto(op.payload))
+  } catch {
+    /* payload inválido é preservado */
+  }
+  const tipo = texto(op.entidade).split(':')[0]
+  const nomes: Record<string, string> = {
+    clientes: 'cliente',
+    servicos: 'serviço do catálogo',
+    observacoes_padrao: 'observação padrão',
+    pagamentos_padrao: 'forma de pagamento',
+    configuracoes: 'configuração',
+    imagens: 'imagem',
+    orcamento: 'orçamento',
+    relatorio: 'relatório',
+    recibo: 'recibo'
+  }
+  const excluir = payload.excluido || (!payload.rows && !payload.row)
+  return `${excluir ? 'Excluir' : 'Salvar'} ${nomes[tipo] ?? 'alteração'}`
+}
+export async function repetirOperacaoNuvem(id: string): Promise<StatusNuvem> {
+  if (ocupado || conectando)
+    throw new Error('Aguarde a sincronização atual antes de tentar novamente.')
+  tentarNovamenteOperacao(id)
+  return sincronizarNuvem(false)
 }
 function aplicarIdentificador(e: Remoto): void {
   if (e.emissao) {
@@ -1047,11 +1117,7 @@ function aplicarIdentificador(e: Remoto): void {
       [e.emissao.tipo, e.emissao.documento_id, e.emissao.numero, e.emissao.criado_em]
     )
   }
-  if (
-    e.payload.tipo &&
-    !e.payload.excluido &&
-    !get('SELECT 1 FROM fila_nuvem WHERE entidade=?', [e.entidade])
-  ) {
+  if (e.payload.tipo && !e.payload.excluido && !temOperacaoAtiva(e.entidade)) {
     const versoes = e.payload.rows?.versoes ?? []
     const ultima = [...versoes].sort((a, b) => Number(b.numero) - Number(a.numero))[0]
     if (ultima && typeof ultima.documento === 'string') {
@@ -1187,14 +1253,10 @@ export async function aplicarConflito(id: string): Promise<void> {
       tx(() => {
         // Cadastros/ativos sem edições pendentes são dependências dos documentos remotos.
         for (const remoto of ordenarDependencias(remotos)) {
-          if (
-            remoto.payload.tabela &&
-            !get('SELECT 1 FROM fila_nuvem WHERE entidade=?', [remoto.entidade])
-          )
-            aplicar(remoto)
+          if (remoto.payload.tabela && !temOperacaoAtiva(remoto.entidade)) aplicar(remoto)
         }
         for (const entidade of relacionadas) {
-          run('DELETE FROM fila_nuvem WHERE entidade=?', [entidade])
+          run("DELETE FROM fila_nuvem WHERE entidade=? AND estado<>'preservada'", [entidade])
           run('DELETE FROM conflitos_nuvem WHERE entidade=?', [entidade])
           if (
             !entidade.startsWith('recibo:') &&
@@ -1234,7 +1296,11 @@ export function capturarCadastros(): void {
       const id = texto(l.id ?? l.hash ?? l.chave)
       // Apenas captura quando o estado difere do último envio conhecido.
       const chave = `estado:${t}:${id}`
-      const payload = { tabela: t, id, row: l }
+      const payload = criarPayloadCadastroSalvo(
+        t as Parameters<typeof criarPayloadCadastroSalvo>[0],
+        id,
+        l
+      )
       const estado = JSON.stringify(payload)
       const anterior = config<string>(chave)
       let igual = anterior === estado

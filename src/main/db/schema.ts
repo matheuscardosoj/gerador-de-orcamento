@@ -368,12 +368,30 @@ const v10 = (d: Database): void => {
     d.run('UPDATE configuracoes SET valor=? WHERE chave=?', [JSON.stringify(p), l.chave])
   }
 }
-export const VERSAO_BANCO = 10
-const MIGRACOES: Array<(d: Database) => void> = [v1, v2, v3, v4, v5, v6, v7, v8, v9, v10]
+const v11 = (d: Database): void => {
+  d.exec(
+    "ALTER TABLE fila_nuvem ADD COLUMN estado TEXT NOT NULL DEFAULT 'pendente' CHECK(estado IN ('pendente','preservada','conflito','falha')); ALTER TABLE fila_nuvem ADD COLUMN erro TEXT;"
+  )
+  const l = d.get("SELECT valor FROM configuracoes WHERE chave='operacoesAnterioresSuspensas'") as {
+    valor: string
+  } | null
+  if (l)
+    for (const id of JSON.parse(l.valor) as string[])
+      d.run("UPDATE fila_nuvem SET estado='preservada' WHERE id=?", [id])
+  d.exec(
+    "UPDATE fila_nuvem SET estado='conflito' WHERE estado<>'preservada' AND id IN (SELECT id FROM conflitos_nuvem); DELETE FROM configuracoes WHERE chave='operacoesAnterioresSuspensas'; CREATE INDEX fila_estado_grupo ON fila_nuvem(estado,grupo);"
+  )
+}
+export const VERSAO_BANCO = 11
+const MIGRACOES: Array<(d: Database) => void> = [v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11]
 
 export function aplicarMigracoes(d: Database, ate = MIGRACOES.length): void {
   const linha = d.get('PRAGMA user_version') as { user_version?: number } | null
   const versao = Number(linha?.user_version ?? 0)
+  if (versao > ate)
+    throw new Error(
+      'Esta base foi aberta por uma versão mais recente do aplicativo. Abra a versão atualizada para continuar.'
+    )
   for (let i = versao; i < ate; i++) {
     d.run('BEGIN')
     try {

@@ -2,12 +2,12 @@ import { registrarImagem } from './imagens'
 import { semRastreamento, nuvemConfigurada, registrarVersao } from './versoes'
 import { recibosRepo } from './recibos'
 import { randomUUID as novoId } from 'crypto'
-import { VERSAO_BANCO } from './db/schema'
+import { aplicarMigracoes, VERSAO_BANCO } from './db/schema'
 import { app, dialog } from 'electron'
 import { copyFileSync, existsSync, mkdirSync, rmSync } from 'fs'
 import { join } from 'path'
 import { Database } from 'node-sqlite3-wasm'
-import { randomUUID } from 'crypto'
+import { createHash, randomUUID } from 'crypto'
 import { abrirBanco, caminhoBanco, fecharBanco, get, run, tx, type Linha } from './db/sqlite'
 import {
   clientesRepo,
@@ -193,6 +193,19 @@ function idOrigemFonte(fonte: Database): { id: string; legado: boolean } {
 function limparAutorizacoesDaCopia(destino: string): void {
   const copia = new Database(destino)
   try {
+    // Somente a cópia é migrada. A fila original permanece intacta no banco em uso.
+    aplicarMigracoes(copia)
+    copia.exec('BEGIN')
+    for (const evento of auditoriaOperacoesNaoConfirmadas(copia))
+      copia.run('INSERT OR IGNORE INTO auditoria_colaboracao VALUES (?,?,?,?,?,?,?)', [
+        evento.id,
+        evento.criado_em,
+        evento.usuario,
+        evento.computador,
+        evento.acao,
+        evento.entidade,
+        evento.dados
+      ] as never)
     copia.exec(
       "DELETE FROM configuracoes WHERE chave IN ('computadorId','sessaoNuvem','nuvem','usuarioNuvem','contextoNuvem','empresaNuvem','cursorNuvem','ultimaNuvem','erroNuvem','bytesNuvem','membrosCache','pedidosEdicaoCache','atualizacaoNumeracaoPendente','operacoesAnterioresSuspensas','backupAtualizacaoNumeracao','renumeracaoPendente') OR chave LIKE 'estado:%' OR chave LIKE 'transferencia:%' OR chave LIKE 'computadorUsuario:%' OR chave LIKE 'numeracaoNuvem:%';"
     )
@@ -202,10 +215,99 @@ function limparAutorizacoesDaCopia(destino: string): void {
       )
     if (temTabela(copia, 'edicoes_documento')) copia.exec('DELETE FROM edicoes_documento')
     copia.run("INSERT OR REPLACE INTO configuracoes VALUES ('restauracaoLocal','true')")
+    copia.exec('COMMIT')
+  } catch (erro) {
+    try {
+      copia.exec('ROLLBACK')
+    } catch {
+      // Uma falha de migração anterior ao BEGIN já foi revertida pela própria migração.
+    }
+    throw erro
   } finally {
     copia.close()
   }
   validar(destino)
+}
+
+/** Evidência histórica; nunca é reintroduzida na fila de publicação. */
+function auditoriaOperacoesNaoConfirmadas(fonte: Database): Linha[] {
+  if (!temTabela(fonte, 'fila_nuvem')) return []
+  const origem = idOrigemFonte(fonte).id
+  const conflitos = temTabela(fonte, 'conflitos_nuvem')
+    ? linhas(fonte, 'SELECT * FROM conflitos_nuvem ORDER BY id')
+    : []
+  const operacoes = linhas(fonte, 'SELECT * FROM fila_nuvem ORDER BY criado_em,id')
+  const idsOperacoes = new Set(operacoes.map((op) => String(op.id)))
+  const evento = (acao: string, entidade: unknown, conteudo: unknown, criadoEm: unknown): Linha => {
+    const dados = JSON.stringify({ origemDados: origem, ...(conteudo as object) })
+    const hash = createHash('sha256').update(`${acao}\n${dados}`).digest('hex')
+    return {
+      id: `backup-fila-${hash}`,
+      criado_em: String(criadoEm || '1970-01-01T00:00:00.000Z'),
+      usuario: null,
+      computador: null,
+      acao,
+      entidade: entidade == null ? null : String(entidade),
+      dados
+    }
+  }
+  return [
+    ...operacoes.map((op) =>
+      evento(
+        'backup:operacao-nao-confirmada',
+        op.entidade,
+        {
+          operacao: {
+            ...op,
+            opid: op.id,
+            grupo: op.grupo ?? '',
+            geracao: op.geracao ?? null,
+            estado: op.estado ?? 'pendente',
+            erro: op.erro ?? null
+          },
+          conflitos: conflitos.filter((conflito) => conflito.id === op.id)
+        },
+        op.criado_em
+      )
+    ),
+    ...conflitos
+      .filter((conflito) => !idsOperacoes.has(String(conflito.id)))
+      .map((conflito) =>
+        evento('backup:conflito-nao-confirmado', conflito.entidade, { conflito }, null)
+      )
+  ]
+}
+
+function mesclarAuditoriaPreservada(fonte: Database): void {
+  const registros = [
+    ...(temTabela(fonte, 'auditoria_colaboracao')
+      ? linhas(fonte, 'SELECT * FROM auditoria_colaboracao ORDER BY criado_em,id')
+      : []),
+    ...auditoriaOperacoesNaoConfirmadas(fonte)
+  ]
+  for (const registro of registros) {
+    let id = String(registro.id)
+    const existente = get('SELECT * FROM auditoria_colaboracao WHERE id=?', [id])
+    if (existente) {
+      if (
+        ['criado_em', 'usuario', 'computador', 'acao', 'entidade', 'dados'].every(
+          (campo) => existente[campo] === registro[campo]
+        )
+      )
+        continue
+      // Preserve também um evento diferente que reutilize um identificador antigo.
+      id = `backup-evento-${createHash('sha256').update(JSON.stringify(registro)).digest('hex')}`
+    }
+    run('INSERT OR IGNORE INTO auditoria_colaboracao VALUES (?,?,?,?,?,?,?)', [
+      id,
+      registro.criado_em,
+      registro.usuario,
+      registro.computador,
+      registro.acao,
+      registro.entidade,
+      registro.dados
+    ])
+  }
 }
 
 function backupAntesImportar(): string {
@@ -530,6 +632,7 @@ function idLivre(
 
 function mesclar(fonte: Database): Resumo {
   const r = resumo()
+  mesclarAuditoriaPreservada(fonte)
   const origem = idOrigemFonte(fonte)
   const mesmaOrigem = !origem.legado && origem.id === idOrigemAtual()
   const clientes = new Map<string, string>()

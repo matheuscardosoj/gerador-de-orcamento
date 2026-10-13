@@ -132,6 +132,12 @@ END $$;
 CREATE OR REPLACE FUNCTION sincronizacao.semantico(p jsonb) RETURNS jsonb LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog AS $$
 DECLARE resultado jsonb:=p; tabela text; dados jsonb; linha jsonb; novo jsonb; k text; serializados text[]; arr jsonb;
 BEGIN
+  -- Os clientes antigos representam exclusão com row:null; a resposta canônica
+  -- omite row. Somente essa chave é normalizada, sem ocultar campos desconhecidos.
+  IF p->>'tabela' IN ('clientes','servicos','observacoes_padrao','pagamentos_padrao','configuracoes','imagens')
+     AND NOT(p ? 'rows') AND p ? 'row' AND p->'row'='null'::jsonb THEN
+    resultado:=resultado-'row';
+  END IF;
   IF p ? 'rows' THEN
     FOR tabela,dados IN SELECT key,value FROM jsonb_each(p->'rows') LOOP
       arr:='[]'::jsonb;

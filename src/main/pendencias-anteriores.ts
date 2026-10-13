@@ -1,9 +1,10 @@
 import { createHash, randomUUID } from 'crypto'
 import { join } from 'path'
 import { Database } from 'node-sqlite3-wasm'
-import { all, get, run, tx, texto, pastaDados, type Linha } from './db/sqlite'
+import { all, get, run, tx, texto, pastaDados } from './db/sqlite'
 import { exportarDadosPara } from './dados'
 import type { AtualizacaoNumeracaoPendente } from '@shared/evolucao'
+import { filaAtiva, marcarGrupo } from './fila-nuvem'
 
 export function conteudoEquivalente(a: unknown, b: unknown): boolean {
   const normalizar = (v: unknown, campo = ''): unknown => {
@@ -45,13 +46,7 @@ const nomes: Record<string, string> = {
   relatorio: 'Relatório',
   recibo: 'Recibo'
 }
-export const filaAnterior = (): Linha[] => {
-  const l = get("SELECT valor FROM configuracoes WHERE chave='operacoesAnterioresSuspensas'")
-  const suspensas: string[] = l ? JSON.parse(texto(l.valor)) : []
-  return all('SELECT * FROM fila_nuvem ORDER BY rowid').filter(
-    (l) => !suspensas.includes(texto(l.id))
-  )
-}
+export const filaAnterior = filaAtiva
 export const revisaoFilaAnterior = (): string =>
   createHash('sha256')
     .update(
@@ -154,14 +149,9 @@ export function suspenderPendenciasAnteriores(revisao: string): void {
     throw new Error(
       'Há alterações de documentos ou pagamentos que precisam de comparação. Elas foram mantidas para revisão, sem envio automático.'
     )
-  const l = get("SELECT valor FROM configuracoes WHERE chave='operacoesAnterioresSuspensas'")
-  const anteriores: string[] = l ? JSON.parse(texto(l.valor)) : []
   // As operações permanecem intactas na fila e no arquivo de auditoria. Somente
   // a publicação automática fica suspensa; não apaga nem reaplica pagamentos.
-  run(
-    "INSERT INTO configuracoes VALUES('operacoesAnterioresSuspensas',?) ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor",
-    [JSON.stringify([...new Set([...anteriores, ...fila.map((l) => texto(l.id))])])]
-  )
+  marcarGrupo(fila, 'preservada')
 }
 
 export function preservarPendenciasAnteriores(empresa: string, usuario: string): string {

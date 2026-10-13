@@ -15,6 +15,7 @@ import { recibosRepo } from './recibos'
 import { computadorId } from './versoes'
 import { exportarDadosPara } from './dados'
 import type { Recibo, RevisaoRecebimentos, TipoDocumento } from '@shared/evolucao'
+import { filaAtiva, temOperacaoAtiva } from './fila-nuvem'
 
 async function conjunto(tipo: TipoDocumento, id: string): Promise<Map<string, Remoto>> {
   const entidades = new Set([`${tipo}:${id}`])
@@ -56,11 +57,7 @@ async function conjunto(tipo: TipoDocumento, id: string): Promise<Map<string, Re
 function operacoes(remotos: Map<string, Remoto>): RevisaoRecebimentos['operacoes'] {
   const resultado: RevisaoRecebimentos['operacoes'] = []
   for (const [entidade, remoto] of remotos) {
-    if (
-      !entidade.startsWith('recibo:') ||
-      !get('SELECT 1 FROM fila_nuvem WHERE entidade=?', [entidade])
-    )
-      continue
+    if (!entidade.startsWith('recibo:') || !temOperacaoAtiva(entidade)) continue
     const id = entidade.slice(7),
       p = get('SELECT * FROM recebimentos WHERE recibo_id=?', [id])
     if (!p) continue
@@ -153,12 +150,10 @@ export async function conciliarRecebimentos(
       'Há divergências financeiras. Preserve os registros para revisão; os dados da empresa não serão sobrescritos.'
     )
   const entidades = [...remotos.keys()]
-  const pendentes = all('SELECT * FROM fila_nuvem').filter((l) =>
-    entidades.includes(texto(l.entidade))
-  )
+  const pendentes = filaAtiva().filter((l) => entidades.includes(texto(l.entidade)))
   for (const p of pendentes)
     if (
-      all('SELECT entidade FROM fila_nuvem WHERE grupo=?', [p.grupo]).some(
+      all("SELECT entidade FROM fila_nuvem WHERE grupo=? AND estado<>'preservada'", [p.grupo]).some(
         (l) => !entidades.includes(texto(l.entidade))
       )
     )
@@ -202,7 +197,7 @@ export async function conciliarRecebimentos(
       })
     ])
     for (const entidade of entidades) {
-      run('DELETE FROM fila_nuvem WHERE entidade=?', [entidade])
+      run("DELETE FROM fila_nuvem WHERE entidade=? AND estado<>'preservada'", [entidade])
       run('DELETE FROM conflitos_nuvem WHERE entidade=?', [entidade])
       if (entidade.startsWith('recibo:'))
         run('DELETE FROM recebimentos WHERE recibo_id=?', [entidade.slice(7)])
@@ -222,10 +217,7 @@ export async function conciliarRecebimentos(
       }
   })
   const s = await sincronizarNuvem()
-  if (
-    s.erro ||
-    all('SELECT entidade FROM fila_nuvem').some((l) => entidades.includes(texto(l.entidade)))
-  )
+  if (s.erro || filaAtiva().some((l) => entidades.includes(texto(l.entidade))))
     throw new Error(
       'A nova operação continua aguardando confirmação. Os registros originais e o backup foram preservados; revise novamente após sincronizar.'
     )

@@ -262,6 +262,24 @@ export function NuvemSection(): JSX.Element {
               computador. Elas não foram publicadas na nuvem.
             </p>
           )}
+          {(s.falhas ?? []).map((x) => (
+            <div
+              key={x.id}
+              className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"
+            >
+              <p>{x.detalhe}</p>
+              <p>
+                A operação continua guardada neste computador. Outras alterações podem ser recebidas
+                e enviadas.
+              </p>
+              <Button
+                variant="outline"
+                onClick={() => void executar(() => api.nuvem.tentarNovamente(x.id))}
+              >
+                Tentar enviar novamente
+              </Button>
+            </div>
+          ))}
           {s.backupAtualizacao && (
             <p className="break-words">Backup verificado da atualização: {s.backupAtualizacao}</p>
           )}

@@ -5,6 +5,7 @@ import { hostname } from 'os'
 import { avisarDados } from './eventos'
 import { all, get, run, texto, tx, grupoTransacao } from './db/sqlite'
 import type { Documento, DocumentoMetadados, TipoDocumento, VersaoDocumento } from '@shared/types'
+import { ultimaBaseAtiva, temOperacaoAtiva } from './fila-nuvem'
 
 let suspenso = 0
 export function semRastreamento<T>(acao: () => T): T {
@@ -31,22 +32,25 @@ export function enfileirar(entidade: string, payload: unknown): void {
   const remoto = Number(
     get('SELECT revisao FROM sincronizacao WHERE entidade=?', [entidade])?.revisao ?? 0
   )
-  const ultimo = get('SELECT MAX(base) AS base FROM fila_nuvem WHERE entidade=?', [entidade])?.base
+  const ultimo = ultimaBaseAtiva(entidade)
   const base = ultimo == null ? remoto : Math.max(remoto, Number(ultimo) + 1)
   const [tipo, id] = entidade.split(':')
   const controle = get('SELECT geracao FROM edicoes_documento WHERE tipo=? AND documento_id=?', [
     tipo,
     id
   ])
-  run('INSERT INTO fila_nuvem VALUES (?,?,?,?,?,?,?)', [
-    randomUUID(),
-    entidade,
-    base,
-    JSON.stringify(payload),
-    new Date().toISOString(),
-    controle?.geracao ?? null,
-    grupoTransacao() ?? randomUUID()
-  ])
+  run(
+    'INSERT INTO fila_nuvem(id,entidade,base,payload,criado_em,geracao,grupo) VALUES (?,?,?,?,?,?,?)',
+    [
+      randomUUID(),
+      entidade,
+      base,
+      JSON.stringify(payload),
+      new Date().toISOString(),
+      controle?.geracao ?? null,
+      grupoTransacao() ?? randomUUID()
+    ]
+  )
 }
 export function lerMeta(tipo: TipoDocumento, id: string): DocumentoMetadados {
   const l = get('SELECT dados FROM documento_meta WHERE tipo=? AND documento_id=?', [tipo, id])
@@ -75,7 +79,7 @@ export function exigirResponsavel(tipo: TipoDocumento, id: string): void {
   if (contexto?.protocolo >= 2 && !suspenso) {
     if (
       !get('SELECT 1 FROM sincronizacao WHERE entidade=?', [`${tipo}:${id}`]) &&
-      get('SELECT 1 FROM fila_nuvem WHERE entidade=?', [`${tipo}:${id}`])
+      temOperacaoAtiva(`${tipo}:${id}`)
     )
       return
     const c = get('SELECT * FROM edicoes_documento WHERE tipo=? AND documento_id=?', [tipo, id])

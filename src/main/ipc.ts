@@ -1,5 +1,6 @@
 import { numeroHistoricoReconhecido } from './numeros'
 import { mensagemErro } from '../shared/erros'
+import { criarPayloadCadastroExcluido, type TabelaCadastro } from '@shared/cadastros-sincronizacao'
 import { recibosRepo } from './recibos'
 import { revisarRecebimentos, conciliarRecebimentos } from './conciliacao-financeira'
 import {
@@ -41,6 +42,7 @@ import {
   statusNuvem,
   conectarNuvem,
   sincronizarNuvem,
+  repetirOperacaoNuvem,
   dispositivosNuvem,
   transferirDocumento,
   sairNuvem,
@@ -156,6 +158,7 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
   'nuvem.status': () => statusNuvem(),
   'nuvem.conectar': (c, s, m) => conectarNuvem(c as never, s as string, m as never),
   'nuvem.sincronizar': () => sincronizarNuvem(),
+  'nuvem.tentarNovamente': (id) => repetirOperacaoNuvem(String(id)),
   'nuvem.finalizarAtualizacao': (revisao) => finalizarAtualizacaoNumeracao(String(revisao)),
   'nuvem.copiarInstalacao': () => copiarInstalacaoNuvem(),
   'nuvem.dispositivos': () => dispositivosNuvem(),
@@ -297,7 +300,7 @@ export function registrarIpc(): void {
         if (/\.(create|update|save|remove)$/.test(canal))
           return await tx(() => {
             const resultado = fn(...args)
-            const dominios: Record<string, string> = {
+            const dominios: Partial<Record<string, TabelaCadastro>> = {
               clientes: 'clientes',
               servicos: 'servicos',
               observacoes: 'observacoes_padrao',
@@ -305,7 +308,10 @@ export function registrarIpc(): void {
             }
             const tabela = dominios[canal.split('.')[0]]
             if (tabela && canal.endsWith('.remove'))
-              enfileirar(`${tabela}:${String(args[0])}`, { tabela, id: args[0], row: null })
+              enfileirar(
+                `${tabela}:${String(args[0])}`,
+                criarPayloadCadastroExcluido(tabela, String(args[0]))
+              )
             capturarCadastros()
             return resultado
           })

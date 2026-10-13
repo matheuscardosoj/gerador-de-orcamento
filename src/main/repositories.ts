@@ -227,8 +227,9 @@ export const clientesRepo = {
   remove: (id: string): void => {
     const uso = get(
       `SELECT 1 AS usado FROM orcamentos WHERE cliente_id = ?
-       UNION ALL SELECT 1 AS usado FROM relatorios WHERE cliente_id = ? LIMIT 1`,
-      [id, id]
+       UNION ALL SELECT 1 AS usado FROM relatorios WHERE cliente_id = ?
+       UNION ALL SELECT 1 AS usado FROM recibos WHERE json_extract(dados,'$.clienteId') = ? LIMIT 1`,
+      [id, id, id]
     )
     if (uso) {
       throw new Error(

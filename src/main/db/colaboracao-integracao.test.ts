@@ -40,6 +40,7 @@ let reciboId = '',
 let reterControles: Promise<void> | null = null
 let renovacoes = 0
 let lotesPublicados = 0
+let recusarEntidade: string | null = null
 let rascunhos: typeof import('../rascunhos')
 async function perfil(nome: string) {
   sql.fecharBanco()
@@ -128,6 +129,18 @@ beforeAll(async () => {
       else {
         const fn = u.pathname.split('/').at(-1)!
         if (fn === 'gdo_batch_v3') lotesPublicados++
+        if (
+          fn === 'gdo_batch_v3' &&
+          body.p_operacoes.some((op: { entidade: string }) => op.entidade === recusarEntidade)
+        )
+          return new Response(
+            JSON.stringify({
+              code: 'P0001',
+              message:
+                'Campos incompatíveis com o esquema da nuvem. Atualize a configuração do banco; nenhuma alteração foi aplicada'
+            }),
+            { status: 400 }
+          )
         if (!endpoints.has(fn)) throw new Error('Endpoint desconhecido: ' + fn)
         const keys = Object.keys(body)
         if (keys.some((k) => !/^p_[a-z_]+$/.test(k))) throw new Error('Parâmetro inválido')
@@ -565,7 +578,10 @@ it('preserva pendência diferente na fila e no backup, sem publicar a alteraçã
   expect(atualizado.erro).toBeNull()
   expect(atualizado.pendentes).toBe(0)
   expect(atualizado.pendenciasPreservadas).toBe(1)
-  expect(sql.get('SELECT * FROM fila_nuvem WHERE id=?', [operacao.id])).toEqual(operacao)
+  expect(sql.get('SELECT * FROM fila_nuvem WHERE id=?', [operacao.id])).toEqual({
+    ...operacao,
+    estado: 'preservada'
+  })
   expect(repos.clientesRepo.get(c.id)?.nome).toBe(original)
   expect(lotesPublicados).toBe(antes)
   const { Database } = await import('node-sqlite3-wasm')
@@ -637,4 +653,89 @@ it('falha de backup ou conta de outra empresa não remove a fila antiga', async 
     ])
   }
   expect((await nuvem.conectarNuvem(config, 'teste', 'baixar')).erro).toBeNull()
+})
+it('uma falha de envio não bloqueia outros cadastros nem as alterações recebidas, e o reenvio mantém a identidade', async () => {
+  await perfil('falha-a')
+  expect((await nuvem.conectarNuvem(config, 'teste', 'baixar')).erro).toBeNull()
+  const falho = repos.clientesRepo.create({
+    nome: 'Cliente com envio recusado',
+    tratamento: '',
+    ativo: true
+  })
+  const independente = repos.clientesRepo.create({
+    nome: 'Envio independente',
+    tratamento: '',
+    ativo: true
+  })
+  nuvem.capturarCadastros()
+  recusarEntidade = `clientes:${falho.id}`
+  const op = sql.get('SELECT id,base,payload,grupo FROM fila_nuvem WHERE entidade=?', [
+    recusarEntidade
+  ])!
+  const status = await nuvem.sincronizarNuvem()
+  expect(status.falhas).toHaveLength(1)
+  expect(status.falhas![0].detalhe).toContain('Salvar cliente')
+  expect(status.falhas![0].detalhe).not.toContain('Atualize a configuração do banco')
+  expect(status.pendentes).toBe(1)
+  expect(
+    sql.get('SELECT 1 FROM fila_nuvem WHERE entidade=?', [`clientes:${independente.id}`])
+  ).toBeNull()
+  await perfil('falha-b')
+  expect(
+    (await nuvem.conectarNuvem({ ...config, email: 'b@example.com' }, 'teste', 'baixar')).erro
+  ).toBeNull()
+  const recebido = repos.clientesRepo.create({
+    nome: 'Alteração recebida durante falha',
+    tratamento: '',
+    ativo: true
+  })
+  nuvem.capturarCadastros()
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  await perfil('falha-a')
+  await nuvem.sincronizarNuvem()
+  expect(repos.clientesRepo.get(recebido.id)?.nome).toBe(recebido.nome)
+  expect(sql.get('SELECT id,base,payload,grupo FROM fila_nuvem WHERE id=?', [op.id])).toEqual(op)
+  recusarEntidade = null
+  expect((await nuvem.repetirOperacaoNuvem(String(op.id))).erro).toBeNull()
+  expect(sql.get('SELECT 1 FROM fila_nuvem WHERE id=?', [op.id])).toBeNull()
+  await perfil('falha-b')
+  await nuvem.sincronizarNuvem()
+  expect(repos.clientesRepo.get(falho.id)?.nome).toBe(falho.nome)
+})
+it('recupera a exclusão row:null já pendente mesmo sem atualizar a função da nuvem', async () => {
+  const c = repos.clientesRepo.create({
+    nome: 'Teste de exclusão legada',
+    tratamento: '',
+    ativo: true
+  })
+  nuvem.capturarCadastros()
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  const base = Number(
+    sql.get('SELECT revisao FROM sincronizacao WHERE entidade=?', [`clientes:${c.id}`])?.revisao
+  )
+  const func = (
+    await pg.query<{ def: string }>(
+      "SELECT pg_get_functiondef('sincronizacao.semantico(jsonb)'::regprocedure) def"
+    )
+  ).rows[0].def
+  // Comparação antiga: row:null difere de row ausente. Exercita o adaptador
+  // do aplicativo, sem depender da correção SQL de compatibilidade.
+  await pg.exec(
+    'RESET ROLE; CREATE OR REPLACE FUNCTION sincronizacao.semantico(p jsonb) RETURNS jsonb LANGUAGE sql IMMUTABLE AS $$ SELECT p $$; SET ROLE authenticated;'
+  )
+  try {
+    const { enfileirar } = await import('../versoes')
+    repos.clientesRepo.remove(c.id)
+    enfileirar(`clientes:${c.id}`, { tabela: 'clientes', id: c.id, row: null })
+    const op = sql.get('SELECT * FROM fila_nuvem WHERE entidade=?', [`clientes:${c.id}`])!
+    expect(op.base).toBe(base)
+    expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+    expect(sql.get('SELECT 1 FROM fila_nuvem WHERE id=?', [op.id])).toBeNull()
+    expect((await pg.query('SELECT id FROM clientes WHERE id=$1', [c.id])).rows).toEqual([])
+  } finally {
+    await pg.exec(`RESET ROLE; ${func}; SET ROLE authenticated;`)
+  }
+  await perfil('falha-a')
+  await nuvem.sincronizarNuvem()
+  expect(repos.clientesRepo.get(c.id)).toBeNull()
 })

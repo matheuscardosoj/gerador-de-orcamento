@@ -75,13 +75,24 @@ try {
   for (const r of isolada.all('SELECT chave FROM configuracoes'))
     if (chaveLocal(r.chave) && r.chave !== 'idOrigemDados')
       isolada.run('DELETE FROM configuracoes WHERE chave=?', [r.chave])
-  for (const t of locais) isolada.exec(`DELETE FROM ${t}`)
+  // A exportação do aplicativo arquiva fila/conflitos na auditoria antes de
+  // sanitizar o backup. Preserva as evidências da fonte sem publicar nada.
+  for (const t of locais)
+    if (!['fila_nuvem', 'conflitos_nuvem'].includes(t)) isolada.exec(`DELETE FROM ${t}`)
 } finally {
   isolada.close()
 }
 const conferir = (depois) => {
   for (const [t, linhas] of Object.entries(antes)) {
     if (locais.has(t)) continue
+    if (t === 'auditoria_colaboracao') {
+      for (const linha of linhas)
+        assert.ok(
+          depois[t].some((l) => JSON.stringify(l) === JSON.stringify(linha)),
+          'Auditoria anterior perdida.'
+        )
+      continue
+    }
     if (t === 'configuracoes') {
       for (const r of linhas.filter((r) => !chaveLocal(r.chave)))
         assert.equal(depois[t].find((d) => d.chave === r.chave)?.valor, r.valor, r.chave)

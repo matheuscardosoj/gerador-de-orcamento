@@ -134,4 +134,17 @@ describe('mensagens de erro para a interface', () => {
     const mensagem = mensagemErro(erro, 'Não foi possível salvar.')
     expect(mensagemErro(mensagem, 'Não foi possível salvar.')).toBe(mensagem)
   })
+  it('diferencia formato recusado de configuração ausente e de cadastro vinculado', () => {
+    const formato = mensagemErro(
+      'Campos incompatíveis com o esquema da nuvem. Atualize a configuração do banco; nenhuma alteração foi aplicada',
+      'Excluir cliente'
+    )
+    expect(formato).toContain('Excluir cliente')
+    expect(formato).toContain('preservada')
+    expect(formato).not.toContain('Atualize a configuração do banco')
+    expect(mensagemErro({ code: '23503', message: 'foreign key violation' })).toContain('inativar')
+    expect(mensagemErro({ code: 'PGRST202', message: 'missing function' })).toContain(
+      'configuração da nuvem está incompleta'
+    )
+  })
 })

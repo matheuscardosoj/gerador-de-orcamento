@@ -13,6 +13,7 @@ import {
 import { autorizarGravacao } from './colaboracao'
 import { snapshotRascunho, conciliarDocumento } from '@shared/conciliacao'
 import { exportarDadosPara } from './dados'
+import { temOperacaoAtiva } from './fila-nuvem'
 import type {
   Documento,
   TipoDocumento,
@@ -223,16 +224,23 @@ export async function aplicarRascunho(
   if (!envelope || envelope.revisao !== revisaoEsperada)
     throw new Error('A revisão mudou durante a comparação. Compare novamente.')
   const entidade = `${r.tipo}:${r.documentoId}`
-  const pendentes = all('SELECT * FROM fila_nuvem WHERE entidade=?', [entidade])
+  const pendentes = all("SELECT * FROM fila_nuvem WHERE entidade=? AND estado<>'preservada'", [
+    entidade
+  ])
   for (const p of pendentes) {
-    if (get('SELECT 1 FROM fila_nuvem WHERE grupo=? AND entidade<>?', [p.grupo, entidade]))
+    if (
+      get("SELECT 1 FROM fila_nuvem WHERE grupo=? AND entidade<>? AND estado<>'preservada'", [
+        p.grupo,
+        entidade
+      ])
+    )
       throw new Error(
         'Este documento possui uma transação relacionada. Resolva os recebimentos relacionados antes da conciliação textual.'
       )
   }
   exportarDadosPara(join(pastaDados(), `antes-conciliacao-rascunho-${Date.now()}.gdo-backup`))
   tx(() => {
-    run('DELETE FROM fila_nuvem WHERE entidade=?', [entidade])
+    run("DELETE FROM fila_nuvem WHERE entidade=? AND estado<>'preservada'", [entidade])
     run('DELETE FROM conflitos_nuvem WHERE entidade=?', [entidade])
     adotarDocumentoRemoto(envelope)
     const d = comparacao.documento
@@ -249,7 +257,7 @@ export async function aplicarRascunho(
     if (!atualizado) throw new Error('Documento não encontrado.')
   })
   const s = await sincronizarNuvem()
-  if (s.erro || get('SELECT 1 FROM fila_nuvem WHERE entidade=?', [entidade])) {
+  if (s.erro || temOperacaoAtiva(entidade)) {
     run("UPDATE rascunhos_compartilhados SET estado='conflito' WHERE id=?", [id])
     throw new Error(
       s.erro ?? 'A aplicação aguarda confirmação da nuvem. O rascunho foi preservado.'

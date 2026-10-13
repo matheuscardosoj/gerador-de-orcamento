@@ -46,9 +46,10 @@ function confirmarOrigemProvisoria(id: string, n: number): void {
         run('UPDATE versoes SET documento=? WHERE id=?', [JSON.stringify(d), v.id])
       }
     }
-    for (const f of all('SELECT id,payload FROM fila_nuvem WHERE entidade=?', [
-      `relatorio:${texto(rel.id)}`
-    ])) {
+    for (const f of all(
+      "SELECT id,payload FROM fila_nuvem WHERE entidade=? AND estado<>'preservada'",
+      [`relatorio:${texto(rel.id)}`]
+    )) {
       const p = JSON.parse(texto(f.payload))
       const pai = p.rows?.relatorios?.[0]
       if (pai?.origem_orcamento_id === id && pai.origem_orcamento_numero <= 0)
@@ -60,7 +61,10 @@ function confirmarOrigemProvisoria(id: string, n: number): void {
           v.documento = JSON.stringify(d)
         }
       }
-      run('UPDATE fila_nuvem SET payload=? WHERE id=?', [JSON.stringify(p), f.id])
+      run("UPDATE fila_nuvem SET payload=? WHERE id=? AND estado<>'preservada'", [
+        JSON.stringify(p),
+        f.id
+      ])
     }
   }
 }
@@ -95,7 +99,10 @@ export function confirmarNumero(tipo: TipoDocumento, id: string, n: number): voi
         ])
     }
   }
-  for (const l of all('SELECT id,payload FROM fila_nuvem WHERE entidade=?', [`${tipo}:${id}`])) {
+  for (const l of all(
+    "SELECT id,payload FROM fila_nuvem WHERE entidade=? AND estado<>'preservada'",
+    [`${tipo}:${id}`]
+  )) {
     const p = JSON.parse(texto(l.payload))
     if (p.rows?.[tabela]?.[0]) p.rows[tabela][0].numero = n
     if (tipo === 'recibo' && p.rows?.recibos?.[0]) {
@@ -106,7 +113,10 @@ export function confirmarNumero(tipo: TipoDocumento, id: string, n: number): voi
       const d = JSON.parse(v.documento)
       if (d.numero <= 0) v.documento = JSON.stringify({ ...d, numero: n })
     }
-    run('UPDATE fila_nuvem SET payload=? WHERE id=?', [JSON.stringify(p), l.id])
+    run("UPDATE fila_nuvem SET payload=? WHERE id=? AND estado<>'preservada'", [
+      JSON.stringify(p),
+      l.id
+    ])
   }
   run(`INSERT OR IGNORE INTO ${tabelaNumerosUsados()} VALUES (?,?)`, [tipo, n])
   const chave = { orcamento: 'seqOrcamento', relatorio: 'seqRelatorio', recibo: 'seqRecibo' }[tipo]

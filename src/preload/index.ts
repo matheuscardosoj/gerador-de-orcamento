@@ -76,6 +76,7 @@ const api: AppApi = {
     status: () => invoke('nuvem.status') as never,
     conectar: (c, s, m) => invoke('nuvem.conectar', c, s, m) as never,
     sincronizar: () => invoke('nuvem.sincronizar') as never,
+    tentarNovamente: (id) => invoke('nuvem.tentarNovamente', id) as never,
     finalizarAtualizacao: (revisao) => invoke('nuvem.finalizarAtualizacao', revisao) as never,
     dispositivos: () => invoke('nuvem.dispositivos') as never,
     transferir: (t, id, d) => invoke('nuvem.transferir', t, id, d) as never,

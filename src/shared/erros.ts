@@ -68,6 +68,12 @@ export function mensagemErro(erro: unknown, contexto?: string): string {
     mensagem = 'Sua sessão expirou. Entre novamente na conta para continuar a sincronização.'
   else if (/^(?:User not found|Usuário não encontrado)\.?$/i.test(limpa))
     mensagem = 'Conta não encontrada. Confira o e-mail e se o usuário foi criado no Supabase.'
+  else if (/^Campos incompatíveis com o esquema da nuvem/.test(limpa))
+    mensagem =
+      'O formato desta alteração não foi aceito pela nuvem. A operação foi preservada neste computador. Atualize o aplicativo e tente novamente; se persistir, envie esta mensagem ao suporte.'
+  else if (codigo === '23503')
+    mensagem =
+      'Este registro possui vínculos com outros dados. Confira os documentos relacionados antes de excluir. Para cadastros, prefira inativar e preservar o histórico.'
   else if (codigo === 'PGRST202' || /^Could not find the function\b/i.test(limpa))
     mensagem =
       'A configuração da nuvem está incompleta ou desatualizada. Execute o script indicado em Configurações → Nuvem / Sincronização e tente novamente.'

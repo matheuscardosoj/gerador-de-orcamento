@@ -103,11 +103,13 @@ function Sidebar(): JSX.Element {
           {nuvem?.configurada
             ? nuvem.conflitos.length
               ? 'Conflito de sincronização'
-              : nuvem.erro
-                ? 'Offline / sincronização pendente'
-                : nuvem.pendentes
-                  ? `${nuvem.pendentes} alterações para sincronizar`
-                  : 'Nuvem sincronizada'
+              : nuvem.falhas?.length
+                ? 'Uma alteração precisa de atenção'
+                : nuvem.erro
+                  ? 'Offline / sincronização pendente'
+                  : nuvem.pendentes
+                    ? `${nuvem.pendentes} alterações para sincronizar`
+                    : 'Nuvem sincronizada'
             : 'Dados neste computador'}
         </button>
       </div>

@@ -123,6 +123,61 @@ try {
       .count(),
     0
   )
+  await app.evaluate(({ ipcMain }) => {
+    const status = {
+      configurada: true,
+      autenticada: true,
+      computador: 'computador-de-teste',
+      pendentes: 1,
+      pendenciasPreservadas: 37,
+      conflitos: [],
+      ultimaSincronizacao: new Date().toISOString(),
+      erro: 'Uma alteração não pôde ser enviada. Confira as operações abaixo; os demais dados continuam sincronizando.',
+      bytesBanco: 0,
+      reservas: { orcamento: 0, relatorio: 0, recibo: 0 },
+      protocolo: 3,
+      tempoReal: 'conectado',
+      falhas: [
+        {
+          id: 'exclusao-teste',
+          entidade: 'clientes:teste',
+          detalhe:
+            'Excluir cliente. O formato desta alteração não foi aceito pela nuvem. A operação foi preservada neste computador.'
+        }
+      ]
+    }
+    ipcMain.removeHandler('nuvem.sincronizar')
+    ipcMain.removeHandler('nuvem.status')
+    ipcMain.handle('nuvem.status', () => status)
+    ipcMain.removeHandler('nuvem.tentarNovamente')
+    ipcMain.handle('nuvem.sincronizar', () => status)
+    ipcMain.handle('nuvem.tentarNovamente', (_e, id) => {
+      if (id !== 'exclusao-teste') throw Error('Operação incorreta')
+      status.pendentes = 0
+      status.falhas = []
+      status.erro = null
+      return status
+    })
+  })
+  await page.getByRole('button', { name: 'Sincronizar agora', exact: true }).click()
+  await page
+    .getByText(
+      'A operação continua guardada neste computador. Outras alterações podem ser recebidas e enviadas.',
+      { exact: true }
+    )
+    .waitFor()
+  await page
+    .getByRole('button', { name: 'Uma alteração precisa de atenção', exact: true })
+    .waitFor()
+  await page.screenshot({ path: join(pasta, 'falha-isolada.png'), fullPage: true })
+  await page.getByRole('button', { name: 'Tentar enviar novamente', exact: true }).click()
+  await page.getByText('Conta conectada · 0 alterações aguardando envio', { exact: true }).waitFor()
+  assert.equal(
+    await page.getByRole('button', { name: 'Tentar enviar novamente', exact: true }).count(),
+    0
+  )
+  await page.getByRole('button', { name: 'Nuvem sincronizada', exact: true }).waitFor()
+  await page.screenshot({ path: join(pasta, 'pendencias-resolvidas.png'), fullPage: true })
   writeFileSync(
     join(pasta, 'resultado.json'),
     JSON.stringify(
@@ -131,6 +186,8 @@ try {
         recuperacaoVisivel: true,
         confirmacao: true,
         pendenciasPreservadas: 37,
+        falhaIsolada: true,
+        novaTentativa: true,
         larguras: [1024, 1440]
       },
       null,

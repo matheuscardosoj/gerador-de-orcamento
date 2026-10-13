@@ -250,3 +250,63 @@ it('restaura estornos, versões e números de recibos excluídos sem ressuscitar
     sql.get('SELECT 1 FROM numeros_usados WHERE tipo=? AND numero=?', ['recibo', r.numero])
   ).toBeTruthy()
 })
+it('guarda os quatro estados da fila no backup e restaura ou mescla somente como evidência', async () => {
+  await perfil('fila-origem')
+  repos.semear()
+  for (const [n, estado] of ['pendente', 'preservada', 'conflito', 'falha'].entries())
+    sql.run(
+      'INSERT INTO fila_nuvem(id,entidade,base,payload,criado_em,geracao,grupo,estado,erro) VALUES(?,?,?,?,?,?,?,?,?)',
+      [
+        `op-${n}`,
+        `clientes:${n}`,
+        n,
+        JSON.stringify({ tabela: 'clientes', id: String(n), row: null }),
+        '2026-10-12T12:00:00Z',
+        3,
+        `grupo-${n}`,
+        estado,
+        estado === 'falha' ? 'Falha preservada' : null
+      ]
+    )
+  sql.run('INSERT INTO conflitos_nuvem VALUES(?,?,?,?)', [
+    'op-2',
+    'clientes:2',
+    'Conflito preservado',
+    'null'
+  ])
+  const antes = sql.all('SELECT * FROM fila_nuvem ORDER BY id')
+  const caminho = join(raiz, 'fila.gdo-backup')
+  dados.exportarDadosPara(caminho)
+  expect(sql.all('SELECT * FROM fila_nuvem ORDER BY id')).toEqual(antes)
+  const copia = new Database(caminho)
+  try {
+    expect(copia.get('SELECT COUNT(*) AS n FROM fila_nuvem')).toEqual({ n: 0 })
+    const eventos = copia.all(
+      "SELECT dados FROM auditoria_colaboracao WHERE acao='backup:operacao-nao-confirmada' ORDER BY entidade"
+    ) as Array<{ dados: string }>
+    expect(eventos.map((e) => JSON.parse(e.dados).operacao)).toEqual(
+      antes.map((op) => ({ ...op, opid: op.id }))
+    )
+  } finally {
+    copia.close()
+  }
+  await perfil('fila-restauracao')
+  repos.semear()
+  dados.importarDadosDe(caminho, 'restaurar')
+  expect(sql.all('SELECT * FROM fila_nuvem')).toEqual([])
+  expect(
+    sql.get(
+      "SELECT COUNT(*) AS n FROM auditoria_colaboracao WHERE acao='backup:operacao-nao-confirmada'"
+    )?.n
+  ).toBe(4)
+  await perfil('fila-mesclagem')
+  repos.semear()
+  dados.importarDadosDe(caminho, 'mesclar')
+  dados.importarDadosDe(caminho, 'mesclar')
+  expect(sql.all('SELECT * FROM fila_nuvem')).toEqual([])
+  expect(
+    sql.get(
+      "SELECT COUNT(*) AS n FROM auditoria_colaboracao WHERE acao='backup:operacao-nao-confirmada'"
+    )?.n
+  ).toBe(4)
+})

@@ -97,7 +97,7 @@ try {
     'Conteúdo comercial alterado pela migração.'
   )
   const migrada = new Database(join(pasta, 'base-migrada.gdo-backup'))
-  assert.equal(migrada.get('PRAGMA user_version').user_version, 10)
+  assert.equal(migrada.get('PRAGMA user_version').user_version, 11)
   migrada.close()
   for (const largura of [1024, 1440, 2560]) {
     await app.evaluate(({ BrowserWindow }, l) => {
@@ -277,7 +277,7 @@ try {
   const resultado = {
     pasta,
     interfaceComApiSimulada: true,
-    migracaoSchema: 10,
+    migracaoSchema: 11,
     tabelasPreservadas: tabelas.length,
     contagens: {
       orcamentos: inicial.orcamentos.length,

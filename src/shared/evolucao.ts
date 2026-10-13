@@ -81,6 +81,7 @@ export interface StatusNuvem {
   atualizacaoPendente?: AtualizacaoNumeracaoPendente | null
   backupAtualizacao?: string | null
   pendenciasPreservadas?: number
+  falhas?: Array<{ id: string; entidade: string; detalhe: string }>
   reservas: Record<TipoDocumento, number>
   empresaId?: string
   usuarioId?: string

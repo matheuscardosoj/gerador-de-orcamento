@@ -6,6 +6,7 @@ import { computadorId } from './versoes'
 import type { ControleEdicao, MembroEmpresa, TipoDocumento } from '@shared/evolucao'
 import { avisarDados } from './eventos'
 import type { InfoNumeracao, ResultadoNumeracao } from '@shared/api'
+import { filaAtiva, temOperacaoAtiva } from './fila-nuvem'
 
 export async function numeracaoCompartilhada(
   tipo: TipoDocumento,
@@ -152,9 +153,7 @@ export async function controlarEdicao(
       )
     if (acao === 'recuperar' && (status.pendentes || status.conflitos.length)) {
       const { preservarConflitos } = await import('./rascunhos')
-      preservarConflitos(
-        all('SELECT DISTINCT entidade FROM fila_nuvem').map((l) => texto(l.entidade))
-      )
+      preservarConflitos([...new Set(filaAtiva().map((l) => texto(l.entidade)))])
     }
     if (acao === 'offline') {
       const { orcamentosRepo, relatoriosRepo } = await import('./repositories')
@@ -243,7 +242,7 @@ export async function autorizarGravacao(tipo: TipoDocumento, id: string): Promis
   if (protocoloNuvem() < 2) return
   if (
     !get('SELECT 1 FROM sincronizacao WHERE entidade=?', [`${tipo}:${id}`]) &&
-    get('SELECT 1 FROM fila_nuvem WHERE entidade=?', [`${tipo}:${id}`])
+    temOperacaoAtiva(`${tipo}:${id}`)
   )
     return
   const controle = get('SELECT * FROM edicoes_documento WHERE tipo=? AND documento_id=?', [
@@ -274,7 +273,7 @@ export async function autorizarEmissao(tipo: TipoDocumento, id: string): Promise
     return
   await autorizarGravacao(tipo, id)
   const s = await sincronizarNuvem()
-  if (s.erro || get('SELECT 1 FROM fila_nuvem WHERE entidade=?', [`${tipo}:${id}`]))
+  if (s.erro || temOperacaoAtiva(`${tipo}:${id}`))
     throw new Error(
       'Sincronize o documento antes de emitir online. Para emissão sem internet, prepare o documento offline enquanto conectado.'
     )
