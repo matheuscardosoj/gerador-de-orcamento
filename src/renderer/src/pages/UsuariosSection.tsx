@@ -18,8 +18,18 @@ import {
 import { DataTableFrame, TableActions } from '../ui/dataTable'
 import { correspondeBusca } from '@shared/historico-preferencias'
 import type { MembroEmpresa, StatusNuvem } from '@shared/evolucao'
+import { useConta } from '../components/ContaGate'
+import { ConvitesSection } from './ConvitesSection'
 
-export function UsuariosSection({
+export function UsuariosSection(props: {
+  novo: boolean
+  setNovo: (novo: boolean) => void
+}): JSX.Element {
+  const { conta } = useConta()
+  return conta.central ? <ConvitesSection {...props} /> : <UsuariosLegadosSection {...props} />
+}
+
+function UsuariosLegadosSection({
   novo,
   setNovo
 }: {

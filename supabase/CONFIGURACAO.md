@@ -1,4 +1,8 @@
-# Nuvem da empresa — versão 1.5
+# Nuvem da empresa — protocolo 3 / esquema local 11
+
+> Este guia descreve a configuração existente por projeto da empresa. O acesso
+> central para múltiplas empresas está em desenvolvimento; não use seus scripts
+> em produção antes da validação e da entrega autorizada.
 
 Use um projeto Supabase por empresa. Cada pessoa pode ter seu próprio login, vinculado à mesma empresa em **Configurações → Usuários**. Todos os membros ativos têm acesso completo; não é possível remover o último membro ativo. Preferências dos históricos e configuração da IA permanecem locais.
 
@@ -9,9 +13,9 @@ Use um projeto Supabase por empresa. Cada pessoa pode ter seu próprio login, vi
 1. Sincronize todos os computadores, resolva pendências e exporte um backup em **Dados e backup**. Salve as edições e feche todos os aplicativos.
 2. Guarde uma exportação remota verificada. O ensaio `scripts/verificar-migracao-colaboracao.mjs` compara essa cópia em PostgreSQL isolado, incluindo documentos, valores, imagens, versões e reservas.
 3. No SQL Editor do projeto existente, execute **schema-colaboracao.sql inteiro**, incluído com a atualização. O botão **Copiar configuração do banco** fornece esse script. Não publique novamente a base nem apague tabelas.
-4. A migração transacional preserva números oficiais, chaves técnicas, pagamentos, imagens e versões. A conta atual torna-se o primeiro membro. Documentos ativos recebem IDs internos de 1 em diante por tipo, ordenados por data, criação, número original e chave técnica. Reexecutar não reinicia os IDs.
-5. Atualize **todos os computadores para 1.5** antes de editar. Gravações antigas são bloqueadas pelo servidor para proteger edição e pagamentos. O SQLite local migra automaticamente para o esquema 9, com backup verificado anterior à mudança.
-6. Abra a versão atualizada com o mesmo usuário do Windows. A base e a sessão existentes continuam na pasta de dados. Confira **0 alterações aguardando envio**, ausência de conflitos e **Tempo real conectado**. Confira documentos e IDs nos históricos.
+4. Na passagem de um protocolo anterior para o protocolo 3, a migração autorizada organiza a numeração dos documentos atuais de 1 em diante por tipo, registrando mapa e novas versões. Preserva chaves técnicas, pagamentos, imagens e versões antigas com os números anteriores. A conta atual torna-se o primeiro membro. Reexecutar o script não repete a renumeração.
+5. Atualize **todos os computadores para 1.5** antes de editar. Gravações antigas são bloqueadas pelo servidor para proteger edição e pagamentos. O SQLite local migra automaticamente para o esquema 11, com backup verificado anterior à mudança.
+6. Abra a versão atualizada com o mesmo usuário do Windows. A base e a sessão existentes continuam na pasta de dados. Confira **0 alterações aguardando envio**, ausência de conflitos e **Tempo real conectado**. Confira documentos e números nos históricos. Se houver operações antigas preservadas, revise a atualização antes de adotar a base; não serão enviadas automaticamente.
 
 Um erro no SQL deve reverter a transação. Não execute novamente o esquema antigo após concluir a migração. Restauração local e restauração da nuvem são operações distintas: preserve os backups e investigue o erro antes de publicar dados.
 
@@ -36,19 +40,20 @@ Um erro no SQL deve reverter a transação. Não execute novamente o esquema ant
 
 Em **Table Editor → public**, consulte:
 
-| Tabelas                                                              | Conteúdo                                                |
-| -------------------------------------------------------------------- | ------------------------------------------------------- |
-| empresas, membros_empresa                                            | Empresa e pessoas vinculadas                            |
-| clientes, servicos                                                   | Clientes e catálogo; apenas nome obrigatório no cliente |
-| orcamentos, itens_orcamento, materiais_orcamento, textos_orcamento   | Propostas, valores e condições                          |
-| relatorios, itens_relatorio, lancamentos_relatorio, textos_relatorio | Serviços executados, adiantamentos, reembolsos e saldo  |
-| recibos, recebimentos                                                | Cobranças, recibos e lançamentos, incluindo estornos    |
-| imagens, anexos_orcamento, anexos_relatorio                          | Imagens em texto e referências                          |
-| documentos, versoes_documentos, imagens_versoes                      | Registros permanentes, snapshots e fotos das versões    |
-| identificadores_documento, numeros_emitidos                          | IDs internos e números oficiais protegidos              |
-| computadores, dispositivos_usuarios, reservas_numeros                | Dispositivos e números reservados/utilizados            |
-| edicoes_documento, pedidos_edicao, auditoria_colaboracao             | Controle de edição, solicitações e autoria              |
-| observacoes_padrao, formas_pagamento_padrao, configuracoes_empresa   | Padrões comerciais                                      |
+| Tabelas                                                                   | Conteúdo                                                |
+| ------------------------------------------------------------------------- | ------------------------------------------------------- |
+| empresas, membros_empresa                                                 | Empresa e pessoas vinculadas                            |
+| clientes, servicos                                                        | Clientes e catálogo; apenas nome obrigatório no cliente |
+| orcamentos, itens_orcamento, materiais_orcamento, textos_orcamento        | Propostas, valores e condições                          |
+| relatorios, itens_relatorio, lancamentos_relatorio, textos_relatorio      | Serviços executados, adiantamentos, reembolsos e saldo  |
+| recibos, recebimentos                                                     | Cobranças, recibos e lançamentos, incluindo estornos    |
+| imagens, anexos_orcamento, anexos_relatorio                               | Imagens em texto e referências                          |
+| documentos, versoes_documentos, imagens_versoes                           | Registros permanentes, snapshots e fotos das versões    |
+| numeros_documentos, numeros_emitidos, mapa_numeracao, migracoes_numeracao | Números definitivos e auditoria da organização inicial  |
+| autoria_documentos                                                        | Autoria vinculada às chaves técnicas dos documentos     |
+| computadores, dispositivos_usuarios                                       | Dispositivos e usuários vinculados                      |
+| edicoes_documento, pedidos_edicao, auditoria_colaboracao                  | Controle de edição, solicitações e autoria              |
+| observacoes_padrao, formas_pagamento_padrao, configuracoes_empresa        | Padrões comerciais                                      |
 
 Detalhes do transporte ficam no schema **sincronizacao**. **gdo_entities** é uma consulta que reconstrói dados a partir das tabelas, sem outra cópia das imagens. Edite pelo app para manter versões, números e pagamentos consistentes.
 
@@ -60,7 +65,7 @@ Detalhes do transporte ficam no schema **sincronizacao**. **gdo_entities** é um
 - Documentos novos offline ficam **Aguardando numeração**. Podem ser editados e salvos como rascunhos; a emissão oficial aguarda a sincronização.
 - A migração para protocolo 3 organiza os documentos atuais de 1 em diante por tipo, cria novas versões e conserva as versões anteriores com os números originais. Depois da migração, exclusões não renumeram os demais documentos.
 
-Números abandonados e reservas distribuídas não são reutilizados. Alterar a sequência futura não modifica documentos existentes.
+O protocolo 3 não distribui novas faixas antecipadas. Números utilizados ou abandonados não são reutilizados. Alterar a sequência futura não modifica documentos existentes; excluir um documento não renumera os demais.
 
 ## Atualizações e edição
 
@@ -72,7 +77,7 @@ O bloqueio online dura 120 segundos e renova a cada 30 enquanto o editor está a
 
 Antes de perder a internet, use **Preparar offline**. Sincroniza conteúdo, fotos e dependências, guarda a revisão de partida e reserva autorização exclusiva de usuário/computador para emissão e operações financeiras. Relatório e recibos relacionados são protegidos em conjunto. A autorização offline continua exclusiva; documentos novos recebem o número definitivo somente ao sincronizar.
 
-Recuperar controle revoga a geração anterior no servidor. Um computador desconectado descobre a revogação ao reconectar; seu trabalho fica como rascunho para comparar ou copiar. Reservas não voltam a ficar disponíveis.
+Recuperar controle revoga a geração anterior no servidor. Um computador desconectado descobre a revogação ao reconectar; seu trabalho fica como rascunho para comparar ou copiar. A recuperação não libera números já utilizados para reutilização.
 
 ## Conflitos e pagamentos
 
@@ -86,7 +91,7 @@ O plano Free oferece 500 MB de banco; pouca atividade pode pausar projetos. Limi
 
 Base64 acrescenta cerca de um terço aos bytes originais. Fotos novas são comprimidas/deduplicadas. O app alerta em 80% e 90% e não apaga versões automaticamente.
 
-Backups incluem documentos, imagens, versões, recebimentos, rascunhos, IDs conhecidos e preferências locais. Não transportam sessão, dispositivo, bloqueios ou autorização offline. Restaurar não publica nem substitui automaticamente a nuvem. Guarde a cópia anterior à migração e teste restauração em perfil separado.
+Backups incluem documentos, imagens, versões, recebimentos, rascunhos, chaves técnicas e preferências locais. Não transportam sessão, dispositivo, bloqueios ou autorização offline. Operações não confirmadas são preservadas na auditoria do backup, sem republicação automática ao restaurar ou mesclar. Restaurar não publica nem substitui automaticamente a nuvem. Guarde a cópia anterior à migração e teste restauração em perfil separado.
 
 ## Conferência entre computadores
 

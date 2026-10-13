@@ -1,0 +1,2 @@
+[functions.central-contas]
+verify_jwt = false

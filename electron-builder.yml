@@ -4,23 +4,16 @@ directories:
   output: release
   buildResources: build
 afterPack: ./scripts/afterPack.cjs
+# Apenas o código compilado entra no asar. O electron-builder acrescenta
+# package.json e dependências de produção; SQL/IA entram via extraResources.
 files:
-  - '!**/.vscode/*'
-  - '!src/*'
-  # Artefatos de builds anteriores nunca fazem parte do aplicativo. Sem esta
-  # regra, um instalador candidato poderia embutir a própria pasta release.
-  - '!release/**'
-  # Saídas temporárias de testes e validações também não pertencem ao aplicativo.
-  # Elas podem conter uma cópia completa da instalação e dobrar o instalador.
-  - '!output/**'
-  - '!electron.vite.config.{js,ts,mjs,cjs}'
-  - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
-  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
-  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
-  # `resources/` entra só via extraResources; sem esta exclusão o modelo de IA
-  # (>1 GB) seria copiado duas vezes e o NSIS estouraria o limite de memória.
-  - '!resources/**'
+  - out/**/*
+  - package.json
 extraResources:
+  - from: resources
+    to: .
+    filter:
+      - servico.json
   - from: supabase
     to: supabase
     filter:

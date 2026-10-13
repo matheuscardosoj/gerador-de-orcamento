@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react'
 import { Cloud, RefreshCw, LogOut } from 'lucide-react'
 import { api } from '../lib/api'
 import { useNav } from '../lib/nav'
+import { useConta } from '../components/ContaGate'
 import type { ConfigNuvem, StatusNuvem } from '@shared/types'
 import { mensagemErro } from '@shared/erros'
+import { resumirSincronizacao } from '@shared/status-sincronizacao'
 import {
   Button,
   Card,
@@ -16,6 +18,7 @@ import {
 } from '../ui/primitives'
 export function NuvemSection(): JSX.Element {
   const { navegar } = useNav()
+  const { conta } = useConta()
   const [c, setC] = useState<ConfigNuvem>({ url: '', chavePublica: '', email: '' })
   const [senha, setSenha] = useState('')
   const [modo, setModo] = useState<'publicar' | 'baixar'>('publicar')
@@ -49,6 +52,7 @@ export function NuvemSection(): JSX.Element {
       setOcupado(false)
     }
   }
+  const resumo = resumirSincronizacao(s)
   const mb = (s?.bytesBanco ?? 0) / 1024 / 1024
   return (
     <Card className="p-6">
@@ -56,83 +60,98 @@ export function NuvemSection(): JSX.Element {
         title="Nuvem da empresa"
         description="Dados compartilhados com os usuários e computadores da empresa"
       />
-      <p className="mb-4 text-sm text-slate-600">
-        Use o mesmo projeto Supabase nos computadores desta empresa. Cada pessoa pode usar seu
-        próprio login, vinculado em Usuários. Plano gratuito: 500 MB de banco; pouca atividade pode
-        pausar o projeto.
-      </p>
-      <details className="mb-4 rounded-lg border border-slate-200 p-4 text-sm text-slate-600">
-        <summary className="cursor-pointer font-medium text-slate-700">
-          Como configurar minha empresa na nuvem
-        </summary>
-        <ol className="mt-3 list-decimal space-y-3 pl-5">
-          <li>
-            Se você já usa uma versão antiga, primeiro exporte um backup em Dados e backup, feche o
-            aplicativo e instale a atualização com o mesmo usuário do Windows. Abra a versão
-            atualizada e confira seus clientes, documentos e fotos: a migração local é automática e
-            cria um backup verificado. Exporte uma nova cópia antes de publicar.
-          </li>
-          <li>
-            Entre no{' '}
-            <a
-              className="text-teal-700 underline"
-              href="https://supabase.com/dashboard"
-              target="_blank"
-              rel="noreferrer"
-            >
-              painel do Supabase
-            </a>
-            , crie uma organização no plano Free e um projeto exclusivo para sua empresa. Escolha a
-            região mais próxima e guarde a senha do banco.
-          </li>
-          <li>
-            Abra o SQL Editor do projeto, crie uma consulta, cole a configuração copiada pelo botão
-            abaixo e execute o script inteiro com Run. Se já existe uma nuvem conectada, sincronize
-            e feche todos os aplicativos antes da atualização. A versão 1.5 exige o novo protocolo:
-            atualize todos os computadores. Não é necessário criar um Storage.
-          </li>
-          <li>
-            Em Authentication → Users, crie e confirme a primeira conta com e-mail e senha. A conta
-            atual continua vinculada após a migração. Para adicionar outra pessoa, crie sua conta no
-            painel e vincule o e-mail em Configurações → Usuários. A senha do banco é diferente.
-          </li>
-          <li>
-            Copie a URL do projeto e a chave pública publishable no painel de conexão / API Keys.
-            Preencha esses dados e o login abaixo.
-          </li>
-          <li>
-            No computador que possui seus dados já migrados, escolha “Publicar os dados locais em
-            uma nuvem vazia”. Nos demais, escolha “Baixar a base da empresa”. Clique em Conectar e
-            aguarde a sincronização.
-          </li>
-          <li>
-            Faça a primeira sincronização online. No editor, use os controles de edição para
-            solicitar, liberar ou transferir. Antes de se desconectar, use “Preparar offline” para
-            baixar as dependências e reservar a autorização de emissão. Os números oficiais já
-            utilizados são preservados; documentos novos recebem o número definitivo ao sincronizar.
-          </li>
-        </ol>
-        <Button
-          className="mt-4"
-          variant="outline"
-          disabled={ocupado}
-          onClick={() => {
-            setErro('')
-            void api.nuvem
-              .copiarInstalacao()
-              .then(() => setInstalacaoCopiada(true))
-              .catch((e) => setErro(mensagemErro(e)))
-          }}
-        >
-          {instalacaoCopiada
-            ? 'Configuração copiada — cole no SQL Editor'
-            : 'Copiar configuração do banco'}
-        </Button>
-        <p className="mt-3 text-xs text-slate-500">
-          A configuração fornecida não contém senhas. As permissões restringem os dados aos membros
-          ativos da empresa, e os avisos de atualização usam um canal privado.
+      {conta.central ? (
+        <p className="mb-4 text-sm text-slate-600">
+          Seus dados salvos são compartilhados automaticamente com os membros da empresa. Gerencie
+          seu acesso em Minha conta e convide pessoas em Usuários.
         </p>
-      </details>
+      ) : (
+        <>
+          <p className="mb-4 text-sm text-slate-600">
+            Use o mesmo projeto Supabase nos computadores desta empresa. Cada pessoa pode usar seu
+            próprio login, vinculado em Usuários. Plano gratuito: 500 MB de banco; pouca atividade
+            pode pausar o projeto.
+          </p>
+          <details className="mb-4 rounded-lg border border-slate-200 p-4 text-sm text-slate-600">
+            <summary className="cursor-pointer font-medium text-slate-700">
+              Como configurar minha empresa na nuvem
+            </summary>
+            <ol className="mt-3 list-decimal space-y-3 pl-5">
+              <li>
+                Se você já usa uma versão antiga, primeiro exporte um backup em Dados e backup,
+                feche o aplicativo e instale a atualização com o mesmo usuário do Windows. Abra a
+                versão atualizada e confira seus clientes, documentos e fotos: a migração local é
+                automática e cria um backup verificado. Exporte uma nova cópia antes de publicar.
+              </li>
+              <li>
+                Entre no{' '}
+                <a
+                  className="text-teal-700 underline"
+                  href="https://supabase.com/dashboard"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  painel do Supabase
+                </a>
+                , crie uma organização no plano Free e um projeto exclusivo para sua empresa.
+                Escolha a região mais próxima e guarde a senha do banco.
+              </li>
+              <li>
+                Abra o SQL Editor do projeto, crie uma consulta, cole a configuração copiada pelo
+                botão abaixo e execute o script inteiro com Run. Se já existe uma nuvem conectada,
+                sincronize e feche todos os aplicativos antes da atualização. A versão 1.5 exige o
+                novo protocolo: atualize todos os computadores. Não é necessário criar um Storage.
+              </li>
+              <li>
+                Em Authentication → Users, crie e confirme a primeira conta com e-mail e senha. A
+                conta atual continua vinculada após a migração. Para adicionar outra pessoa, crie
+                sua conta no painel e vincule o e-mail em Configurações → Usuários. A senha do banco
+                é diferente.
+              </li>
+              <li>
+                Copie a URL do projeto e a chave pública publishable no painel de conexão / API
+                Keys. Preencha esses dados e o login abaixo.
+              </li>
+              <li>
+                No computador que possui seus dados já migrados, escolha “Publicar os dados locais
+                em uma nuvem vazia”. Nos demais, escolha “Baixar a base da empresa”. Clique em
+                Conectar e aguarde a sincronização.
+              </li>
+              <li>
+                Faça a primeira sincronização online. No editor, use os controles de edição para
+                solicitar, liberar ou transferir. Antes de se desconectar, use “Preparar offline”
+                para baixar as dependências e reservar a autorização de emissão. Os números oficiais
+                já utilizados são preservados; documentos novos recebem o número definitivo ao
+                sincronizar.
+              </li>
+            </ol>
+            <Button
+              className="mt-4"
+              variant="outline"
+              disabled={ocupado}
+              onClick={() => {
+                setErro('')
+                void api.nuvem
+                  .copiarInstalacao()
+                  .then(() => setInstalacaoCopiada(true))
+                  .catch((e) => setErro(mensagemErro(e)))
+              }}
+            >
+              {instalacaoCopiada
+                ? 'Configuração copiada — cole no SQL Editor'
+                : 'Copiar configuração do banco'}
+            </Button>
+            <p className="mt-3 text-xs text-slate-500">
+              A configuração fornecida não contém senhas. As permissões restringem os dados aos
+              membros ativos da empresa, e os avisos de atualização usam um canal privado.
+            </p>
+          </details>
+        </>
+      )}
+      <Mensagem tom={resumo.tom} className="mb-4">
+        <p className="font-semibold">{resumo.titulo}</p>
+        <p>{resumo.descricao}</p>
+      </Mensagem>
       {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
       {s?.erro && mensagemErro(s.erro) !== erro && <Mensagem className="mb-4">{s.erro}</Mensagem>}
       {s?.atualizacaoPendente && (
@@ -180,76 +199,88 @@ export function NuvemSection(): JSX.Element {
           </Button>
         </section>
       )}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Field label="URL do projeto">
-          <Input
-            value={c.url}
-            onChange={(e) => setC({ ...c, url: e.target.value })}
-            placeholder="https://seu-projeto.supabase.co"
-          />
-        </Field>
-        <Field label="Chave pública (publishable)">
-          <Input
-            value={c.chavePublica}
-            onChange={(e) => setC({ ...c, chavePublica: e.target.value })}
-          />
-        </Field>
-        <Field label="E-mail do usuário">
-          <Input
-            type="email"
-            value={c.email}
-            onChange={(e) => setC({ ...c, email: e.target.value })}
-          />
-        </Field>
-        <Field label="Senha">
-          <Input
-            type="password"
-            value={senha}
-            onChange={(e) => setSenha(e.target.value)}
-            autoComplete="current-password"
-          />
-        </Field>
-        {!s?.configurada && (
-          <Field label="Primeira conexão neste computador">
-            <Select value={modo} onChange={(e) => setModo(e.target.value as typeof modo)}>
-              <option value="publicar">Publicar os dados locais em uma nuvem vazia</option>
-              <option value="baixar">
-                Baixar a base da empresa — salva backup dos dados locais
-              </option>
-            </Select>
+      {!conta.central && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label="URL do projeto">
+            <Input
+              value={c.url}
+              onChange={(e) => setC({ ...c, url: e.target.value })}
+              placeholder="https://seu-projeto.supabase.co"
+            />
           </Field>
-        )}
-        <div className="mt-2 flex flex-wrap gap-2 md:col-span-2">
-          <Button
-            icon={Cloud}
-            disabled={ocupado || !senha || !c.url || !c.chavePublica || !c.email}
-            onClick={() => setConfirmar(true)}
-          >
-            Conectar
-          </Button>
-          <Button
-            icon={RefreshCw}
-            disabled={ocupado || !s?.autenticada}
-            variant="outline"
-            onClick={() => void executar(() => api.nuvem.sincronizar())}
-          >
-            Sincronizar agora
-          </Button>
-          <Button
-            icon={LogOut}
-            disabled={ocupado || !s?.autenticada}
-            variant="outline"
-            onClick={() =>
-              void executar(async () => {
-                await api.nuvem.sair()
-                return api.nuvem.status()
-              })
-            }
-          >
-            Sair da conta
-          </Button>
+          <Field label="Chave pública (publishable)">
+            <Input
+              value={c.chavePublica}
+              onChange={(e) => setC({ ...c, chavePublica: e.target.value })}
+            />
+          </Field>
+          <Field label="E-mail do usuário">
+            <Input
+              type="email"
+              value={c.email}
+              onChange={(e) => setC({ ...c, email: e.target.value })}
+            />
+          </Field>
+          <Field label="Senha">
+            <Input
+              type="password"
+              value={senha}
+              onChange={(e) => setSenha(e.target.value)}
+              autoComplete="current-password"
+            />
+          </Field>
+          {!s?.configurada && (
+            <Field label="Primeira conexão neste computador">
+              <Select value={modo} onChange={(e) => setModo(e.target.value as typeof modo)}>
+                <option value="publicar">Publicar os dados locais em uma nuvem vazia</option>
+                <option value="baixar">
+                  Baixar a base da empresa — salva backup dos dados locais
+                </option>
+              </Select>
+            </Field>
+          )}
+          <div className="mt-2 flex flex-wrap gap-2 md:col-span-2">
+            <Button
+              icon={Cloud}
+              disabled={ocupado || !senha || !c.url || !c.chavePublica || !c.email}
+              onClick={() => setConfirmar(true)}
+            >
+              Conectar
+            </Button>
+            <Button
+              icon={RefreshCw}
+              disabled={ocupado || !s?.autenticada}
+              variant="outline"
+              onClick={() => void executar(() => api.nuvem.sincronizar())}
+            >
+              Sincronizar agora
+            </Button>
+            <Button
+              icon={LogOut}
+              disabled={ocupado || !s?.autenticada}
+              variant="outline"
+              onClick={() =>
+                void executar(async () => {
+                  await api.nuvem.sair()
+                  return api.nuvem.status()
+                })
+              }
+            >
+              Sair da conta
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
+      {conta.central && (
+        <Button
+          icon={RefreshCw}
+          disabled={ocupado || !s?.autenticada}
+          variant="outline"
+          onClick={() => void executar(() => api.nuvem.sincronizar())}
+        >
+          Sincronizar agora
+        </Button>
+      )}
       {s && (
         <div className="mt-6 space-y-3 border-t border-slate-200 pt-6 text-sm text-slate-600">
           <p>
@@ -257,10 +288,26 @@ export function NuvemSection(): JSX.Element {
             aguardando envio
           </p>
           {!!s.pendenciasPreservadas && (
-            <p>
-              {s.pendenciasPreservadas} operações anteriores guardadas separadamente neste
-              computador. Elas não foram publicadas na nuvem.
-            </p>
+            <details className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <summary className="cursor-pointer font-medium text-slate-700">
+                Operações antigas preservadas ({s.pendenciasPreservadas})
+              </summary>
+              <div className="mt-3 space-y-3">
+                <p>
+                  Estes registros foram guardados durante uma atualização. Eles não fazem parte das
+                  alterações aguardando envio e não impedem a sincronização.
+                </p>
+                <p>
+                  O conteúdo continua preservado neste computador para consulta e não será reenviado
+                  automaticamente.
+                </p>
+                {s.backupAtualizacao && (
+                  <p className="break-words text-xs text-slate-500">
+                    Cópia de segurança verificada: {s.backupAtualizacao}
+                  </p>
+                )}
+              </div>
+            </details>
           )}
           {(s.falhas ?? []).map((x) => (
             <div
@@ -280,7 +327,7 @@ export function NuvemSection(): JSX.Element {
               </Button>
             </div>
           ))}
-          {s.backupAtualizacao && (
+          {!s.pendenciasPreservadas && s.backupAtualizacao && (
             <p className="break-words">Backup verificado da atualização: {s.backupAtualizacao}</p>
           )}
           {s.autenticada && (
@@ -293,7 +340,7 @@ export function NuvemSection(): JSX.Element {
                   : s.tempoReal === 'conectando'
                     ? 'conectando…'
                     : s.tempoReal === 'indisponivel'
-                      ? 'canal indisponível — recuperação periódica ativa'
+                      ? 'atualizações automáticas indisponíveis — novas tentativas serão feitas'
                       : 'desconectado'}
             </p>
           )}
@@ -400,7 +447,7 @@ export function NuvemSection(): JSX.Element {
         description={
           modo === 'baixar' && !s?.configurada
             ? 'Uma cópia de segurança será criada e a base local será substituída pelos dados da nuvem. Após conectar, reabra os documentos.'
-            : 'Os dados desta empresa serão compartilhados com os computadores conectados à mesma conta.'
+            : 'Os dados desta empresa serão compartilhados com os usuários autorizados da equipe.'
         }
         onCancel={() => setConfirmar(false)}
         onConfirm={() => {

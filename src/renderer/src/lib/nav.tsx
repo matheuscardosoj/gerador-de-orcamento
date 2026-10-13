@@ -10,6 +10,18 @@ import {
 import { api } from './api'
 import { ConfirmDialog } from '../ui/primitives'
 
+export type AbaConfiguracoes =
+  | 'conta'
+  | 'nuvem'
+  | 'usuarios'
+  | 'empresa'
+  | 'parametros'
+  | 'observacoes'
+  | 'pagamentos'
+  | 'numeracao'
+  | 'dados'
+  | 'ia'
+
 export type Rota =
   | { nome: 'historico' }
   | { nome: 'editor'; orcamentoId?: string }
@@ -17,7 +29,7 @@ export type Rota =
   | { nome: 'editorRelatorio'; relatorioId?: string }
   | { nome: 'recibos'; reciboId?: string; origem?: { tipo: 'orcamento' | 'relatorio'; id: string } }
   | { nome: 'cadastros' }
-  | { nome: 'configuracoes' }
+  | { nome: 'configuracoes'; aba?: AbaConfiguracoes }
 
 interface NavContexto {
   rota: Rota
@@ -62,7 +74,7 @@ export function NavProvider({ children }: { children: ReactNode }): JSX.Element 
       <ConfirmDialog
         open={pendente !== null}
         title="Alterações não salvas"
-        description="Se você sair deste editor agora, as alterações feitas desde o último salvamento serão perdidas."
+        description="Se você sair agora, as alterações feitas desde o último salvamento serão perdidas."
         confirmLabel="Descartar alterações"
         cancelLabel="Continuar editando"
         onCancel={() => setPendente(null)}

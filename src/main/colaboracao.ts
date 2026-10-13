@@ -68,6 +68,9 @@ export async function definirNumeracaoCompartilhada(
   }
 }
 const editoresAtivos = new Set<string>()
+export function encerrarEdicoesConta(): void {
+  editoresAtivos.clear()
+}
 export async function acompanharEdicao(
   tipo: TipoDocumento,
   id: string,

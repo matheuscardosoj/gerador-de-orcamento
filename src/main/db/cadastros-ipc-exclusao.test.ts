@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vite
 import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { definirAcesso } from '../contas/acesso'
 
 type Handler = (evento: unknown, ...args: unknown[]) => Promise<unknown>
 const estado = vi.hoisted(() => ({ perfil: '', handlers: new Map<string, Handler>() }))
@@ -23,6 +24,7 @@ beforeAll(async () => {
   ;(await import('../ipc')).registrarIpc()
 })
 beforeEach(() => {
+  definirAcesso(true, 'administrador')
   estado.perfil = mkdtempSync(join(raiz, 'perfil-'))
   sql.abrirBanco()
   repos.semear()

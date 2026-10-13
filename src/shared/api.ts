@@ -77,6 +77,7 @@ export interface ResultadoImportacaoDados {
 }
 
 export interface AppApi {
+  conta: import('./conta').ContaApi
   rascunhos: {
     list(
       tipo?: import('./evolucao').TipoDocumento,

@@ -1,4 +1,6 @@
 import { numeroHistoricoReconhecido } from './numeros'
+import { contaApi } from './contas/servico'
+import { exigirAcesso, iniciarOperacao } from './contas/acesso'
 import { mensagemErro } from '../shared/erros'
 import { criarPayloadCadastroExcluido, type TabelaCadastro } from '@shared/cadastros-sincronizacao'
 import { recibosRepo } from './recibos'
@@ -102,8 +104,6 @@ async function selecionarLogo(): Promise<string | null> {
   }
 }
 
-// Mapa canal -> função. Registrado em loop via ipcMain.handle.
-// A geração de documentos (documentos.*) é registrada na Fase 5.
 const handlers: Record<string, (...args: unknown[]) => unknown> = {
   'rascunhos.list': (tipo, id) => listarRascunhos(tipo as never, id as string | undefined),
   'rascunhos.get': (id) => obterRascunho(String(id)),
@@ -240,9 +240,22 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
 }
 
 export function registrarIpc(): void {
+  for (const [acao, fn] of Object.entries(contaApi)) {
+    ipcMain.handle(`conta.${acao}`, async (_evento, ...args) => {
+      try {
+        return await (fn as (...valores: unknown[]) => Promise<unknown>)(...args)
+      } catch (erro) {
+        throw new Error(mensagemErro(erro))
+      }
+    })
+  }
   for (const [canal, fn] of Object.entries(handlers)) {
     ipcMain.handle(canal, async (_evento, ...args) => {
+      let finalizar: (() => void) | undefined
       try {
+        exigirAcesso(canal, args)
+        if (canal === 'nuvem.sair') return await contaApi.sair()
+        finalizar = iniciarOperacao()
         const dominio = canal.split('.')[0]
         if (
           (statusNuvem().atualizandoNumeracao || statusNuvem().atualizacaoPendente) &&
@@ -320,6 +333,8 @@ export function registrarIpc(): void {
         // Não serializar argumentos, sessão ou SQL para o renderer.
         // A causa original permanece no processo principal para diagnóstico.
         throw new Error(mensagemErro(erro), { cause: erro })
+      } finally {
+        finalizar?.()
       }
     })
   }

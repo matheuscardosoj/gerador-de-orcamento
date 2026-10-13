@@ -1,6 +1,8 @@
 import { RecibosPage } from './pages/RecibosPage'
+import { ContaGate } from './components/ContaGate'
 import { useEffect, useState } from 'react'
 import type { StatusNuvem } from '@shared/types'
+import { resumirSincronizacao } from '@shared/status-sincronizacao'
 import { NavProvider, useNav, type Rota } from './lib/nav'
 import { cn, AppIcon } from './ui/primitives'
 import {
@@ -98,19 +100,9 @@ function Sidebar(): JSX.Element {
         v{versao ?? '…'} · base da empresa
         <button
           className="mt-1 block rounded-lg text-left text-slate-600 hover:text-brand-tealDark focus:outline-none focus:ring-2 focus:ring-brand-teal/40"
-          onClick={() => navegar({ nome: 'configuracoes' })}
+          onClick={() => navegar({ nome: 'configuracoes', aba: 'nuvem' })}
         >
-          {nuvem?.configurada
-            ? nuvem.conflitos.length
-              ? 'Conflito de sincronização'
-              : nuvem.falhas?.length
-                ? 'Uma alteração precisa de atenção'
-                : nuvem.erro
-                  ? 'Offline / sincronização pendente'
-                  : nuvem.pendentes
-                    ? `${nuvem.pendentes} alterações para sincronizar`
-                    : 'Nuvem sincronizada'
-            : 'Dados neste computador'}
+          {resumirSincronizacao(nuvem).titulo}
         </button>
       </div>
     </aside>
@@ -139,7 +131,7 @@ function Conteudo(): JSX.Element {
     case 'cadastros':
       return <CadastrosPage />
     case 'configuracoes':
-      return <ConfiguracoesPage />
+      return <ConfiguracoesPage key={revisaoRota} />
     default:
       return <HistoricoPage />
   }
@@ -147,14 +139,16 @@ function Conteudo(): JSX.Element {
 
 function App(): JSX.Element {
   return (
-    <NavProvider>
-      <div className="flex h-full">
-        <Sidebar />
-        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-slate-100">
-          <Conteudo />
-        </main>
-      </div>
-    </NavProvider>
+    <ContaGate>
+      <NavProvider>
+        <div className="flex h-full">
+          <Sidebar />
+          <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-slate-100">
+            <Conteudo />
+          </main>
+        </div>
+      </NavProvider>
+    </ContaGate>
   )
 }
 

@@ -1,9 +1,45 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { AgendadorSincronizacao, iniciarTempoReal, pararTempoReal } from '../tempo-real'
+import {
+  AgendadorSincronizacao,
+  iniciarTempoReal,
+  pararTempoReal,
+  aguardarTempoReal
+} from '../tempo-real'
 
 afterEach(() => {
   pararTempoReal()
   vi.useRealTimers()
+})
+it('aguarda a renovação antiga e não reconecta depois de encerrar a conta', async () => {
+  vi.useFakeTimers()
+  let liberar!: () => void
+  const pendente = new Promise<void>((resolve) => {
+    liberar = resolve
+  })
+  const renovar = vi.fn(() => pendente)
+  const identidade = vi.fn(() => null)
+  iniciarTempoReal({
+    configuracao: () => ({ url: '', chavePublica: '', email: '' }),
+    identidade,
+    sincronizar: async () => null,
+    renovar,
+    estado: () => {}
+  })
+  await vi.advanceTimersByTimeAsync(30000)
+  expect(renovar).toHaveBeenCalledTimes(1)
+  pararTempoReal()
+  let terminou = false
+  const drenagem = aguardarTempoReal().then(() => {
+    terminou = true
+  })
+  await Promise.resolve()
+  expect(terminou).toBe(false)
+  const consultas = identidade.mock.calls.length
+  liberar()
+  await drenagem
+  await vi.advanceTimersByTimeAsync(60000)
+  expect(identidade).toHaveBeenCalledTimes(consultas)
+  expect(renovar).toHaveBeenCalledTimes(1)
 })
 
 it('recupera uma mudança que chega durante a consulta, sem consultas paralelas', async () => {

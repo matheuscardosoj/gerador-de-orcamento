@@ -2,10 +2,13 @@ import { mensagemErro } from '@shared/erros'
 import { PadroesConfig } from './PadroesConfig'
 import { NuvemSection } from './NuvemSection'
 import { UsuariosSection } from './UsuariosSection'
+import { MinhaContaSection } from './MinhaContaSection'
+import { useConta } from '../components/ContaGate'
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { Save, Check, Plus, Download, ArchiveRestore, Import } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAsync } from '../lib/hooks'
+import { useBloqueioEdicao, useNav, type AbaConfiguracoes } from '../lib/nav'
 import { PageShell, Tabs } from '../ui/layout'
 import {
   Button,
@@ -33,16 +36,7 @@ import {
   validarUrlOllamaLocal
 } from '@shared/validacao'
 
-type Aba =
-  | 'nuvem'
-  | 'usuarios'
-  | 'empresa'
-  | 'parametros'
-  | 'observacoes'
-  | 'pagamentos'
-  | 'numeracao'
-  | 'dados'
-  | 'ia'
+type Aba = AbaConfiguracoes
 
 type EstadoSalvar = { salvando: boolean; ok: boolean; disabled: boolean }
 const AcoesFormulario = createContext<{
@@ -51,7 +45,9 @@ const AcoesFormulario = createContext<{
 } | null>(null)
 
 export function ConfiguracoesPage(): JSX.Element {
-  const [aba, setAba] = useState<Aba>('empresa')
+  const { conta } = useConta()
+  const { rota, navegar } = useNav()
+  const aba: Aba = rota.nome === 'configuracoes' ? (rota.aba ?? 'empresa') : 'empresa'
   const [novoUsuario, setNovoUsuario] = useState(false)
   const [novoTexto, setNovoTexto] = useState(false)
   const [estadoSalvar, setEstadoSalvar] = useState<EstadoSalvar>({
@@ -67,9 +63,9 @@ export function ConfiguracoesPage(): JSX.Element {
         titulo="Configurações"
         descricao="Dados fixos, parâmetros de cálculo e textos padrão"
         acoes={
-          aba === 'usuarios' ? (
+          aba === 'usuarios' && (!conta.central || conta.empresa?.papel === 'administrador') ? (
             <Button icon={Plus} onClick={() => setNovoUsuario(true)}>
-              Vincular usuário
+              {conta.central ? 'Convidar usuário' : 'Vincular usuário'}
             </Button>
           ) : aba === 'observacoes' || aba === 'pagamentos' ? (
             <Button icon={Plus} onClick={() => setNovoTexto(true)}>
@@ -94,10 +90,11 @@ export function ConfiguracoesPage(): JSX.Element {
         <Tabs
           atual={aba}
           onChange={(aba) => {
-            setAba(aba)
+            navegar({ nome: 'configuracoes', aba })
             setNovoTexto(false)
           }}
           tabs={[
+            { id: 'conta', label: 'Minha conta' },
             { id: 'empresa', label: 'Empresa / Cabeçalho' },
             { id: 'parametros', label: 'Parâmetros financeiros' },
             { id: 'observacoes', label: 'Observações padrão' },
@@ -110,6 +107,7 @@ export function ConfiguracoesPage(): JSX.Element {
           ]}
         />
         {aba === 'nuvem' && <NuvemSection />}
+        {aba === 'conta' && <MinhaContaSection />}
         {aba === 'usuarios' && <UsuariosSection novo={novoUsuario} setNovo={setNovoUsuario} />}
         {aba === 'empresa' && <SecaoEmpresa />}
         {aba === 'parametros' && <SecaoParametros />}
@@ -191,11 +189,16 @@ function useMutacao<Operacao extends string>(): {
 function SecaoEmpresa(): JSX.Element {
   const { data, error: erroCarga } = useAsync(() => api.empresa.get(), [])
   const [form, setForm] = useState<EmpresaConfig | null>(null)
+  const [salvo, setSalvo] = useState('')
+  useBloqueioEdicao(!!form && JSON.stringify(form) !== salvo)
   const { operacao, ocupado, erro, executar, limparErro } = useMutacao<'salvar' | 'logo'>()
   const [ok, setOk] = useState(false)
 
   useEffect(() => {
-    if (data) setForm(data)
+    if (data) {
+      setForm(data)
+      setSalvo(JSON.stringify(data))
+    }
   }, [data])
 
   if (!form)
@@ -215,6 +218,7 @@ function SecaoEmpresa(): JSX.Element {
     e.preventDefault()
     const salvo = await executar('salvar', async () => {
       await api.empresa.save(form)
+      setSalvo(JSON.stringify(form))
     })
     if (salvo) setOk(true)
   }
@@ -387,12 +391,17 @@ function SecaoEmpresa(): JSX.Element {
 function SecaoParametros(): JSX.Element {
   const { data, error: erroCarga } = useAsync(() => api.parametros.get(), [])
   const [form, setForm] = useState<ParametrosFinanceiros | null>(null)
+  const [salvo, setSalvo] = useState('')
+  useBloqueioEdicao(!!form && JSON.stringify(form) !== salvo)
   const [salvando, setSalvando] = useState(false)
   const [ok, setOk] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
   useEffect(() => {
-    if (data) setForm(data)
+    if (data) {
+      setForm(data)
+      setSalvo(JSON.stringify(data))
+    }
   }, [data])
 
   if (!form)
@@ -419,6 +428,7 @@ function SecaoParametros(): JSX.Element {
     setErro(null)
     try {
       await api.parametros.save(form)
+      setSalvo(JSON.stringify(form))
       setOk(true)
     } catch (e) {
       setErro(mensagemErro(e))
@@ -569,13 +579,18 @@ function SecaoParametros(): JSX.Element {
 function SecaoIA(): JSX.Element {
   const { data, error: erroCarga } = useAsync(() => api.ia.get(), [])
   const [form, setForm] = useState<ConfigIA | null>(null)
+  const [salvo, setSalvo] = useState('')
+  useBloqueioEdicao(!!form && JSON.stringify(form) !== salvo)
   const [salvando, setSalvando] = useState(false)
   const [ok, setOk] = useState(false)
   const [status, setStatus] = useState<StatusIA | null>(null)
   const [testando, setTestando] = useState(false)
 
   useEffect(() => {
-    if (data) setForm(data)
+    if (data) {
+      setForm(data)
+      setSalvo(JSON.stringify(data))
+    }
   }, [data])
 
   if (!form)
@@ -604,6 +619,7 @@ function SecaoIA(): JSX.Element {
     setSalvando(true)
     try {
       await api.ia.save(form)
+      setSalvo(JSON.stringify(form))
       setOk(true)
     } catch (e) {
       setStatus({
@@ -626,6 +642,7 @@ function SecaoIA(): JSX.Element {
     setTestando(true)
     try {
       await api.ia.save(form)
+      setSalvo(JSON.stringify(form))
       setStatus(await api.ia.status())
     } catch (e) {
       setStatus({ modo: form.modo, disponivel: false, detalhe: mensagemErro(e) })

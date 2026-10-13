@@ -67,7 +67,18 @@ export function mensagemErro(erro: unknown, contexto?: string): string {
   )
     mensagem = 'Sua sessão expirou. Entre novamente na conta para continuar a sincronização.'
   else if (/^(?:User not found|Usuário não encontrado)\.?$/i.test(limpa))
-    mensagem = 'Conta não encontrada. Confira o e-mail e se o usuário foi criado no Supabase.'
+    mensagem = 'Conta não encontrada. Confira seu e-mail ou peça um convite ao administrador.'
+  else if (codigo === 'otp_expired' || /^Token has expired or is invalid/i.test(limpa))
+    mensagem =
+      'O código expirou ou não é válido. Solicite outro código e use o e-mail mais recente.'
+  else if (codigo === 'same_password' || /^New password should be different/i.test(limpa))
+    mensagem = 'Escolha uma senha diferente da atual.'
+  else if (codigo === 'weak_password')
+    mensagem =
+      'A senha não atende aos requisitos de segurança. Use uma senha mais longa e tente novamente.'
+  else if (codigo === 'over_email_send_rate_limit' || /^Email rate limit exceeded/i.test(limpa))
+    mensagem =
+      'O limite temporário de e-mails foi atingido. Aguarde antes de solicitar outro código.'
   else if (/^Campos incompatíveis com o esquema da nuvem/.test(limpa))
     mensagem =
       'O formato desta alteração não foi aceito pela nuvem. A operação foi preservada neste computador. Atualize o aplicativo e tente novamente; se persistir, envie esta mensagem ao suporte.'

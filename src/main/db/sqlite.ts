@@ -24,10 +24,19 @@ export function grupoTransacao(): string | null {
   return grupoAtual
 }
 let trava: { caminho: string; fd: number } | null = null
+let perfilDados: string | null = null
+
+export function selecionarPerfilDados(perfil: string | null): void {
+  if (conexao || trava) throw new Error('Feche a base atual antes de trocar de conta.')
+  if (perfil && !/^[a-f0-9]{64}$/.test(perfil)) throw new Error('Perfil de acesso inválido.')
+  perfilDados = perfil
+}
 
 /** Pasta `userData/data`, onde ficam o banco e os backups. */
 export function pastaDados(): string {
-  const dir = join(app.getPath('userData'), 'data')
+  const dir = perfilDados
+    ? join(app.getPath('userData'), 'perfis', perfilDados, 'data')
+    : join(app.getPath('userData'), 'data')
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
   return dir
 }

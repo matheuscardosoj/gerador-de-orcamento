@@ -14,7 +14,12 @@ import { exportarDadosPara } from './dados'
 import { join } from 'path'
 import { pastaDados } from './db/sqlite'
 import { avisarDados } from './eventos'
-import { iniciarTempoReal, pararTempoReal, avisarEstadoTempoReal } from './tempo-real'
+import {
+  iniciarTempoReal,
+  pararTempoReal,
+  avisarEstadoTempoReal,
+  aguardarTempoReal
+} from './tempo-real'
 import { randomUUID } from 'crypto'
 import { tabelaNumerosUsados, confirmarNumero } from './numeros'
 import {
@@ -43,6 +48,11 @@ type ContextoNuvem = {
   empresaId: string
   usuarioId: string
   usuarioNome: string
+  papel?: 'administrador' | 'membro'
+}
+let observarContexto: ((contexto: ContextoNuvem | null) => void) | null = null
+export function observarAcessoNuvem(observador: (contexto: ContextoNuvem | null) => void): void {
+  observarContexto = observador
 }
 let estadoTempoReal: NonNullable<StatusNuvem['tempoReal']> = 'desconectado'
 let erroTempoReal: string | null = null
@@ -87,17 +97,41 @@ type Sessao = {
   expires_at: number
   user: { id: string }
 }
+let sessaoVolatil: Sessao | null = null
+let lembrarSessao = true
+let empresaSelecionada: string | null = null
+let central = false
+export function configurarSessaoConta(
+  lembrar: boolean,
+  empresa: string | null,
+  usarCentral: boolean
+): void {
+  lembrarSessao = lembrar
+  empresaSelecionada = empresa
+  central = usarCentral
+}
 function sessao(): Sessao | null {
+  if (sessaoVolatil) return sessaoVolatil
   const s = config<string>('sessaoNuvem')
   return s ? JSON.parse(safeStorage.decryptString(Buffer.from(s, 'base64'))) : null
 }
 function gravarSessao(s: Sessao): void {
+  sessaoVolatil = lembrarSessao ? null : s
+  if (!lembrarSessao) {
+    run("DELETE FROM configuracoes WHERE chave='sessaoNuvem'")
+    return
+  }
   if (!safeStorage.isEncryptionAvailable())
     throw new Error('A proteção de credenciais do Windows está indisponível.')
   salvar('sessaoNuvem', safeStorage.encryptString(JSON.stringify(s)).toString('base64'))
 }
 let renovacaoSessao: { chave: string; pedido: Promise<Sessao> } | null = null
-export async function pedidoNuvem(path: string, body?: unknown, login = false): Promise<unknown> {
+export async function pedidoNuvem(
+  path: string,
+  body?: unknown,
+  login = false,
+  metodo?: 'PUT'
+): Promise<unknown> {
   const c = configuracaoNuvem()
   let token = c.chavePublica
   if (!login) {
@@ -131,10 +165,11 @@ export async function pedidoNuvem(path: string, body?: unknown, login = false): 
     token = s.access_token
   }
   const resposta = await fetch(c.url + path, {
-    method: body === undefined ? 'GET' : 'POST',
+    method: metodo ?? (body === undefined ? 'GET' : 'POST'),
     headers: {
       apikey: c.chavePublica,
       ...(!login ? { Authorization: `Bearer ${token}` } : {}),
+      ...(central && empresaSelecionada ? { 'x-gdo-empresa': empresaSelecionada } : {}),
       'Content-Type': 'application/json'
     },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -155,13 +190,25 @@ const pedido = pedidoNuvem
 async function reconhecerEmpresa(criar = false): Promise<ContextoNuvem> {
   let contexto: ContextoNuvem
   try {
-    contexto = (await pedido('/rest/v1/rpc/gdo_contexto_v3', { p_criar: criar }).catch(
-      async (e) => {
-        if ((e as { codigo?: string }).codigo !== 'PGRST202') throw e
-        return pedido('/rest/v1/rpc/gdo_contexto_v2', { p_criar: criar })
-      }
-    )) as ContextoNuvem
+    contexto = central
+      ? ((await pedido('/rest/v1/rpc/gdo_contexto_v4', {
+          p_empresa: empresaSelecionada
+        })) as ContextoNuvem)
+      : ((await pedido('/rest/v1/rpc/gdo_contexto_v3', { p_criar: criar }).catch(async (e) => {
+          if ((e as { codigo?: string }).codigo !== 'PGRST202') throw e
+          return pedido('/rest/v1/rpc/gdo_contexto_v2', { p_criar: criar })
+        })) as ContextoNuvem)
   } catch (e) {
+    if (central) {
+      const falha = e as { status?: number; message?: string }
+      if (
+        falha.status === 401 ||
+        falha.status === 403 ||
+        /Você não tem acesso a esta empresa/.test(falha.message ?? '')
+      )
+        observarContexto?.(null)
+      throw e
+    }
     // Compatibilidade de transição com a nuvem 1.4: mantém suas regras antigas.
     // Após migrar, o servidor revoga as rotas de escrita antigas.
     if ((e as { codigo?: string }).codigo !== 'PGRST202') throw e
@@ -211,6 +258,7 @@ async function reconhecerEmpresa(criar = false): Promise<ContextoNuvem> {
     })
   }
   salvar('contextoNuvem', contexto)
+  if (central) observarContexto?.(contexto)
   salvar('empresaNuvem', contexto.empresaId)
   salvar('atualizacaoNumeracaoPendente', null)
   return contexto
@@ -268,7 +316,7 @@ export function statusNuvem(): StatusNuvem {
   ) as Record<TipoDocumento, number>
   return {
     configurada: !!config<ConfigNuvem>('nuvem'),
-    autenticada: !!config<string>('sessaoNuvem'),
+    autenticada: !!sessaoVolatil || !!config<string>('sessaoNuvem'),
     computador: computadorId(),
     pendentes: filaAnterior().length,
     pendenciasPreservadas: Number(
@@ -1200,7 +1248,30 @@ export async function transferirDocumento(
 }
 export function sairNuvem(): void {
   pararTempoReal()
+  sessaoVolatil = null
   run("DELETE FROM configuracoes WHERE chave='sessaoNuvem'")
+}
+
+export async function suspenderNuvemConta(): Promise<void> {
+  pararTempoReal()
+  await aguardarTempoReal()
+  await sincronizacaoAtual?.catch(() => undefined)
+  if (renovacaoSessao) await renovacaoSessao.pedido.catch(() => undefined)
+  sessaoVolatil = null
+  renovacaoSessao = null
+  empresaSelecionada = null
+  central = false
+  estadoTempoReal = 'desconectado'
+  erroTempoReal = null
+}
+
+export function adotarSessaoConta(c: ConfigNuvem, token: Sessao): void {
+  salvar('nuvem', c)
+  gravarSessao(token)
+}
+
+export function lerSessaoConta(): Sessao | null {
+  return sessao()
 }
 export async function aplicarConflito(id: string): Promise<void> {
   const conflito = get('SELECT entidade FROM conflitos_nuvem WHERE id=?', [id])

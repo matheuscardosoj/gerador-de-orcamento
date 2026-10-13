@@ -1,9 +1,9 @@
 {
   "name": "gerador-de-orcamento",
   "version": "1.5.0-rc.4",
-  "description": "Gerador de Orçamentos - VS Prestadora de Serviços",
+  "description": "Documentos de serviços, cálculo de custos e gestão comercial",
   "main": "./out/main/index.js",
-  "author": "VS Prestadora de Serviços",
+  "author": "Matheus",
   "license": "UNLICENSED",
   "scripts": {
     "dev": "electron-vite dev",
@@ -24,9 +24,11 @@
     "check": "npm run lint && npm run format:check && npm run typecheck && npm test && npm run build",
     "icone": "node scripts/gerar-icone.mjs",
     "ia": "node scripts/preparar-ia.mjs",
-    "pack": "electron-vite build && electron-builder --dir",
+    "pack": "npm run build && electron-builder --dir",
+    "servico:configurar": "node scripts/preparar-servico-central.mjs",
+    "dist:central": "npm run servico:configurar && npm run dist",
     "predist": "node scripts/preparar-ia.mjs",
-    "dist": "electron-vite build && electron-builder"
+    "dist": "npm run build && electron-builder"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

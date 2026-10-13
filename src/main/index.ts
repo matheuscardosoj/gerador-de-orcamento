@@ -2,7 +2,7 @@ import { registrarVersao } from './versoes'
 import { orcamentosRepo, relatoriosRepo } from './repositories'
 import { mensagemErro } from '@shared/erros'
 import { recibosRepo } from './recibos'
-import { capturarCadastros, sincronizarNuvem, statusNuvem, inicializarNuvem } from './nuvem'
+import { inicializarContas } from './contas/servico'
 import { pararTempoReal } from './tempo-real'
 import { observarDados } from './eventos'
 import { app, shell, dialog, BrowserWindow } from 'electron'
@@ -39,7 +39,7 @@ function iniciarBanco(): void {
   } catch (e) {
     dialog.showErrorBox(
       'Falha ao importar os dados antigos',
-      `Não foi possível migrar o banco.json para o novo formato:\n\n${String(e)}\n\n` +
+      `Não foi possível importar os dados antigos:\n\n${mensagemErro(e)}\n\n` +
         'O arquivo antigo foi preservado. O aplicativo vai abrir com os dados iniciais.'
     )
   }
@@ -84,7 +84,7 @@ function createWindow(): void {
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    if (/^https?:\/\//i.test(details.url)) void shell.openExternal(details.url)
     return { action: 'deny' }
   })
 
@@ -96,7 +96,7 @@ function createWindow(): void {
 }
 
 if (temTrava)
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     electronApp.setAppUserModelId('com.gerador.orcamentos')
 
     // Inicializa o banco (cria arquivo, migra o JSON ou semeia) e registra o IPC.
@@ -130,13 +130,11 @@ if (temTrava)
       }
     })
     app.once('before-quit', pararEventos)
-    capturarCadastros()
-    const sincronizarQuandoConectado = (): void => {
-      if (statusNuvem().autenticada && (statusNuvem().protocolo ?? 1) < 2) void sincronizarNuvem()
+    try {
+      await inicializarContas()
+    } catch (erro) {
+      dialog.showErrorBox('Não foi possível recuperar seu acesso', mensagemErro(erro))
     }
-    void inicializarNuvem()
-    const intervaloNuvem = setInterval(sincronizarQuandoConectado, 30000)
-    app.once('before-quit', () => clearInterval(intervaloNuvem))
     app.once('before-quit', pararTempoReal)
 
     app.on('browser-window-created', (_, window) => {

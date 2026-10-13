@@ -1,5 +1,4 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
 import type { AppApi, CrudApi } from '@shared/api'
 
 const invoke = (canal: string, ...args: unknown[]): Promise<unknown> =>
@@ -15,6 +14,23 @@ function crud<T, C>(dominio: string): CrudApi<T, C> {
 }
 
 const api: AppApi = {
+  conta: {
+    status: () => invoke('conta.status') as never,
+    entrar: (email, senha, lembrar) => invoke('conta.entrar', email, senha, lembrar) as never,
+    selecionarEmpresa: (id) => invoke('conta.selecionarEmpresa', id) as never,
+    sair: () => invoke('conta.sair') as never,
+    atualizarNome: (nome) => invoke('conta.atualizarNome', nome) as never,
+    alterarSenha: (atual, nova) => invoke('conta.alterarSenha', atual, nova) as never,
+    alterarPapel: (usuario, papel) => invoke('conta.alterarPapel', usuario, papel) as never,
+    enviarCodigo: (email, tipo) => invoke('conta.enviarCodigo', email, tipo) as never,
+    confirmarCodigo: (email, codigo, tipo, senha) =>
+      invoke('conta.confirmarCodigo', email, codigo, tipo, senha) as never,
+    convites: () => invoke('conta.convites') as never,
+    convidar: (email, nome, papel) => invoke('conta.convidar', email, nome, papel) as never,
+    cancelarConvite: (id) => invoke('conta.cancelarConvite', id) as never,
+    reenviarConvite: (id) => invoke('conta.reenviarConvite', id) as never,
+    criarEmpresa: (nome, email, admin) => invoke('conta.criarEmpresa', nome, email, admin) as never
+  },
   rascunhos: {
     list: (tipo, id) => invoke('rascunhos.list', tipo, id) as never,
     get: (id) => invoke('rascunhos.get', id) as never,
@@ -156,14 +172,11 @@ const api: AppApi = {
 
 if (process.contextIsolated) {
   try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('api', api)
   } catch (error) {
     console.error(error)
   }
 } else {
-  // @ts-expect-error API de compatibilidade exposta no window
-  window.electron = electronAPI
   // @ts-expect-error API de compatibilidade exposta no window
   window.api = api
 }

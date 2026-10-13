@@ -44,6 +44,10 @@ interface Opcoes {
   criarCliente?: (config: ConfigNuvem, opcoes: SupabaseClientOptions<'public'>) => SupabaseClient
 }
 let pararAtual: (() => void) | null = null
+const renovacoesAtivas = new Set<Promise<void>>()
+export async function aguardarTempoReal(): Promise<void> {
+  await Promise.allSettled([...renovacoesAtivas])
+}
 export function pararTempoReal(): void {
   pararAtual?.()
   pararAtual = null
@@ -86,10 +90,12 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
     }
   })
   const solicitar = (completa = false): void => {
+    if (encerrado) return
     completarProxima ||= completa
     void agendador.solicitar().catch(() => undefined)
   }
   const conectar = async (): Promise<void> => {
+    if (encerrado) return
     const identidade = opcoes.identidade()
     if (!identidade) {
       if (cliente) {
@@ -130,6 +136,7 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
     cliente
       .channel(`empresa:${identidade.empresa}`, { config: { private: true } })
       .on('broadcast', { event: 'alteracao' }, (evento) => {
+        if (encerrado) return
         solicitar()
         const entidade = evento.payload?.entidade
         if (
@@ -155,16 +162,19 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
     if (evento.origem === 'local' && evento.entidades.length) solicitar()
   })
   const vigilancia = setInterval(() => {
-    if (encerrado) return
-    void opcoes
+    if (encerrado || renovacoesAtivas.size) return
+    const renovacao = opcoes
       .renovar()
       .then(conectar)
       .catch(() => {
+        if (encerrado) return
         opcoes.estado(
           'indisponivel',
           'Não foi possível renovar a sessão ou a conexão. Suas alterações continuam guardadas neste computador.'
         )
       })
+    renovacoesAtivas.add(renovacao)
+    void renovacao.finally(() => renovacoesAtivas.delete(renovacao))
   }, 30000)
   const seguranca = setInterval(() => solicitar(true), 5 * 60 * 1000)
   pararAtual = () => {
@@ -179,7 +189,9 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
   }
   void conectar()
     .then(() => solicitar())
-    .catch(() => opcoes.estado('indisponivel', 'A conexão em tempo real não iniciou.'))
+    .catch(() => {
+      if (!encerrado) opcoes.estado('indisponivel', 'A conexão em tempo real não iniciou.')
+    })
 }
 
 export function avisarEstadoTempoReal(): void {

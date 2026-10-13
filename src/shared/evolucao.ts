@@ -96,6 +96,7 @@ export interface EventoDados {
   status?: boolean
 }
 export interface MembroEmpresa {
+  papel?: import('./conta').PapelConta
   usuarioId: string
   nome: string
   email: string

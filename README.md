@@ -1,7 +1,9 @@
-# Gerador de Orçamentos — VS Prestadora de Serviços
+# Gerador de Orçamentos
 
 Aplicação **desktop** (Electron + React + TypeScript) para calcular o custo de serviços,
-aplicar acréscimo sobre o custo e gerar orçamentos no layout da VS Prestadora, exportando **PDF** e **DOCX**.
+aplicar acréscimo sobre o custo e gerar propostas, relatórios e recibos com a identidade
+da empresa, exportando **PDF** e **DOCX**. Instalações novas começam sem clientes,
+catálogo, identidade empresarial ou dados bancários de outras empresas.
 
 ## Requisitos
 
@@ -13,7 +15,7 @@ aplicar acréscimo sobre o custo e gerar orçamentos no layout da VS Prestadora,
 | --------------- | ------------------------------------------------------------------- |
 | `npm run dev`   | Roda em modo desenvolvimento (HMR)                                  |
 | `npm run build` | Compila main + preload + renderer para `out/`                       |
-| `npm run start` | Compila e abre o app empacotado (preview)                           |
+| `npm run start` | Abre o último build em preview; execute build antes                 |
 | `npm run test`  | Roda os testes (motor de cálculo, banco e geração de DOCX)          |
 | `npm run lint`  | Verifica regras estáticas e a padronização do código                |
 | `npm run check` | Executa lint, formatação, tipos, testes e build                     |
@@ -26,9 +28,25 @@ aplicar acréscimo sobre o custo e gerar orçamentos no layout da VS Prestadora,
 > e o build roda com `CSC_IDENTITY_AUTO_DISCOVERY=false`. O instalador sai em
 > `release/Gerador de Orçamentos Setup <versão>.exe`.
 
+## Build e empacotamento
+
+`npm run pack` e `npm run dist` passam por `npm run build`, que regenera o SQL antes
+da compilação. O pacote inclui somente `out/`, metadados e dependências de produção.
+SQLite/WASM permanece fora do asar; SQL, tutorial e IA entram em `extraResources`.
+Scripts de teste, bancos, backups e evidências em `output/` não fazem parte do app.
+
+Os SQL gerados não devem ser editados manualmente: altere os contratos/fontes e
+execute `npm run schema:nuvem`. Fixtures de protocolos antigos continuam necessárias
+para testar migrações. Preserve backups e evidências antes de limpar artefatos.
+Scripts operacionais que acessam uma nuvem real exigem projeto e autorização
+explícitos; não pertencem à verificação automática `npm run check`.
+
 ## Arquitetura
 
 - `src/main` — processo principal (Node): persistência, IPC, geração de documentos.
+  O cadastro de clientes está isolado em `repositories/clientes.ts`; a fachada
+  `repositories.ts` mantém os contratos atuais. A divisão dos demais domínios
+  deve ser incremental, preservando transações de documentos e pagamentos.
 - `src/preload` — bridge segura (contextBridge) entre main e renderer.
 - `src/shared` — código compartilhado: tipos e o **motor de cálculo** (`calculo/`).
 - `src/renderer` — interface React (Tailwind).
@@ -42,7 +60,8 @@ por foto e 20 KiB por miniatura antes do Base64. Imagens antigas preservam seus 
 Antes da migração, o aplicativo calcula o espaço necessário e verifica um backup.
 
 O **DOCX** é montado diretamente em OOXML (biblioteca `docx`, em `src/shared/documento/docx.ts`),
-espelhando as mesmas medidas do HTML que gera o PDF — por isso os dois saem iguais.
+espelhando as medidas do HTML que gera o PDF. A conferência visual de cada
+entrega deve incluir Word/PDF; diferentes renderizadores podem alterar fontes e quebras.
 
 O **PDF e a prévia** compartilham um único motor de paginação
 (`src/shared/documento/paginar.ts`): ele distribui propostas/relatórios em A4 e recibos em A5 horizontal
@@ -70,11 +89,19 @@ o app tenta o Ollama automaticamente.
 
 ## Status
 
-**Candidato 1.5.0-rc.2** — usuários vinculados à empresa, Supabase Broadcast privado,
-edição temporária e preparação offline, rascunhos com comparação de três versões,
-conciliação financeira separada, IDs internos permanentes e ordem visual. SQLite
-esquema 9 e protocolo de nuvem 2; todos os computadores devem ser atualizados após
-a migração. O candidato é desenvolvido na branch `claude`; `main` mantém a entrega estável.
+**Versão declarada no código: 1.5.0-rc.4**, SQLite esquema 11 e protocolo de nuvem 3.
+O candidato usa somente Nº do documento e mantém chaves técnicas ocultas. Inclui
+usuários vinculados, Broadcast privado, controle de edição, rascunhos offline e
+preservação de operações pendentes em backups. Código e testes isolados não
+comprovam, por si, a adoção correta de uma atualização em todos os computadores.
+
+**Em desenvolvimento:** acesso central para múltiplas empresas e reorganização
+interna. A presença de scripts e telas não significa que a configuração central
+já esteja publicada ou validada no ambiente real. Cada entrega deve registrar
+verificações, migrações autorizadas e resultados dos testes físicos entre PCs.
+
+Os recursos das versões anteriores abaixo são um histórico, não instruções para
+configurar a numeração ou a nuvem atual.
 
 **Versão 1.4.1** — nuvem organizada em tabelas de domínio, migração transacional,
 integridade financeira e histórico preservado. Inclui o esquema atualizado e o
@@ -127,9 +154,11 @@ o instalador não contém credenciais administrativas.
 
 A fila SQLite sobrevive a reinícios. Operações têm identificadores únicos e revisões
 de origem; conflitos preservam alterações e exigem conciliação com backup. Relatório
-e recibos/pagamentos relacionados são conciliados juntos. O computador responsável
-edita e emite definitivamente, com números reservados em blocos de 20 por tipo e
-reabastecidos quando restam cinco. Números usados não são reaproveitados.
+e recibos/pagamentos relacionados são conciliados juntos. O controle de edição e a autorização
+offline são independentes da numeração. O servidor atribui o número definitivo
+transacionalmente ao primeiro salvamento confirmado. Não há novas reservas de
+faixas por computador; documentos novos offline aguardam sincronização para
+emissão. Números utilizados não são reaproveitados.
 
 Backups incluem imagens, recibos, pagamentos e versões, retirando identidade, sessão
 e reservas offline. Restauração/mesclagem são locais e não publicam nem substituem a
@@ -154,11 +183,11 @@ recusados. Cancelamento, limite de 120 segundos e proteção de edição concorr
 mantêm o texto original. Modelo embutido e Ollama continuam inteiramente locais.
 Somente PF/PJ aparece no cadastro, com PF como valor inicial.
 
-O esquema 8 acrescenta ordem ao catálogo e mantém a apresentação existente na
-migração. Restauração mantém a identidade já existente no perfil de destino; o
+A migração do catálogo preserva a ordem já existente. Restauração mantém a identidade já existente no perfil de destino; o
 backup não transporta identidade, sessão ou autorização de outro computador.
 
-Somente nome/razão social é obrigatório no cliente. PF/PJ, CPF/CNPJ (inclusive
+Somente nome/razão social é obrigatório no cliente. O tipo tem as opções PF/PJ,
+com PF inicial; CPF/CNPJ (inclusive
 alfanumérico), telefone, e-mail, endereço, nome fantasia e contato são opcionais,
 com validação quando preenchidos. Cada documento escolhe quais dados exibir e
 congela os cadastros por versão; atualização posterior exige ação explícita.
@@ -201,6 +230,6 @@ real e verifica cancelamento durante a inicialização. `atualizar-backup-candid
 usa uma cópia do backup fornecido para migrar, exportar, comparar os dados e
 restaurar o resultado em um perfil separado.
 
-### Numeração sequencial (rc.2)
+### Numeração sequencial (protocolo 3)
 
 Somente Nº do documento aparece nos históricos. A atribuição é transacional por empresa/tipo, sem faixas por computador. Documentos novos offline aguardam sincronização para receber número definitivo e emitir PDF/DOCX. A migração registra um mapa de números e versões novas; conserva os snapshots e o financeiro anterior. Gravações do protocolo 2 são bloqueadas depois da troca.

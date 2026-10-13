@@ -19,15 +19,15 @@ const uid = (): string => Math.random().toString(36).slice(2)
 function estadoInicial(): BancoDados {
   return {
     empresa: {
-      nome: 'VS PRESTADORA DE SERVIÇOS',
-      razaoSocial: 'V S DE JESUS',
-      endereco: 'Rua do Ipê Roxo, QD 46, LT 1083, Gameleira 1, Rio Verde - GO',
-      telefones: '(64) 3623-2113 / (64) 99234-1244',
-      email: 'vsprestadoradeservicos@outlook.com',
-      site: 'https://www.vsprestadora.com.br',
-      cnpj: '04.871.989/0001-60',
+      nome: 'Empresa de demonstração',
+      razaoSocial: '',
+      endereco: '',
+      telefones: '',
+      email: '',
+      site: '',
+      cnpj: '',
       logoDataUrl: null,
-      textoAssinatura: 'V S DE JESUS',
+      textoAssinatura: '',
       corFaixaRodape: '#0f6d6b',
       nomeExibicao: 'nome'
     },
@@ -49,7 +49,7 @@ function estadoInicial(): BancoDados {
     clientes: [
       {
         id: uid(),
-        nome: 'TMG',
+        nome: 'Cliente de demonstração',
         tratamento: 'A',
         contato: '',
         observacao: '',
@@ -99,7 +99,7 @@ function estadoInicial(): BancoDados {
     pagamentosPadrao: [
       {
         id: uid(),
-        texto: 'Via transferência bancária no Banco do Brasil, agência: 0221-6, conta: 59088-6.',
+        texto: 'Pagamento conforme combinado entre as partes.',
         padrao: true,
         aplicacao: 'orcamento'
       }
@@ -118,6 +118,17 @@ function estadoInicial(): BancoDados {
 
 export function criarMockApi(): AppApi {
   const db = estadoInicial()
+  let conta: import('@shared/conta').EstadoConta = {
+    central: true,
+    fase: 'desconectado',
+    servicoConfigurado: true,
+    email: '',
+    nome: 'Pessoa de demonstração',
+    lembrar: false,
+    operador: true,
+    empresa: null,
+    empresas: [{ id: 'demo', nome: 'Empresa de demonstração', papel: 'administrador' }]
+  }
   let proximoRecibo = 1
   const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v))
 
@@ -177,6 +188,37 @@ export function criarMockApi(): AppApi {
 
   return {
     eventos: { observarDados: () => () => {} },
+    conta: {
+      status: async () => clone(conta),
+      entrar: async (email, _senha, lembrar) => {
+        conta = { ...conta, email, lembrar, fase: 'pronto', empresa: conta.empresas[0] }
+        return clone(conta)
+      },
+      selecionarEmpresa: async (id) => {
+        conta = { ...conta, fase: 'pronto', empresa: conta.empresas.find((e) => e.id === id)! }
+        return clone(conta)
+      },
+      sair: async () => {
+        conta = { ...conta, fase: 'desconectado', empresa: null, lembrar: false }
+        return clone(conta)
+      },
+      atualizarNome: async (nome) => {
+        conta.nome = nome
+        return clone(conta)
+      },
+      alterarSenha: async () => {},
+      alterarPapel: async () => clone(conta),
+      enviarCodigo: async () => {},
+      confirmarCodigo: async (email) => {
+        conta = { ...conta, email, fase: 'pronto', empresa: conta.empresas[0] }
+        return clone(conta)
+      },
+      convites: async () => [],
+      convidar: async () => {},
+      cancelarConvite: async () => {},
+      reenviarConvite: async () => {},
+      criarEmpresa: async () => {}
+    },
     rascunhos: {
       list: async () => [],
       get: async () => {
@@ -207,7 +249,15 @@ export function criarMockApi(): AppApi {
         throw new Error('Disponível no aplicativo desktop.')
       },
       acompanhar: async () => {},
-      membros: async () => [],
+      membros: async () => [
+        {
+          usuarioId: 'demo',
+          nome: conta.nome,
+          email: conta.email,
+          ativo: true,
+          papel: 'administrador'
+        }
+      ],
       vincularMembro: async () => {
         throw new Error('Disponível no aplicativo conectado à nuvem.')
       },
@@ -312,7 +362,7 @@ export function criarMockApi(): AppApi {
       aceitarRemoto: async () => {}
     },
     aplicativo: {
-      versao: async () => '1.3.0-dev',
+      versao: async () => 'prévia de desenvolvimento',
       alteracoesPendentes: async () => undefined
     },
     empresa: {

@@ -1,8 +1,6 @@
 // Gera:
 //  - build/icon.ico  -> ícone do APLICATIVO (genérico), a partir de build/app-icon.svg
 //                       (fallback: build/logo-vs.png)
-//  - src/main/db/logo-embutida.ts -> logo da EMPRESA no cabeçalho dos orçamentos,
-//                       a partir de build/logo-vs.png (se existir)
 //
 // Uso: `npm run icone`
 import { writeFileSync, existsSync } from 'fs'
@@ -33,21 +31,3 @@ const buffers = await Promise.all(
 )
 writeFileSync(join(raiz, 'build', 'icon.ico'), await pngToIco(buffers))
 console.log(`[icone] build/icon.ico gerado a partir de ${fonteIcone.split(/[\\/]/).pop()}`)
-
-// 2) Logo da empresa no cabeçalho dos orçamentos -> logo-embutida.ts
-if (existsSync(logoVs)) {
-  const png256 = await sharp(logoVs)
-    .resize(256, 256, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-    .png()
-    .toBuffer()
-  const dataUrl = `data:image/png;base64,${png256.toString('base64')}`
-  const ts = `// Logo padrão da empresa embutida como data URL, usada no seed inicial.
-// Gerado automaticamente por \`npm run icone\` a partir de build/logo-vs.png.
-export const LOGO_VS_DATAURL: string | null =
-  '${dataUrl}'
-`
-  writeFileSync(join(raiz, 'src', 'main', 'db', 'logo-embutida.ts'), ts)
-  console.log('[icone] logo-embutida.ts atualizado a partir de build/logo-vs.png')
-} else {
-  console.log('[icone] build/logo-vs.png ausente; logo-embutida.ts mantido.')
-}
