@@ -106,6 +106,13 @@ export function ConvitesSection({
         />
       ) : (
         <DataTableFrame minWidth="800px">
+          <colgroup>
+            <col style={{ width: '21%' }} />
+            <col style={{ width: '38%' }} />
+            <col style={{ width: '20%' }} />
+            <col style={{ width: '12%' }} />
+            <col style={{ width: '9%' }} />
+          </colgroup>
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
             <tr>
               {['Nome', 'E-mail', 'Acesso', 'Estado', 'Ações'].map((t) => (
@@ -118,8 +125,16 @@ export function ConvitesSection({
           <tbody className="divide-y divide-slate-100">
             {data.membros.map((m) => (
               <tr key={m.usuarioId} className="h-[62px] hover:bg-slate-50">
-                <td className="px-4 py-3 font-medium text-slate-800">{m.nome}</td>
-                <td className="px-4 py-3 text-slate-600">{m.email}</td>
+                <td className="px-4 py-3 font-medium text-slate-800">
+                  <span className="line-clamp-2 break-words" title={m.nome}>
+                    {m.nome}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-slate-600">
+                  <span className="line-clamp-2 break-all" title={m.email}>
+                    {m.email}
+                  </span>
+                </td>
                 <td className="px-4 py-3">
                   {admin ? (
                     <Select

@@ -2,6 +2,11 @@
 
 Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
+## 1.5.0-rc.7 — ajuste da tabela de usuários
+
+- A tabela da empresa mantém colunas alinhadas em janelas estreitas e quebra
+  nomes e e-mails longos sem sobrepor o perfil de acesso.
+
 ## 1.5.0-rc.6 — correção do convite
 
 - Convites novos usam o envio administrativo do Supabase; o cadastro público

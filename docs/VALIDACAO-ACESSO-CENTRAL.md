@@ -1,4 +1,4 @@
-# Acesso central — validação do candidato 1.5.0-rc.6 (13/10/2026)
+# Acesso central — validação dos candidatos rc.6 e rc.7 (13/10/2026)
 
 ## Implementado no código
 
@@ -114,23 +114,45 @@ misturar os dados exibidos, conforme confirmação do usuário.
 4. Validar a operadora sem empresa vinculada, repetição após perda da resposta
    ao criar empresa e convite, expiração/revogação e alterações simultâneas.
 
+## Teste de sincronização entre computadores
+
+Os dois computadores foram confirmados no rc.6. O usuário criou um cliente no
+computador principal, observou sua chegada no notebook, renomeou-o no notebook
+e observou a atualização no computador principal. A percepção relatada foi de
+menos de dois segundos em cada sentido, sem mencionar erro ou pendência nova.
+Esse resultado confirma a meta no teste realizado, embora não seja uma garantia
+de latência constante em toda conexão.
+
+## Ajuste da tabela de usuários
+
+Uma captura do rc.6 em janela estreita mostrou e-mail e perfil de acesso
+invadindo colunas adjacentes. O rc.7 define larguras proporcionais para as cinco
+colunas no mesmo componente compartilhado das outras tabelas e quebra nomes e
+e-mails longos em até duas linhas. O executável rc.7 passou pelo ensaio das
+telas de acesso em perfil isolado; a conferência visual da tabela na janela
+estreita ainda deve ser feita após a instalação pelo usuário.
+
 O executável empacotado do rc.6 passou novamente pelo ensaio automatizado em
 perfil isolado, incluindo a tela de aceitação de convite e recuperação em
 larguras de 1024 e 1440 px. O envio real do convite passou no serviço após a
 correção, e o destinatário confirmou a aceitação com código e senha diretamente
 no aplicativo.
 
-O candidato rc.6 foi gerado para esses testes. Não houve merge para `main`
+O candidato rc.7 foi gerado para esses testes. Não houve merge para `main`
 nem publicação da versão final. Não recomendar o uso por outras empresas
 até concluir os ensaios reais acima.
 
 ## Artefato entregue
 
-O instalador `Gerador de Orçamentos Setup 1.5.0-rc.6.exe` está em
-`Downloads/Gerador de Orcamentos/Candidato 1.5.0-rc.6`. O arquivo original e a
-cópia têm o mesmo SHA-256:
+O instalador `Gerador de Orçamentos Setup 1.5.0-rc.7.exe` está em
+`Downloads/Gerador de Orcamentos/Candidato 1.5.0-rc.7`. A cópia tem o mesmo
+SHA-256 do arquivo de saída:
 
-`08BF9F75D1DBBCA2FFAC1DA22D953EE583EF160421B903F4835E70B6D17AB60B`
+`B2E9066E0C6EE23899D915564868C4F32A84146160722292C0057C9D02AEF9A6`
+
+A configuração do pacote contém a URL e a chave pública do projeto. A busca
+no pacote não encontrou senha SMTP, endereço de e-mail SMTP nem valor de chave
+secreta.
 
 A configuração empacotada contém a URL e a chave pública do projeto, sem
 e-mail preenchido. Uma busca no arquivo da aplicação não encontrou valor de
