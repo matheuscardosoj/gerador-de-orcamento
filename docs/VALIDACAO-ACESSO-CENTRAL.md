@@ -1,4 +1,4 @@
-# Acesso central — validação do candidato 1.5.0-rc.5 (13/10/2026)
+# Acesso central — validação do candidato 1.5.0-rc.6 (13/10/2026)
 
 ## Implementado no código
 
@@ -78,14 +78,30 @@ números são uma fotografia da migração, não um retrato necessariamente atua
 O backup verificado permanece em Downloads. Não reaplicar a migração nem
 restaurar esse backup sobre a base atual.
 
-A função `central-contas` foi publicada no projeto, os templates de código de
-acesso e recuperação foram configurados e a conta
+A função `central-contas` foi publicada no projeto, os templates de convite e
+recuperação foram configurados e a conta
 `matheuscardosoj@outlook.com` foi registrada como operadora após autorização.
 O projeto ecoplay está fora do escopo.
 
+## Convite real e correção do rc.6
+
+No primeiro teste com o rc.5, o convite novo foi registrado, mas o e-mail não
+foi enviado. Os logs do projeto mostraram que a função chamava `/auth/v1/otp`,
+que respondeu `422 Signups not allowed for this instance` porque o cadastro
+público está corretamente desligado. A função foi alterada para enviar o
+convite por `inviteUserByEmail`, na rota administrativa. Para contas já
+confirmadas, ela envia um código de recuperação; o aplicativo aceita ambos os
+tipos de código ao concluir o convite. O convite pendente foi preservado.
+
+A função corrigida foi publicada no projeto. Ao repetir o envio pelo rc.5,
+o usuário confirmou que o convite foi enviado e chegou à caixa Gmail de teste.
+O template Invite foi salvo em português, com o código de acesso. Esse teste
+confirma o envio real, mas ainda não a aceitação do código e a definição da
+senha; essas etapas exigem o rc.6 no aplicativo.
+
 ## Pendências de validação real
 
-1. Testar convite novo no alias Gmail autorizado, código, definição de senha,
+1. Testar aceitação do convite no alias Gmail autorizado, definição de senha,
    reenvio, cancelamento, expiração e rejeição de outro e-mail. Repetir entrega
    em Outlook; o único e-mail de recuperação confirmado chegou ao lixo eletrônico.
 2. Testar no serviço real alteração de senha, manter conectado, troca de conta,
@@ -96,19 +112,26 @@ O projeto ecoplay está fora do escopo.
 4. Validar a operadora sem empresa vinculada, repetição após perda da resposta
    ao criar empresa e convite, expiração/revogação e alterações simultâneas.
 
-O candidato rc.5 foi gerado para esses testes. Não houve merge para `main`
+O executável empacotado do rc.6 passou novamente pelo ensaio automatizado em
+perfil isolado, incluindo a tela de aceitação de convite e recuperação em
+larguras de 1024 e 1440 px. O envio real do convite passou no serviço após a
+correção; a aceitação ainda depende do teste pelo destinatário com o código
+recebido diretamente no aplicativo.
+
+O candidato rc.6 foi gerado para esses testes. Não houve merge para `main`
 nem publicação da versão final. Não recomendar o uso por outras empresas
 até concluir os ensaios reais acima.
 
 ## Artefato entregue
 
-O instalador `Gerador de Orçamentos Setup 1.5.0-rc.5.exe` está em
-`Downloads/Gerador de Orcamentos/Candidato 1.5.0-rc.5`. A cópia tem o mesmo
-SHA-256 da saída do build:
+O instalador `Gerador de Orçamentos Setup 1.5.0-rc.6.exe` está em
+`Downloads/Gerador de Orcamentos/Candidato 1.5.0-rc.6`. O arquivo original e a
+cópia têm o mesmo SHA-256:
 
-`E483D3EB0C72B7A1A3996A1EE60347B1ABF7A475E74A9943A65C37DABF96C145`
+`08BF9F75D1DBBCA2FFAC1DA22D953EE583EF160421B903F4835E70B6D17AB60B`
 
 A configuração empacotada contém a URL e a chave pública do projeto, sem
-e-mail preenchido. Uma busca no arquivo da aplicação não encontrou chave
-`sb_secret_` literal nem a conta usada no SMTP. Referências genéricas a
-`service_role` fazem parte do código da biblioteca e não são uma credencial.
+e-mail preenchido. Uma busca no arquivo da aplicação não encontrou valor de
+chave secreta nem a conta usada no SMTP. A biblioteca contém somente a
+expressão genérica `sb_secret_` (sem caracteres de chave após o prefixo) e
+referências genéricas a `service_role`; nenhuma delas é uma credencial.

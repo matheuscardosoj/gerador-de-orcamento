@@ -74,6 +74,7 @@ export function ConvitesSection({
         setNome('')
         setEmpresa('')
         setPapel('membro')
+        setErro('')
       })
     }
   }
@@ -92,7 +93,7 @@ export function ConvitesSection({
         title="Usuários da empresa"
         description="Convide por e-mail. Cada pessoa define sua senha e usa seu próprio acesso. Administradores também gerenciam pessoas e configurações."
       />
-      {(erro || error) && <Mensagem>{erro || error}</Mensagem>}
+      {(error || (erro && !novo && !novaEmpresa)) && <Mensagem>{error || erro}</Mensagem>}
       {aviso && <Mensagem tom="info">{aviso}</Mensagem>}
       {loading && !data ? (
         <p role="status" className="text-sm text-slate-500">

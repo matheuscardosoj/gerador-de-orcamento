@@ -451,11 +451,23 @@ export const contaApi: ContaApi = {
     exclusiva(async () => {
       senhaValida(novaSenha)
       const config = { ...configuracaoAcesso(), email: email.trim().toLowerCase() }
-      const token = (await requisitar(config, '/auth/v1/verify', {
-        email: config.email,
-        token: codigo,
-        type: tipo === 'convite' ? 'magiclink' : 'recovery'
-      })) as Token
+      const verificar = (tipoCodigo: 'invite' | 'recovery') =>
+        requisitar(config, '/auth/v1/verify', {
+          email: config.email,
+          token: codigo,
+          type: tipoCodigo
+        }) as Promise<Token>
+      let token: Token
+      if (tipo === 'convite') {
+        try {
+          token = await verificar('invite')
+        } catch (erro) {
+          const status = (erro as { status?: number })?.status
+          if (status !== 400 && status !== 403) throw erro
+          // Contas já existentes recebem o template de recuperação.
+          token = await verificar('recovery')
+        }
+      } else token = await verificar('recovery')
       await requisitar(config, '/auth/v1/user', { password: novaSenha }, token.access_token, 'PUT')
       return listarAposAutenticar(token, config, false)
     }),

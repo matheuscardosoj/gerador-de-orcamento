@@ -79,6 +79,9 @@ export function mensagemErro(erro: unknown, contexto?: string): string {
   else if (codigo === 'over_email_send_rate_limit' || /^Email rate limit exceeded/i.test(limpa))
     mensagem =
       'O limite temporário de e-mails foi atingido. Aguarde antes de solicitar outro código.'
+  else if (/^Não foi possível concluir\. O convite pendente foi preservado/.test(limpa))
+    mensagem =
+      'O convite foi salvo, mas o e-mail não pôde ser enviado. Confira o serviço de e-mail e tente reenviar o convite.'
   else if (/^Campos incompatíveis com o esquema da nuvem/.test(limpa))
     mensagem =
       'O formato desta alteração não foi aceito pela nuvem. A operação foi preservada neste computador. Atualize o aplicativo e tente novamente; se persistir, envie esta mensagem ao suporte.'

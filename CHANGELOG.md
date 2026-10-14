@@ -2,6 +2,15 @@
 
 Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
+## 1.5.0-rc.6 — correção do convite
+
+- Convites novos usam o envio administrativo do Supabase; o cadastro público
+  continua fechado. Convites para contas confirmadas notificam pelo fluxo de
+  recuperação, e a pessoa também pode entrar com sua senha atual.
+- O aplicativo aceita códigos de convite e de recuperação, e a falha de envio
+  informa que o convite pendente foi preservado.
+- A mensagem de erro da janela de convite aparece uma vez, junto ao formulário.
+
 ## 1.5.0-rc.5 — candidato para validação
 
 - Acesso central por convite, com perfis locais separados por empresa e usuário,

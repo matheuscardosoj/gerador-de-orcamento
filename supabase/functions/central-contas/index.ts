@@ -28,18 +28,21 @@ Deno.serve(async (request) => {
       auth: { persistSession: false, autoRefreshToken: false }
     })
     const enviar = async (email: string) => {
-      // Cria a identidade somente após validar o convite, sem enviar outro e-mail.
-      // generateLink não envia mensagens; o código retornado não é usado nem registrado.
-      const { error: preparacao } = await admin.auth.admin.generateLink({
-        type: 'magiclink',
-        email
-      })
-      if (preparacao) throw new Error('Não foi possível preparar o acesso')
-      const { error } = await remetente.auth.signInWithOtp({
-        email,
-        options: { shouldCreateUser: false }
-      })
-      if (error) throw new Error('Não foi possível enviar o código. Tente novamente em um minuto')
+      // A rota pública /otp é bloqueada quando o cadastro público está desligado.
+      // O convite administrativo envia o template Invite e aceita contas não confirmadas.
+      const { error } = await admin.auth.admin.inviteUserByEmail(email)
+      if (!error) return
+      if (
+        error.code === 'email_exists' ||
+        /already registered|already exists/i.test(error.message)
+      ) {
+        // Uma conta confirmada entra com a senha atual; o e-mail de recuperação
+        // serve como aviso e permite definir outra senha se necessário.
+        const { error: recuperacao } = await remetente.auth.resetPasswordForEmail(email)
+        if (!recuperacao) return
+        throw new Error('Não foi possível enviar o código para a conta existente')
+      }
+      throw new Error('Não foi possível enviar o convite')
     }
     if (body.acao === 'enviarCodigo') {
       const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
@@ -82,7 +85,8 @@ Deno.serve(async (request) => {
     if (error) return json({ erro: error.message }, 400)
     await enviar(data.email)
     return json({ ok: true, convite: data })
-  } catch {
+  } catch (erro) {
+    console.error('Falha no serviço de convites:', erro instanceof Error ? erro.message : 'erro')
     return json(
       {
         erro: 'Não foi possível concluir. O convite pendente foi preservado; tente novamente em um minuto.'

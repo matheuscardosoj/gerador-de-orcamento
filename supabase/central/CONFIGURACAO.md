@@ -1,7 +1,7 @@
 # Serviço central — preparação e validação
 
 Estado: protocolo central instalado no projeto `gerador-orcamento`, função
-`central-contas` publicada e template de código de acesso salvo. A validação
+`central-contas` publicada e templates de convite e recuperação salvos. A validação
 funcional continua pendente; não distribuir o aplicativo como versão final antes
 de concluir os testes remotos e de recuperação listados abaixo.
 
@@ -52,9 +52,11 @@ somente no servidor. Não copiar para chat, código, logs, screenshots ou backup
 do aplicativo. A verificação em duas etapas deve continuar habilitada.
 
 Desativar cadastro público de usuários em Authentication. A função administrativa
-prepara identidades somente após conferir um convite autorizado. O envio usa
-Supabase Auth com `shouldCreateUser: false`, aproveitando os limites de envio e
-os códigos de uso único do serviço. Recuperação usa o fluxo próprio de recuperação.
+prepara identidades somente após conferir um convite autorizado. O envio usa a
+rota administrativa de convite do Supabase Auth, que funciona com o cadastro
+público desligado. Contas já confirmadas recebem o e-mail de recuperação e podem
+entrar com sua senha atual para aceitar o vínculo. Recuperação usa o fluxo próprio
+de recuperação.
 
 No projeto de produção `gerador-orcamento`, a conta
 `matheuscardosoj@outlook.com` já foi registrada em `central.operadores` após
@@ -62,7 +64,7 @@ autorização explícita. O cadastro público em Authentication → Sign In / Pr
 foi desativado em 13/10/2026, após confirmação do responsável; contas existentes
 continuam ativas e novos acessos dependem do fluxo de convite.
 
-Nos templates **Magic Link** e **Reset Password**, usar código em vez de exigir
+Nos templates **Invite user** e **Reset Password**, usar código em vez de exigir
 um site externo de retorno. Corpo sugerido:
 
 ```html

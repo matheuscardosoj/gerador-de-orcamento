@@ -88,6 +88,13 @@ describe('mensagens de erro para a interface', () => {
       'conexão não foi autorizada'
     )
     expect(mensagemErro({ message: 'Invalid API key', status: 401 })).toContain('chave pública')
+    expect(
+      mensagemErro({
+        message:
+          'Não foi possível concluir. O convite pendente foi preservado; tente novamente em um minuto.',
+        status: 503
+      })
+    ).toContain('convite foi salvo')
   })
 
   it('explica integridade e autorização sem expor tabelas ou restrições', () => {
