@@ -44,6 +44,11 @@ permissão foi confirmada no banco. No Outlook, marcar a mensagem recebida como
 a treinar a classificação; não garante que mensagens futuras cheguem à caixa de
 entrada.
 
+O cadastro público em Authentication → Sign In / Providers foi desativado após
+confirmação do responsável. A tela do Supabase confirmou “Successfully updated
+settings” e mostrou a opção desligada. As contas existentes permanecem ativas;
+os novos usuários devem entrar por convite do aplicativo.
+
 Antes da migração foi criada uma cópia da base compartilhada em
 `Downloads/Gerador de Orcamentos/Migracao acesso central 2026-10-13`. O arquivo
 tem o mesmo SHA-256 da origem e passou por `PRAGMA integrity_check`, sem violações

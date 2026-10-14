@@ -58,8 +58,9 @@ os códigos de uso único do serviço. Recuperação usa o fluxo próprio de rec
 
 No projeto de produção `gerador-orcamento`, a conta
 `matheuscardosoj@outlook.com` já foi registrada em `central.operadores` após
-autorização explícita. O cadastro público ainda precisa ser conferido e, se
-estiver ativo, desativado antes de distribuir o aplicativo.
+autorização explícita. O cadastro público em Authentication → Sign In / Providers
+foi desativado em 13/10/2026, após confirmação do responsável; contas existentes
+continuam ativas e novos acessos dependem do fluxo de convite.
 
 Nos templates **Magic Link** e **Reset Password**, usar código em vez de exigir
 um site externo de retorno. Corpo sugerido:
