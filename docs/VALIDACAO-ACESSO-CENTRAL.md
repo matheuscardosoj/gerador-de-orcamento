@@ -38,6 +38,12 @@ entrega ainda precisa ser repetida em Gmail e Outlook depois da configuração d
 demais templates. O lançamento deve orientar o usuário a marcar a primeira
 mensagem como confiável enquanto o remetente gratuito constrói reputação.
 
+A conta `matheuscardosoj@outlook.com` foi habilitada como operadora central e a
+permissão foi confirmada no banco. No Outlook, marcar a mensagem recebida como
+“Não é lixo eletrônico” e adicionar o remetente aos remetentes confiáveis ajuda
+a treinar a classificação; não garante que mensagens futuras cheguem à caixa de
+entrada.
+
 Antes da migração foi criada uma cópia da base compartilhada em
 `Downloads/Gerador de Orcamentos/Migracao acesso central 2026-10-13`. O arquivo
 tem o mesmo SHA-256 da origem e passou por `PRAGMA integrity_check`, sem violações
@@ -64,10 +70,11 @@ mantidos. Não houve exclusão desses arquivos nem liberação de espaço alegad
    recebimentos, 11 clientes, 81 versões e dois membros. A conta
    `matheuscardosoj@outlook.com` aparece ativa como administradora. O backup
    verificado permanece em Downloads.
-3. A função central `central-contas` foi publicada no projeto e o template
-   personalizado de código de acesso foi salvo. Falta atribuir a permissão de
-   operador central após autorização do responsável e validar convites de ponta a
-   ponta. O projeto ecoplay está fora do escopo.
+3. A função central `central-contas` foi publicada no projeto, os templates de
+   código de acesso e recuperação foram configurados e a conta
+   `matheuscardosoj@outlook.com` foi registrada como operadora após autorização.
+   Falta validar convites de ponta a ponta e a entrega em Gmail e Outlook. O
+   projeto ecoplay está fora do escopo.
 4. Validar a conta do operador sem empresa vinculada, repetição após perda da
    resposta ao criar empresa, expiração/revogação e alterações simultâneas.
 5. Validar o executável em perfis separados, SMTP real e dois computadores.

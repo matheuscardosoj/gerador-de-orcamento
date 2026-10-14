@@ -56,6 +56,11 @@ prepara identidades somente após conferir um convite autorizado. O envio usa
 Supabase Auth com `shouldCreateUser: false`, aproveitando os limites de envio e
 os códigos de uso único do serviço. Recuperação usa o fluxo próprio de recuperação.
 
+No projeto de produção `gerador-orcamento`, a conta
+`matheuscardosoj@outlook.com` já foi registrada em `central.operadores` após
+autorização explícita. O cadastro público ainda precisa ser conferido e, se
+estiver ativo, desativado antes de distribuir o aplicativo.
+
 Nos templates **Magic Link** e **Reset Password**, usar código em vez de exigir
 um site externo de retorno. Corpo sugerido:
 
@@ -87,4 +92,8 @@ Fontes: [Google — SMTP](https://support.google.com/mail/answer/7104828),
 - O template de código de acesso foi salvo. A recuperação foi enviada com sucesso,
   mas caiu no lixo eletrônico do Outlook; validar a classificação em Gmail e
   Outlook antes da entrega.
+- Se a mensagem cair no lixo eletrônico, marcar “Não é lixo eletrônico” e salvar
+  `gerador.orcamentos.app@gmail.com` como remetente confiável. Isso ajuda a
+  classificação local, mas não garante entrega na caixa de entrada; Gmail gratuito
+  e um endereço recém-criado têm reputação e limites de envio restritos.
 - Conferir o pacote instalado e os dois computadores antes de autorizar versão final.
