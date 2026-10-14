@@ -2,6 +2,16 @@
 
 Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
+## 1.5.0-rc.9 — exclusões remotas e códigos de cadastro
+
+- Editores abertos avisam quando o documento foi excluído em outro computador,
+  bloqueiam o salvamento da cópia antiga e permitem guardar alterações como rascunho.
+- Clientes e serviços ganham códigos permanentes, únicos e atribuídos pela nuvem;
+  os cadastros existentes recebem códigos determinísticos na migração local e remota.
+- A reconciliação de número de recibo só libera o registro de teste confirmado como
+  excluído e sem pagamento; se encontrar outro uso, interrompe a operação sem alterar a sequência.
+- Inclui as migrações SQL necessárias para atualizar a nuvem antes de conectar este candidato.
+
 ## 1.5.0-rc.8 — visualização de senha
 
 - Campos de senha permitem mostrar e ocultar o texto com um ícone animado,

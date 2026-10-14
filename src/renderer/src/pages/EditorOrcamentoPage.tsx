@@ -210,6 +210,10 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
   const persistir = async (exigirFinal: boolean): Promise<Orcamento | null> => {
     setErro(null)
     try {
+      if (atualizacao.excluido)
+        throw new Error(
+          'Este orçamento foi excluído em outro computador. Guarde o conteúdo como rascunho antes de sair.'
+        )
       const payload = normalizarOrcamento({ ...orc, valorTotal: total })
       if (rascunhoId) {
         if (exigirFinal)
@@ -394,7 +398,7 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
         </div>
       )}
       <div className="space-y-5">
-        <AvisoAtualizacao {...atualizacao} />
+        <AvisoAtualizacao {...atualizacao} sujo={sujo} />
         <ColaboracaoDocumento
           tipo="orcamento"
           documento={orc}

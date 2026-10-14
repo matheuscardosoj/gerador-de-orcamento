@@ -2,8 +2,9 @@
 import { randomUUID } from 'crypto'
 import { validarCliente, normalizarTipoCliente } from '@shared/clientes'
 import type { Cliente } from '@shared/types'
-import { all, get, run, bool, paraBool, texto, textoOuNulo } from '../db/sqlite'
+import { all, get, run, tx, bool, paraBool, texto, textoOuNulo } from '../db/sqlite'
 import type { Linha } from '../db/sqlite'
+import { proximoCodigoCadastro } from '../codigos-cadastros'
 
 // ---------------------------------------------------------------- Clientes
 const paraCliente = (l: Linha): Cliente => ({
@@ -25,10 +26,11 @@ export const clientesRepo = {
     return l ? paraCliente(l) : null
   },
   create: (dto: Omit<Cliente, 'id' | 'criadoEm'> & { id?: string; criadoEm?: string }): Cliente => {
+    const id = dto.id ?? randomUUID()
     const cliente: Cliente = {
       ...dto,
       tipoPessoa: normalizarTipoCliente(dto),
-      id: dto.id ?? randomUUID(),
+      id,
       criadoEm: dto.criadoEm ?? new Date().toISOString(),
       nome: dto.nome,
       tratamento: dto.tratamento,
@@ -37,21 +39,24 @@ export const clientesRepo = {
       ativo: dto.ativo ?? true
     }
     validarCliente(cliente)
-    run(
-      `INSERT INTO clientes (id, nome, tratamento, contato, observacao, ativo, criado_em)
+    return tx(() => {
+      cliente.codigo = proximoCodigoCadastro('cliente', id)
+      run(
+        `INSERT INTO clientes (id, nome, tratamento, contato, observacao, ativo, criado_em)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        cliente.id,
-        cliente.nome,
-        cliente.tratamento,
-        cliente.contato ?? null,
-        cliente.observacao ?? null,
-        bool(cliente.ativo),
-        cliente.criadoEm
-      ]
-    )
-    run('UPDATE clientes SET dados_json = ? WHERE id = ?', [JSON.stringify(cliente), cliente.id])
-    return cliente
+        [
+          cliente.id,
+          cliente.nome,
+          cliente.tratamento,
+          cliente.contato ?? null,
+          cliente.observacao ?? null,
+          bool(cliente.ativo),
+          cliente.criadoEm
+        ]
+      )
+      run('UPDATE clientes SET dados_json = ? WHERE id = ?', [JSON.stringify(cliente), cliente.id])
+      return cliente
+    })
   },
   update: (id: string, patch: Partial<Cliente>): Cliente | null => {
     const atual = clientesRepo.get(id)
@@ -60,6 +65,7 @@ export const clientesRepo = {
       ...atual,
       ...patch,
       id,
+      codigo: atual.codigo,
       tipoPessoa: normalizarTipoCliente({ ...atual, ...patch })
     }
     validarCliente(novo)

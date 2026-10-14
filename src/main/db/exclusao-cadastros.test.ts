@@ -15,7 +15,13 @@ const cliente = (id: string) => ({
   observacao: null,
   ativo: 1,
   criado_em: criado,
-  dados_json: JSON.stringify({ id, nome: 'Cliente de teste', ativo: true, tipoPessoa: 'pf' })
+  dados_json: JSON.stringify({
+    id,
+    nome: 'Cliente de teste',
+    ativo: true,
+    tipoPessoa: 'pf',
+    codigo: 1
+  })
 })
 const aplicar = async (
   tabela: string,
@@ -23,13 +29,18 @@ const aplicar = async (
   payload: unknown,
   base = 0,
   operacao = randomUUID()
-) =>
-  (
-    await pg.query<{ r: { ok: boolean; resultados: Array<{ revisao: number }> } }>(
-      'SELECT gdo_batch_v3($1,$2) r',
-      [JSON.stringify([{ id: operacao, entidade: `${tabela}:${id}`, base, payload }]), computador]
-    )
-  ).rows[0].r
+) => {
+  try {
+    return (
+      await pg.query<{ r: { ok: boolean; resultados: Array<{ revisao: number }> } }>(
+        'SELECT gdo_batch_v3($1,$2) r',
+        [JSON.stringify([{ id: operacao, entidade: `${tabela}:${id}`, base, payload }]), computador]
+      )
+    ).rows[0].r
+  } catch (e) {
+    throw new Error(`${tabela}:${id}: ${String(e)}`)
+  }
+}
 
 beforeAll(async () => {
   await pg.exec(`CREATE SCHEMA auth; CREATE ROLE anon; CREATE ROLE authenticated;
@@ -61,7 +72,8 @@ it('aceita exclusão com row nulo ou ausente nas seis coleções compartilhadas'
         descricao_padrao: '',
         unidade: '',
         preco_referencia: null,
-        ordem: 0
+        ordem: 0,
+        codigo: 1
       }
     ],
     ...['observacoes_padrao', 'pagamentos_padrao'].map(
@@ -102,6 +114,47 @@ it('aceita exclusão com row nulo ou ausente nas seis coleções compartilhadas'
       expect(remoto.payload).not.toHaveProperty('row')
     }
   }
+})
+
+it('atribui códigos únicos pelo servidor quando dois computadores enviam o mesmo código local', async () => {
+  const proximo = (
+    await pg.query<{ n: number }>(
+      "SELECT coalesce(max(codigo),0)+1 n FROM codigos_cadastros WHERE tipo='cliente'"
+    )
+  ).rows[0].n
+  const linha = (id: string, nome: string) => {
+    const c = cliente(id)
+    c.nome = nome
+    c.dados_json = JSON.stringify({ ...JSON.parse(c.dados_json), nome, codigo: 1 })
+    return c
+  }
+  await aplicar('clientes', 'codigo-a', {
+    tabela: 'clientes',
+    id: 'codigo-a',
+    row: linha('codigo-a', 'A')
+  })
+  await aplicar('clientes', 'codigo-b', {
+    tabela: 'clientes',
+    id: 'codigo-b',
+    row: linha('codigo-b', 'B')
+  })
+  expect(
+    (
+      await pg.query(
+        "SELECT codigo FROM clientes WHERE id IN ('codigo-a','codigo-b') ORDER BY codigo"
+      )
+    ).rows
+  ).toEqual([{ codigo: proximo }, { codigo: proximo + 1 }])
+  expect(
+    (
+      await pg.query(
+        "SELECT tipo,codigo,cadastro_id FROM codigos_cadastros WHERE cadastro_id IN ('codigo-a','codigo-b') ORDER BY codigo"
+      )
+    ).rows
+  ).toEqual([
+    { tipo: 'cliente', codigo: proximo, cadastro_id: 'codigo-a' },
+    { tipo: 'cliente', codigo: proximo + 1, cadastro_id: 'codigo-b' }
+  ])
 })
 
 it('reenvia a mesma exclusão sem consumir outra revisão', async () => {

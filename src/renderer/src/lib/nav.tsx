@@ -35,6 +35,7 @@ interface NavContexto {
   rota: Rota
   revisaoRota: number
   navegar: (rota: Rota) => void
+  navegarAposSalvar: (rota: Rota) => void
   registrarBloqueio: (bloqueio: (() => boolean) | null) => void
   executarComConfirmacao: (acao: () => void) => void
 }
@@ -61,6 +62,12 @@ export function NavProvider({ children }: { children: ReactNode }): JSX.Element 
       }),
     [executarComConfirmacao]
   )
+  const navegarAposSalvar = useCallback((proxima: Rota) => {
+    bloqueio.current = null
+    void api.aplicativo.alteracoesPendentes(false)
+    setRota(proxima)
+    setRevisaoRota((r) => r + 1)
+  }, [])
   const descartar = (): void => {
     const destino = pendente
     setPendente(null)
@@ -69,7 +76,16 @@ export function NavProvider({ children }: { children: ReactNode }): JSX.Element 
     destino?.executar()
   }
   return (
-    <Ctx.Provider value={{ rota, revisaoRota, navegar, registrarBloqueio, executarComConfirmacao }}>
+    <Ctx.Provider
+      value={{
+        rota,
+        revisaoRota,
+        navegar,
+        navegarAposSalvar,
+        registrarBloqueio,
+        executarComConfirmacao
+      }}
+    >
       {children}
       <ConfirmDialog
         open={pendente !== null}

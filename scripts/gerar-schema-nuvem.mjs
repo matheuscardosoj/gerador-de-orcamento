@@ -10,7 +10,7 @@ const tabelas = [
   [
     'servicos',
     'servicos',
-    'id,nome,descricao_padrao,unidade,preco_referencia:numeric,ordem:integer',
+    'id,nome,descricao_padrao,unidade,preco_referencia:numeric,ordem:integer,codigo:bigint',
     ['id']
   ],
   [
@@ -119,7 +119,8 @@ const cliente = {
   email: ['email', 'text'],
   endereco: ['endereco', 'jsonb'],
   nomeFantasia: ['nome_fantasia', 'text'],
-  pessoaContato: ['pessoa_contato', 'text']
+  pessoaContato: ['pessoa_contato', 'text'],
+  codigo: ['codigo', 'bigint']
 }
 const recibo = {
   id: ['id', 'text'],
@@ -215,7 +216,8 @@ const nomes = [
   'clientes',
   'recibos',
   'documentos',
-  'imagens_versoes'
+  'imagens_versoes',
+  'codigos_cadastros'
 ]
 const sql = readFileSync('supabase/relacional-base.sql', 'utf8')
   .replace('__TABELAS__', ddl)

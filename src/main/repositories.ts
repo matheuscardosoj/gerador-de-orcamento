@@ -10,6 +10,7 @@ import { envolverDocumento, nuvemConfigurada } from './versoes'
 // persistência era JSON — o IPC, o preload e o renderer não conhecem o banco.
 import { randomUUID } from 'crypto'
 import { clientesRepo } from './repositories/clientes'
+import { proximoCodigoCadastro } from './codigos-cadastros'
 import { registrarImagem, imagemDataUrl } from './imagens'
 import {
   all,
@@ -157,6 +158,7 @@ export { clientesRepo } from './repositories/clientes'
 // -------------------------------------------------------- Catálogo serviços
 const paraServico = (l: Linha): ServicoCatalogo => ({
   id: texto(l.id),
+  codigo: numero(l.codigo),
   nome: texto(l.nome),
   descricaoPadrao: texto(l.descricao_padrao),
   unidade: texto(l.unidade),
@@ -171,22 +173,25 @@ export const servicosRepo = {
     return l ? paraServico(l) : null
   },
   create: (dto: Omit<ServicoCatalogo, 'id'> & { id?: string }): ServicoCatalogo => {
-    const s: ServicoCatalogo = { ...dto, id: dto.id ?? randomUUID() }
-    run(
-      `INSERT INTO servicos (id, nome, descricao_padrao, unidade, preco_referencia)
-       VALUES (?, ?, ?, ?, ?)`,
-      [s.id, s.nome, s.descricaoPadrao, s.unidade, s.precoReferencia]
-    )
-    run(
-      'UPDATE servicos SET ordem=(SELECT COALESCE(MAX(ordem),-1)+1 FROM servicos WHERE id<>?) WHERE id=?',
-      [s.id, s.id]
-    )
-    return s
+    const id = dto.id ?? randomUUID()
+    return tx(() => {
+      const s: ServicoCatalogo = { ...dto, codigo: proximoCodigoCadastro('servico', id), id }
+      run(
+        `INSERT INTO servicos (id, nome, descricao_padrao, unidade, preco_referencia, codigo)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+        [s.id, s.nome, s.descricaoPadrao, s.unidade, s.precoReferencia, s.codigo]
+      )
+      run(
+        'UPDATE servicos SET ordem=(SELECT COALESCE(MAX(ordem),-1)+1 FROM servicos WHERE id<>?) WHERE id=?',
+        [s.id, s.id]
+      )
+      return s
+    })
   },
   update: (id: string, patch: Partial<ServicoCatalogo>): ServicoCatalogo | null => {
     const atual = servicosRepo.get(id)
     if (!atual) return null
-    const novo = { ...atual, ...patch, id }
+    const novo = { ...atual, ...patch, id, codigo: atual.codigo }
     run(
       `UPDATE servicos SET nome = ?, descricao_padrao = ?, unidade = ?, preco_referencia = ? WHERE id = ?`,
       [novo.nome, novo.descricaoPadrao, novo.unidade, novo.precoReferencia, id]

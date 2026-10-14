@@ -30,6 +30,16 @@ it('migra catálogo v7 mantendo ordem alfabética, PF/PJ e snapshots antigos', (
       .tipoPessoa
   ).toBe('pf')
   expect(d.get('PRAGMA user_version')?.user_version).toBe(VERSAO_BANCO)
+  expect(d.all('SELECT tipo,codigo,id FROM codigos_cadastros ORDER BY tipo,codigo')).toEqual([
+    { tipo: 'cliente', codigo: 1, id: 'pj' },
+    { tipo: 'cliente', codigo: 2, id: 'pf' },
+    { tipo: 'servico', codigo: 1, id: 'a' },
+    { tipo: 'servico', codigo: 2, id: 'z' }
+  ])
+  expect(d.all('SELECT codigo FROM servicos ORDER BY codigo')).toEqual([
+    { codigo: 1 },
+    { codigo: 2 }
+  ])
   d.close()
 })
 it('reordena atomicamente e mantém preferências dos três históricos isoladas', async () => {
@@ -48,10 +58,22 @@ it('reordena atomicamente e mantém preferências dos três históricos isoladas
     unidade: '',
     precoReferencia: null
   })
+  expect([a.codigo, b.codigo]).toEqual([1, 2])
   prefs.reordenarCadastro('servicos', [b.id, a.id])
   expect(repos.servicosRepo.list().map((s) => s.id)).toEqual([b.id, a.id])
   expect(() => prefs.reordenarCadastro('servicos', [a.id, a.id])).toThrow('lista mudou')
   expect(repos.servicosRepo.list().map((s) => s.id)).toEqual([b.id, a.id])
+  repos.servicosRepo.remove(a.id)
+  const c = repos.servicosRepo.create({
+    nome: 'C',
+    descricaoPadrao: '',
+    unidade: '',
+    precoReferencia: null
+  })
+  expect(c.codigo).toBe(3)
+  expect(
+    sql.get("SELECT codigo FROM codigos_cadastros WHERE tipo='servico' AND codigo=1")?.codigo
+  ).toBe(1)
   prefs.salvarPreferencias('orcamento', { busca: 'João', colunas: ['versao'] })
   sql.fecharBanco()
   sql.abrirBanco()

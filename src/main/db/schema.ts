@@ -382,8 +382,36 @@ const v11 = (d: Database): void => {
     "UPDATE fila_nuvem SET estado='conflito' WHERE estado<>'preservada' AND id IN (SELECT id FROM conflitos_nuvem); DELETE FROM configuracoes WHERE chave='operacoesAnterioresSuspensas'; CREATE INDEX fila_estado_grupo ON fila_nuvem(estado,grupo);"
   )
 }
-export const VERSAO_BANCO = 11
-const MIGRACOES: Array<(d: Database) => void> = [v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11]
+const v12 = (d: Database): void => {
+  d.exec(`
+    ALTER TABLE servicos ADD COLUMN codigo INTEGER;
+    CREATE TABLE codigos_cadastros (
+      tipo TEXT NOT NULL CHECK(tipo IN ('cliente','servico')),
+      codigo INTEGER NOT NULL CHECK(codigo > 0),
+      id TEXT NOT NULL,
+      PRIMARY KEY(tipo,codigo)
+    );
+  `)
+  const clientes = d.all(
+    'SELECT id,criado_em,nome,dados_json FROM clientes ORDER BY criado_em,nome COLLATE NOCASE,id'
+  ) as Array<{ id: string; criado_em: string; nome: string; dados_json: string }>
+  clientes.forEach((c, i) => {
+    const dados = JSON.parse(c.dados_json || '{}') as Record<string, unknown>
+    const codigo = i + 1
+    dados.codigo = codigo
+    d.run('UPDATE clientes SET dados_json=? WHERE id=?', [JSON.stringify(dados), c.id])
+    d.run('INSERT OR IGNORE INTO codigos_cadastros VALUES (?,?,?)', ['cliente', codigo, c.id])
+  })
+  const servicos = d.all('SELECT id FROM servicos ORDER BY ordem,nome COLLATE NOCASE,id') as Array<{
+    id: string
+  }>
+  servicos.forEach((s, i) => {
+    d.run('UPDATE servicos SET codigo=? WHERE id=?', [i + 1, s.id])
+    d.run('INSERT OR IGNORE INTO codigos_cadastros VALUES (?,?,?)', ['servico', i + 1, s.id])
+  })
+}
+export const VERSAO_BANCO = 12
+const MIGRACOES: Array<(d: Database) => void> = [v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12]
 
 export function aplicarMigracoes(d: Database, ate = MIGRACOES.length): void {
   const linha = d.get('PRAGMA user_version') as { user_version?: number } | null

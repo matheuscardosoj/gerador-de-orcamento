@@ -20,6 +20,11 @@ extraResources:
       - schema.sql
       - schema-colaboracao.sql
       - CONFIGURACAO.md
+  - from: supabase/migrations
+    to: supabase/migrations
+    filter:
+      - 004_codigos_cadastros.sql
+      - 005_reconciliar_numero_recibos_teste.sql
   # Runtime de IA (llama-server.exe + modelo GGUF), baixado por `npm run ia`.
   - from: resources/ia
     to: ia

@@ -4,6 +4,12 @@ BEGIN;
 CREATE OR REPLACE FUNCTION sincronizacao.semantico(p jsonb) RETURNS jsonb LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog AS $$
 DECLARE resultado jsonb:=p; tabela text; dados jsonb; linha jsonb; novo jsonb; k text; serializados text[]; arr jsonb;
 BEGIN
+  IF p->>'tabela'='servicos' AND jsonb_typeof(p->'row')='object' THEN
+    resultado:=jsonb_set(resultado,'{row}',(p->'row')-'codigo');
+  ELSIF p->>'tabela'='clientes' AND jsonb_typeof(p->'row')='object'
+      AND jsonb_typeof(p->'row'->'dados_json')='string' THEN
+    resultado:=jsonb_set(resultado,'{row,dados_json}',to_jsonb(((p->'row'->>'dados_json')::jsonb)-'codigo'));
+  END IF;
   -- Os clientes antigos representam exclusão com row:null; a resposta canônica
   -- omite row. Somente essa chave é normalizada, sem ocultar campos desconhecidos.
   IF p->>'tabela' IN ('clientes','servicos','observacoes_padrao','pagamentos_padrao','configuracoes','imagens')
@@ -22,9 +28,9 @@ BEGIN
       SELECT coalesce(jsonb_agg(x ORDER BY x::text),'[]'::jsonb) INTO arr FROM jsonb_array_elements(arr) x;
       resultado:=jsonb_set(resultado,ARRAY['rows',tabela],arr);
     END LOOP;
-  ELSIF p ? 'row' THEN
-    k:=CASE p->>'tabela' WHEN 'clientes' THEN 'dados_json' WHEN 'configuracoes' THEN 'valor' ELSE NULL END;
-    IF k IS NOT NULL AND jsonb_typeof(p->'row'->k)='string' THEN resultado:=jsonb_set(resultado,ARRAY['row',k],(p->'row'->>k)::jsonb); END IF;
+  ELSIF resultado ? 'row' THEN
+    k:=CASE resultado->>'tabela' WHEN 'clientes' THEN 'dados_json' WHEN 'configuracoes' THEN 'valor' ELSE NULL END;
+    IF k IS NOT NULL AND jsonb_typeof(resultado->'row'->k)='string' THEN resultado:=jsonb_set(resultado,ARRAY['row',k],(resultado->'row'->>k)::jsonb); END IF;
   END IF;
   RETURN resultado;
 END $$;

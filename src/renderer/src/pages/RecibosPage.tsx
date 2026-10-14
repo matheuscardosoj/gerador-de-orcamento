@@ -191,6 +191,10 @@ export function RecibosPage({
   }
   const salvar = async (): Promise<Recibo> => {
     if (!r) throw new Error('Abra um recibo.')
+    if (atualizacao.excluido)
+      throw new Error(
+        'Este recibo foi excluído em outro computador. Guarde o conteúdo como rascunho antes de sair.'
+      )
     if (rascunhoId) {
       const salvo = await api.rascunhos.save(rascunhoId, r)
       const d = salvo.documento as Recibo
@@ -346,7 +350,7 @@ export function RecibosPage({
         />
       ) : (
         <div className="space-y-5">
-          <AvisoAtualizacao {...atualizacao} />
+          <AvisoAtualizacao {...atualizacao} sujo={!!r && JSON.stringify(r) !== salvo} />
           <ColaboracaoDocumento
             tipo="recibo"
             documento={r}

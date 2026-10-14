@@ -130,7 +130,7 @@ it('migra datas ISO de um banco SQLite v5 para a data civil', () => {
 
     expect(banco.get('SELECT data FROM orcamentos')?.data).toBe('2026-05-04')
     expect(banco.get('SELECT data FROM relatorios')?.data).toBe('2026-05-05')
-    expect(banco.get('PRAGMA user_version')?.user_version).toBe(11)
+    expect(banco.get('PRAGMA user_version')?.user_version).toBe(12)
   } finally {
     banco.close()
   }

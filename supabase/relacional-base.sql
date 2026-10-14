@@ -30,6 +30,55 @@ CREATE TABLE IF NOT EXISTS sincronizacao.entidades(empresa_id uuid NOT NULL REFE
 CREATE INDEX IF NOT EXISTS idx_entidades_sequencia ON sincronizacao.entidades(empresa_id,sequencia);
 CREATE TABLE IF NOT EXISTS public.documentos(empresa_id uuid NOT NULL REFERENCES auth.users(id),tipo text NOT NULL CHECK(tipo IN ('orcamento','relatorio','recibo')),documento_id text NOT NULL,excluido boolean NOT NULL,responsavel uuid NOT NULL,dados jsonb NOT NULL,PRIMARY KEY(empresa_id,tipo,documento_id));
 __TABELAS__
+CREATE TABLE IF NOT EXISTS public.codigos_cadastros (
+  empresa_id uuid NOT NULL REFERENCES auth.users(id),
+  tipo text NOT NULL CHECK(tipo IN ('cliente','servico')),
+  codigo bigint NOT NULL CHECK(codigo > 0),
+  cadastro_id text NOT NULL,
+  criado_em timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY(empresa_id,tipo,codigo)
+);
+DO $codigos_iniciais$
+BEGIN
+  WITH numerados AS (
+    SELECT empresa_id,id,row_number() OVER(PARTITION BY empresa_id ORDER BY criado_em,nome COLLATE "C",id) AS codigo
+    FROM public.clientes
+  ) UPDATE public.clientes c SET codigo=n.codigo FROM numerados n WHERE c.empresa_id=n.empresa_id AND c.id=n.id AND c.codigo IS NULL;
+  INSERT INTO public.codigos_cadastros(empresa_id,tipo,codigo,cadastro_id)
+    SELECT empresa_id,'cliente',codigo,id FROM public.clientes WHERE codigo IS NOT NULL
+    ON CONFLICT(empresa_id,tipo,codigo) DO NOTHING;
+  WITH numerados AS (
+    SELECT empresa_id,id,row_number() OVER(PARTITION BY empresa_id ORDER BY ordem NULLS LAST,nome COLLATE "C",id) AS codigo
+    FROM public.servicos
+  ) UPDATE public.servicos s SET codigo=n.codigo FROM numerados n WHERE s.empresa_id=n.empresa_id AND s.id=n.id AND s.codigo IS NULL;
+  INSERT INTO public.codigos_cadastros(empresa_id,tipo,codigo,cadastro_id)
+    SELECT empresa_id,'servico',codigo,id FROM public.servicos WHERE codigo IS NOT NULL
+    ON CONFLICT(empresa_id,tipo,codigo) DO NOTHING;
+END $codigos_iniciais$;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_clientes_codigo ON public.clientes(empresa_id,codigo);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_servicos_codigo ON public.servicos(empresa_id,codigo);
+CREATE OR REPLACE FUNCTION public.gdo_codigo_cadastro() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+DECLARE atual bigint; proximo bigint; tipo_codigo text;
+BEGIN
+  tipo_codigo:=CASE WHEN TG_TABLE_NAME='clientes' THEN 'cliente' ELSE 'servico' END;
+  EXECUTE format('SELECT codigo FROM public.%I WHERE empresa_id=$1 AND id=$2',TG_TABLE_NAME)
+    INTO atual USING NEW.empresa_id,NEW.id;
+  IF atual IS NOT NULL THEN NEW.codigo:=atual; RETURN NEW; END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended(NEW.empresa_id::text||':'||tipo_codigo,0));
+  SELECT coalesce(max(codigo),0)+1 INTO proximo FROM public.codigos_cadastros
+    WHERE empresa_id=NEW.empresa_id AND tipo=tipo_codigo;
+  NEW.codigo:=proximo;
+  INSERT INTO public.codigos_cadastros(empresa_id,tipo,codigo,cadastro_id)
+    VALUES(NEW.empresa_id,tipo_codigo,proximo,NEW.id);
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS gdo_codigo_cadastro ON public.clientes;
+CREATE TRIGGER gdo_codigo_cadastro BEFORE INSERT ON public.clientes
+  FOR EACH ROW EXECUTE FUNCTION public.gdo_codigo_cadastro();
+DROP TRIGGER IF EXISTS gdo_codigo_cadastro ON public.servicos;
+CREATE TRIGGER gdo_codigo_cadastro BEFORE INSERT ON public.servicos
+  FOR EACH ROW EXECUTE FUNCTION public.gdo_codigo_cadastro();
 CREATE TABLE IF NOT EXISTS public.imagens_versoes(empresa_id uuid NOT NULL,versao_id text NOT NULL,imagem_hash text NOT NULL,PRIMARY KEY(empresa_id,versao_id,imagem_hash));
 CREATE UNIQUE INDEX IF NOT EXISTS idx_versao_vinculo ON public.versoes_documentos(empresa_id,tipo,documento_id,id);
 ALTER TABLE public.orcamentos ADD COLUMN IF NOT EXISTS tipo_documento text GENERATED ALWAYS AS ('orcamento'::text) STORED;
@@ -132,6 +181,14 @@ END $$;
 CREATE OR REPLACE FUNCTION sincronizacao.semantico(p jsonb) RETURNS jsonb LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog AS $$
 DECLARE resultado jsonb:=p; tabela text; dados jsonb; linha jsonb; novo jsonb; k text; serializados text[]; arr jsonb;
 BEGIN
+  -- O código de cadastro é atribuído pela nuvem e pode diferir do provisório local.
+  -- Excluí-lo da comparação permite que a linha canônica seja sincronizada de volta.
+  IF p->>'tabela'='servicos' AND jsonb_typeof(p->'row')='object' THEN
+    resultado:=jsonb_set(resultado,'{row}',(p->'row')-'codigo');
+  ELSIF p->>'tabela'='clientes' AND jsonb_typeof(p->'row')='object'
+      AND jsonb_typeof(p->'row'->'dados_json')='string' THEN
+    resultado:=jsonb_set(resultado,'{row,dados_json}',to_jsonb(((p->'row'->>'dados_json')::jsonb)-'codigo'));
+  END IF;
   -- Os clientes antigos representam exclusão com row:null; a resposta canônica
   -- omite row. Somente essa chave é normalizada, sem ocultar campos desconhecidos.
   IF p->>'tabela' IN ('clientes','servicos','observacoes_padrao','pagamentos_padrao','configuracoes','imagens')
@@ -150,9 +207,9 @@ BEGIN
       SELECT coalesce(jsonb_agg(x ORDER BY x::text),'[]'::jsonb) INTO arr FROM jsonb_array_elements(arr) x;
       resultado:=jsonb_set(resultado,ARRAY['rows',tabela],arr);
     END LOOP;
-  ELSIF p ? 'row' THEN
-    k:=CASE p->>'tabela' WHEN 'clientes' THEN 'dados_json' WHEN 'configuracoes' THEN 'valor' ELSE NULL END;
-    IF k IS NOT NULL AND jsonb_typeof(p->'row'->k)='string' THEN resultado:=jsonb_set(resultado,ARRAY['row',k],(p->'row'->>k)::jsonb); END IF;
+  ELSIF resultado ? 'row' THEN
+    k:=CASE resultado->>'tabela' WHEN 'clientes' THEN 'dados_json' WHEN 'configuracoes' THEN 'valor' ELSE NULL END;
+    IF k IS NOT NULL AND jsonb_typeof(resultado->'row'->k)='string' THEN resultado:=jsonb_set(resultado,ARRAY['row',k],(resultado->'row'->>k)::jsonb); END IF;
   END IF;
   RETURN resultado;
 END $$;

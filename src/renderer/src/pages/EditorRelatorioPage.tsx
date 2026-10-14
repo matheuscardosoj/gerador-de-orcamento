@@ -176,6 +176,10 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
     if (!rel || !totais) return null
     setErro(null)
     try {
+      if (atualizacao.excluido)
+        throw new Error(
+          'Este relatório foi excluído em outro computador. Guarde o conteúdo como rascunho antes de sair.'
+        )
       const payload = normalizarRelatorio({ ...rel, totais })
       if (rascunhoId) {
         if (exigirFinal)
@@ -359,7 +363,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
         </Mensagem>
       )}
       <div className="mb-5 space-y-5">
-        <AvisoAtualizacao {...atualizacao} />
+        <AvisoAtualizacao {...atualizacao} sujo={sujo} />
         <ColaboracaoDocumento
           tipo="relatorio"
           documento={rel}

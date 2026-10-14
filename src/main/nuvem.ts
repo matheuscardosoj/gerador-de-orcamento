@@ -36,6 +36,7 @@ import {
   adaptarExclusaoCadastroLegada,
   criarPayloadCadastroSalvo
 } from '@shared/cadastros-sincronizacao'
+import { registrarCodigoRemoto } from './codigos-cadastros'
 import { filaParaEnvio, marcarGrupo, temOperacaoAtiva, tentarNovamenteOperacao } from './fila-nuvem'
 
 let ocupado = false
@@ -664,8 +665,13 @@ function aplicar(e: Remoto): void {
       !['empresa', 'parametros', 'camposClientePadrao'].includes(p.id)
     )
       throw new Error('Configuração não compartilhável.')
-    if (p.row) upsert(p.tabela, p.row)
-    else
+    if (p.row) {
+      upsert(p.tabela, p.row)
+      if (p.tabela === 'clientes') {
+        const dados = JSON.parse(texto(p.row.dados_json) || '{}') as { codigo?: number }
+        registrarCodigoRemoto('cliente', dados.codigo, p.id)
+      } else if (p.tabela === 'servicos') registrarCodigoRemoto('servico', p.row.codigo, p.id)
+    } else
       run(
         `DELETE FROM ${p.tabela} WHERE ${{ configuracoes: 'chave', imagens: 'hash' }[p.tabela] ?? 'id'}=?`,
         [p.id]

@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS sincronizacao.operacoes(empresa_id uuid NOT NULL REFE
 CREATE TABLE IF NOT EXISTS sincronizacao.entidades(empresa_id uuid NOT NULL REFERENCES auth.users(id),entidade text NOT NULL,revisao bigint NOT NULL,sequencia bigint NOT NULL,excluido boolean NOT NULL,PRIMARY KEY(empresa_id,entidade));
 CREATE INDEX IF NOT EXISTS idx_entidades_sequencia ON sincronizacao.entidades(empresa_id,sequencia);
 CREATE TABLE IF NOT EXISTS public.documentos(empresa_id uuid NOT NULL REFERENCES auth.users(id),tipo text NOT NULL CHECK(tipo IN ('orcamento','relatorio','recibo')),documento_id text NOT NULL,excluido boolean NOT NULL,responsavel uuid NOT NULL,dados jsonb NOT NULL,PRIMARY KEY(empresa_id,tipo,documento_id));
-CREATE TABLE IF NOT EXISTS public.servicos (empresa_id uuid NOT NULL REFERENCES auth.users(id), id text NOT NULL, nome text, descricao_padrao text, unidade text, preco_referencia numeric, ordem integer, PRIMARY KEY (empresa_id,id));
+CREATE TABLE IF NOT EXISTS public.servicos (empresa_id uuid NOT NULL REFERENCES auth.users(id), id text NOT NULL, nome text, descricao_padrao text, unidade text, preco_referencia numeric, ordem integer, codigo bigint, PRIMARY KEY (empresa_id,id));
 CREATE TABLE IF NOT EXISTS public.observacoes_padrao (empresa_id uuid NOT NULL REFERENCES auth.users(id), id text NOT NULL, texto text, padrao integer, ordem integer, aplicacao text, PRIMARY KEY (empresa_id,id));
 CREATE TABLE IF NOT EXISTS public.formas_pagamento_padrao (empresa_id uuid NOT NULL REFERENCES auth.users(id), id text NOT NULL, texto text, padrao integer, ordem integer, aplicacao text, PRIMARY KEY (empresa_id,id));
 CREATE TABLE IF NOT EXISTS public.configuracoes_empresa (empresa_id uuid NOT NULL REFERENCES auth.users(id), chave text NOT NULL, valor jsonb, PRIMARY KEY (empresa_id,chave));
@@ -47,9 +47,58 @@ CREATE TABLE IF NOT EXISTS public.textos_relatorio (empresa_id uuid NOT NULL REF
 CREATE TABLE IF NOT EXISTS public.anexos_relatorio (empresa_id uuid NOT NULL REFERENCES auth.users(id), id text NOT NULL, relatorio_id text NOT NULL, referencia_tipo text, referencia_id text, ordem integer, titulo text, descricao text, mime text, largura integer, altura integer, imagem text, miniatura text, PRIMARY KEY (empresa_id,relatorio_id,id));
 CREATE TABLE IF NOT EXISTS public.versoes_documentos (empresa_id uuid NOT NULL REFERENCES auth.users(id), id text NOT NULL, tipo text, documento_id text, numero integer, anterior_id text, criado_em text, computador text, descricao text, documento jsonb, PRIMARY KEY (empresa_id,id));
 CREATE TABLE IF NOT EXISTS public.recebimentos (empresa_id uuid NOT NULL REFERENCES auth.users(id), id text NOT NULL, recibo_id text, relatorio_id text, adiantamento_id text, valor numeric, estornado integer, PRIMARY KEY (empresa_id,id));
-CREATE TABLE IF NOT EXISTS public.clientes (empresa_id uuid NOT NULL REFERENCES auth.users(id),id text NOT NULL,nome text,tratamento text,contato text,observacao text,ativo integer,criado_em text,tipo_pessoa text,cpf_cnpj text,telefone text,email text,endereco jsonb,nome_fantasia text,pessoa_contato text,campos_presentes text[] NOT NULL, dados_adicionais jsonb NOT NULL DEFAULT '{}',PRIMARY KEY(empresa_id,id));
+CREATE TABLE IF NOT EXISTS public.clientes (empresa_id uuid NOT NULL REFERENCES auth.users(id),id text NOT NULL,nome text,tratamento text,contato text,observacao text,ativo integer,criado_em text,tipo_pessoa text,cpf_cnpj text,telefone text,email text,endereco jsonb,nome_fantasia text,pessoa_contato text,codigo bigint,campos_presentes text[] NOT NULL, dados_adicionais jsonb NOT NULL DEFAULT '{}',PRIMARY KEY(empresa_id,id));
 CREATE TABLE IF NOT EXISTS public.recibos (empresa_id uuid NOT NULL REFERENCES auth.users(id),id text NOT NULL,numero bigint,data date,cliente_id text,destinatario text,descricao text,valor numeric,local_pagamento text,forma_pagamento text,status text,quitacao text,origem_tipo text,origem_id text,adiantamento_id text,observacao text,criado_em text,atualizado_em text,campos_presentes text[] NOT NULL, dados_adicionais jsonb NOT NULL DEFAULT '{}',PRIMARY KEY(empresa_id,id));
 
+CREATE TABLE IF NOT EXISTS public.codigos_cadastros (
+  empresa_id uuid NOT NULL REFERENCES auth.users(id),
+  tipo text NOT NULL CHECK(tipo IN ('cliente','servico')),
+  codigo bigint NOT NULL CHECK(codigo > 0),
+  cadastro_id text NOT NULL,
+  criado_em timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY(empresa_id,tipo,codigo)
+);
+DO $codigos_iniciais$
+BEGIN
+  WITH numerados AS (
+    SELECT empresa_id,id,row_number() OVER(PARTITION BY empresa_id ORDER BY criado_em,nome COLLATE "C",id) AS codigo
+    FROM public.clientes
+  ) UPDATE public.clientes c SET codigo=n.codigo FROM numerados n WHERE c.empresa_id=n.empresa_id AND c.id=n.id AND c.codigo IS NULL;
+  INSERT INTO public.codigos_cadastros(empresa_id,tipo,codigo,cadastro_id)
+    SELECT empresa_id,'cliente',codigo,id FROM public.clientes WHERE codigo IS NOT NULL
+    ON CONFLICT(empresa_id,tipo,codigo) DO NOTHING;
+  WITH numerados AS (
+    SELECT empresa_id,id,row_number() OVER(PARTITION BY empresa_id ORDER BY ordem NULLS LAST,nome COLLATE "C",id) AS codigo
+    FROM public.servicos
+  ) UPDATE public.servicos s SET codigo=n.codigo FROM numerados n WHERE s.empresa_id=n.empresa_id AND s.id=n.id AND s.codigo IS NULL;
+  INSERT INTO public.codigos_cadastros(empresa_id,tipo,codigo,cadastro_id)
+    SELECT empresa_id,'servico',codigo,id FROM public.servicos WHERE codigo IS NOT NULL
+    ON CONFLICT(empresa_id,tipo,codigo) DO NOTHING;
+END $codigos_iniciais$;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_clientes_codigo ON public.clientes(empresa_id,codigo);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_servicos_codigo ON public.servicos(empresa_id,codigo);
+CREATE OR REPLACE FUNCTION public.gdo_codigo_cadastro() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+DECLARE atual bigint; proximo bigint; tipo_codigo text;
+BEGIN
+  tipo_codigo:=CASE WHEN TG_TABLE_NAME='clientes' THEN 'cliente' ELSE 'servico' END;
+  EXECUTE format('SELECT codigo FROM public.%I WHERE empresa_id=$1 AND id=$2',TG_TABLE_NAME)
+    INTO atual USING NEW.empresa_id,NEW.id;
+  IF atual IS NOT NULL THEN NEW.codigo:=atual; RETURN NEW; END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended(NEW.empresa_id::text||':'||tipo_codigo,0));
+  SELECT coalesce(max(codigo),0)+1 INTO proximo FROM public.codigos_cadastros
+    WHERE empresa_id=NEW.empresa_id AND tipo=tipo_codigo;
+  NEW.codigo:=proximo;
+  INSERT INTO public.codigos_cadastros(empresa_id,tipo,codigo,cadastro_id)
+    VALUES(NEW.empresa_id,tipo_codigo,proximo,NEW.id);
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS gdo_codigo_cadastro ON public.clientes;
+CREATE TRIGGER gdo_codigo_cadastro BEFORE INSERT ON public.clientes
+  FOR EACH ROW EXECUTE FUNCTION public.gdo_codigo_cadastro();
+DROP TRIGGER IF EXISTS gdo_codigo_cadastro ON public.servicos;
+CREATE TRIGGER gdo_codigo_cadastro BEFORE INSERT ON public.servicos
+  FOR EACH ROW EXECUTE FUNCTION public.gdo_codigo_cadastro();
 CREATE TABLE IF NOT EXISTS public.imagens_versoes(empresa_id uuid NOT NULL,versao_id text NOT NULL,imagem_hash text NOT NULL,PRIMARY KEY(empresa_id,versao_id,imagem_hash));
 CREATE UNIQUE INDEX IF NOT EXISTS idx_versao_vinculo ON public.versoes_documentos(empresa_id,tipo,documento_id,id);
 ALTER TABLE public.orcamentos ADD COLUMN IF NOT EXISTS tipo_documento text GENERATED ALWAYS AS ('orcamento'::text) STORED;
@@ -137,7 +186,7 @@ BEGIN
     IF FOUND AND antigo IS DISTINCT FROM ((p_row-'documento')||jsonb_build_object('documento',(p_row->>'documento')::jsonb)) THEN RAISE EXCEPTION 'Uma versão já registrada não pode ser alterada'; END IF;
   END IF;
   CASE p_tabela
-  WHEN 'servicos' THEN INSERT INTO public.servicos (empresa_id,id,nome,descricao_padrao,unidade,preco_referencia,ordem) VALUES (p_empresa,(p_row->>'id')::text,(p_row->>'nome')::text,(p_row->>'descricao_padrao')::text,(p_row->>'unidade')::text,(p_row->>'preco_referencia')::numeric,(p_row->>'ordem')::integer) ON CONFLICT (empresa_id,id) DO UPDATE SET nome=excluded.nome,descricao_padrao=excluded.descricao_padrao,unidade=excluded.unidade,preco_referencia=excluded.preco_referencia,ordem=excluded.ordem;
+  WHEN 'servicos' THEN INSERT INTO public.servicos (empresa_id,id,nome,descricao_padrao,unidade,preco_referencia,ordem,codigo) VALUES (p_empresa,(p_row->>'id')::text,(p_row->>'nome')::text,(p_row->>'descricao_padrao')::text,(p_row->>'unidade')::text,(p_row->>'preco_referencia')::numeric,(p_row->>'ordem')::integer,(p_row->>'codigo')::bigint) ON CONFLICT (empresa_id,id) DO UPDATE SET nome=excluded.nome,descricao_padrao=excluded.descricao_padrao,unidade=excluded.unidade,preco_referencia=excluded.preco_referencia,ordem=excluded.ordem,codigo=excluded.codigo;
 WHEN 'observacoes_padrao' THEN INSERT INTO public.observacoes_padrao (empresa_id,id,texto,padrao,ordem,aplicacao) VALUES (p_empresa,(p_row->>'id')::text,(p_row->>'texto')::text,(p_row->>'padrao')::integer,(p_row->>'ordem')::integer,(p_row->>'aplicacao')::text) ON CONFLICT (empresa_id,id) DO UPDATE SET texto=excluded.texto,padrao=excluded.padrao,ordem=excluded.ordem,aplicacao=excluded.aplicacao;
 WHEN 'pagamentos_padrao' THEN INSERT INTO public.formas_pagamento_padrao (empresa_id,id,texto,padrao,ordem,aplicacao) VALUES (p_empresa,(p_row->>'id')::text,(p_row->>'texto')::text,(p_row->>'padrao')::integer,(p_row->>'ordem')::integer,(p_row->>'aplicacao')::text) ON CONFLICT (empresa_id,id) DO UPDATE SET texto=excluded.texto,padrao=excluded.padrao,ordem=excluded.ordem,aplicacao=excluded.aplicacao;
 WHEN 'configuracoes' THEN INSERT INTO public.configuracoes_empresa (empresa_id,chave,valor) VALUES (p_empresa,(p_row->>'chave')::text,(p_row->>'valor')::jsonb) ON CONFLICT (empresa_id,chave) DO UPDATE SET valor=excluded.valor;
@@ -154,7 +203,7 @@ WHEN 'relatorio_textos' THEN INSERT INTO public.textos_relatorio (empresa_id,id,
 WHEN 'relatorio_anexos' THEN INSERT INTO public.anexos_relatorio (empresa_id,id,relatorio_id,referencia_tipo,referencia_id,ordem,titulo,descricao,mime,largura,altura,imagem,miniatura) VALUES (p_empresa,(p_row->>'id')::text,(p_row->>'relatorio_id')::text,(p_row->>'referencia_tipo')::text,(p_row->>'referencia_id')::text,(p_row->>'ordem')::integer,(p_row->>'titulo')::text,(p_row->>'descricao')::text,(p_row->>'mime')::text,(p_row->>'largura')::integer,(p_row->>'altura')::integer,(p_row->>'imagem')::text,(p_row->>'miniatura')::text) ON CONFLICT (empresa_id,relatorio_id,id) DO UPDATE SET referencia_tipo=excluded.referencia_tipo,referencia_id=excluded.referencia_id,ordem=excluded.ordem,titulo=excluded.titulo,descricao=excluded.descricao,mime=excluded.mime,largura=excluded.largura,altura=excluded.altura,imagem=excluded.imagem,miniatura=excluded.miniatura;
 WHEN 'versoes' THEN INSERT INTO public.versoes_documentos (empresa_id,id,tipo,documento_id,numero,anterior_id,criado_em,computador,descricao,documento) VALUES (p_empresa,(p_row->>'id')::text,(p_row->>'tipo')::text,(p_row->>'documento_id')::text,(p_row->>'numero')::integer,(p_row->>'anterior_id')::text,(p_row->>'criado_em')::text,(p_row->>'computador')::text,(p_row->>'descricao')::text,(p_row->>'documento')::jsonb) ON CONFLICT (empresa_id,id) DO UPDATE SET tipo=excluded.tipo,documento_id=excluded.documento_id,numero=excluded.numero,anterior_id=excluded.anterior_id,criado_em=excluded.criado_em,computador=excluded.computador,descricao=excluded.descricao,documento=excluded.documento;
 WHEN 'recebimentos' THEN INSERT INTO public.recebimentos (empresa_id,id,recibo_id,relatorio_id,adiantamento_id,valor,estornado) VALUES (p_empresa,(p_row->>'id')::text,(p_row->>'recibo_id')::text,(p_row->>'relatorio_id')::text,(p_row->>'adiantamento_id')::text,(p_row->>'valor')::numeric,(p_row->>'estornado')::integer) ON CONFLICT (empresa_id,id) DO UPDATE SET recibo_id=excluded.recibo_id,relatorio_id=excluded.relatorio_id,adiantamento_id=excluded.adiantamento_id,valor=excluded.valor,estornado=excluded.estornado;
-WHEN 'clientes' THEN d:=(p_row->>'dados_json')::jsonb; IF jsonb_typeof(d)<>'object' THEN RAISE EXCEPTION 'Conteúdo inválido em clientes'; END IF; INSERT INTO public.clientes (empresa_id,id,nome,tratamento,contato,observacao,ativo,criado_em,tipo_pessoa,cpf_cnpj,telefone,email,endereco,nome_fantasia,pessoa_contato,campos_presentes,dados_adicionais) VALUES (p_empresa,(p_row->>'id')::text,(p_row->>'nome')::text,(p_row->>'tratamento')::text,(p_row->>'contato')::text,(p_row->>'observacao')::text,(p_row->>'ativo')::integer,(p_row->>'criado_em')::text,(d->>'tipoPessoa')::text,(d->>'documento')::text,(d->>'telefone')::text,(d->>'email')::text,d->'endereco',(d->>'nomeFantasia')::text,(d->>'pessoaContato')::text,ARRAY(SELECT jsonb_object_keys(d) INTERSECT SELECT unnest(ARRAY['id','nome','tratamento','contato','observacao','ativo','criadoEm','tipoPessoa','documento','telefone','email','endereco','nomeFantasia','pessoaContato']::text[])),d - ARRAY['id','nome','tratamento','contato','observacao','ativo','criadoEm','tipoPessoa','documento','telefone','email','endereco','nomeFantasia','pessoaContato']::text[]) ON CONFLICT (empresa_id,id) DO UPDATE SET nome=excluded.nome,tratamento=excluded.tratamento,contato=excluded.contato,observacao=excluded.observacao,ativo=excluded.ativo,criado_em=excluded.criado_em,tipo_pessoa=excluded.tipo_pessoa,cpf_cnpj=excluded.cpf_cnpj,telefone=excluded.telefone,email=excluded.email,endereco=excluded.endereco,nome_fantasia=excluded.nome_fantasia,pessoa_contato=excluded.pessoa_contato,campos_presentes=excluded.campos_presentes,dados_adicionais=excluded.dados_adicionais;
+WHEN 'clientes' THEN d:=(p_row->>'dados_json')::jsonb; IF jsonb_typeof(d)<>'object' THEN RAISE EXCEPTION 'Conteúdo inválido em clientes'; END IF; INSERT INTO public.clientes (empresa_id,id,nome,tratamento,contato,observacao,ativo,criado_em,tipo_pessoa,cpf_cnpj,telefone,email,endereco,nome_fantasia,pessoa_contato,codigo,campos_presentes,dados_adicionais) VALUES (p_empresa,(p_row->>'id')::text,(p_row->>'nome')::text,(p_row->>'tratamento')::text,(p_row->>'contato')::text,(p_row->>'observacao')::text,(p_row->>'ativo')::integer,(p_row->>'criado_em')::text,(d->>'tipoPessoa')::text,(d->>'documento')::text,(d->>'telefone')::text,(d->>'email')::text,d->'endereco',(d->>'nomeFantasia')::text,(d->>'pessoaContato')::text,(d->>'codigo')::bigint,ARRAY(SELECT jsonb_object_keys(d) INTERSECT SELECT unnest(ARRAY['id','nome','tratamento','contato','observacao','ativo','criadoEm','tipoPessoa','documento','telefone','email','endereco','nomeFantasia','pessoaContato','codigo']::text[])),d - ARRAY['id','nome','tratamento','contato','observacao','ativo','criadoEm','tipoPessoa','documento','telefone','email','endereco','nomeFantasia','pessoaContato','codigo']::text[]) ON CONFLICT (empresa_id,id) DO UPDATE SET nome=excluded.nome,tratamento=excluded.tratamento,contato=excluded.contato,observacao=excluded.observacao,ativo=excluded.ativo,criado_em=excluded.criado_em,tipo_pessoa=excluded.tipo_pessoa,cpf_cnpj=excluded.cpf_cnpj,telefone=excluded.telefone,email=excluded.email,endereco=excluded.endereco,nome_fantasia=excluded.nome_fantasia,pessoa_contato=excluded.pessoa_contato,codigo=excluded.codigo,campos_presentes=excluded.campos_presentes,dados_adicionais=excluded.dados_adicionais;
 WHEN 'recibos' THEN d:=(p_row->>'dados')::jsonb; IF jsonb_typeof(d)<>'object' THEN RAISE EXCEPTION 'Conteúdo inválido em recibos'; END IF; INSERT INTO public.recibos (empresa_id,id,numero,data,cliente_id,destinatario,descricao,valor,local_pagamento,forma_pagamento,status,quitacao,origem_tipo,origem_id,adiantamento_id,observacao,criado_em,atualizado_em,campos_presentes,dados_adicionais) VALUES (p_empresa,(p_row->>'id')::text,(p_row->>'numero')::bigint,(d->>'data')::date,(d->>'clienteId')::text,(d->>'destinatario')::text,(d->>'descricao')::text,(d->>'valor')::numeric,(d->>'local')::text,(d->>'formaPagamento')::text,(d->>'status')::text,(d->>'quitacao')::text,(d->>'origemTipo')::text,(d->>'origemId')::text,(d->>'adiantamentoId')::text,(d->>'observacao')::text,(d->>'criadoEm')::text,(d->>'atualizadoEm')::text,ARRAY(SELECT jsonb_object_keys(d) INTERSECT SELECT unnest(ARRAY['id','numero','data','clienteId','destinatario','descricao','valor','local','formaPagamento','status','quitacao','origemTipo','origemId','adiantamentoId','observacao','criadoEm','atualizadoEm']::text[])),d - ARRAY['id','numero','data','clienteId','destinatario','descricao','valor','local','formaPagamento','status','quitacao','origemTipo','origemId','adiantamentoId','observacao','criadoEm','atualizadoEm']::text[]) ON CONFLICT (empresa_id,id) DO UPDATE SET numero=excluded.numero,data=excluded.data,cliente_id=excluded.cliente_id,destinatario=excluded.destinatario,descricao=excluded.descricao,valor=excluded.valor,local_pagamento=excluded.local_pagamento,forma_pagamento=excluded.forma_pagamento,status=excluded.status,quitacao=excluded.quitacao,origem_tipo=excluded.origem_tipo,origem_id=excluded.origem_id,adiantamento_id=excluded.adiantamento_id,observacao=excluded.observacao,criado_em=excluded.criado_em,atualizado_em=excluded.atualizado_em,campos_presentes=excluded.campos_presentes,dados_adicionais=excluded.dados_adicionais;
 
   ELSE RAISE EXCEPTION 'Tabela não compartilhável'; END CASE;
@@ -171,6 +220,14 @@ END $$;
 CREATE OR REPLACE FUNCTION sincronizacao.semantico(p jsonb) RETURNS jsonb LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog AS $$
 DECLARE resultado jsonb:=p; tabela text; dados jsonb; linha jsonb; novo jsonb; k text; serializados text[]; arr jsonb;
 BEGIN
+  -- O código de cadastro é atribuído pela nuvem e pode diferir do provisório local.
+  -- Excluí-lo da comparação permite que a linha canônica seja sincronizada de volta.
+  IF p->>'tabela'='servicos' AND jsonb_typeof(p->'row')='object' THEN
+    resultado:=jsonb_set(resultado,'{row}',(p->'row')-'codigo');
+  ELSIF p->>'tabela'='clientes' AND jsonb_typeof(p->'row')='object'
+      AND jsonb_typeof(p->'row'->'dados_json')='string' THEN
+    resultado:=jsonb_set(resultado,'{row,dados_json}',to_jsonb(((p->'row'->>'dados_json')::jsonb)-'codigo'));
+  END IF;
   -- Os clientes antigos representam exclusão com row:null; a resposta canônica
   -- omite row. Somente essa chave é normalizada, sem ocultar campos desconhecidos.
   IF p->>'tabela' IN ('clientes','servicos','observacoes_padrao','pagamentos_padrao','configuracoes','imagens')
@@ -189,9 +246,9 @@ BEGIN
       SELECT coalesce(jsonb_agg(x ORDER BY x::text),'[]'::jsonb) INTO arr FROM jsonb_array_elements(arr) x;
       resultado:=jsonb_set(resultado,ARRAY['rows',tabela],arr);
     END LOOP;
-  ELSIF p ? 'row' THEN
-    k:=CASE p->>'tabela' WHEN 'clientes' THEN 'dados_json' WHEN 'configuracoes' THEN 'valor' ELSE NULL END;
-    IF k IS NOT NULL AND jsonb_typeof(p->'row'->k)='string' THEN resultado:=jsonb_set(resultado,ARRAY['row',k],(p->'row'->>k)::jsonb); END IF;
+  ELSIF resultado ? 'row' THEN
+    k:=CASE resultado->>'tabela' WHEN 'clientes' THEN 'dados_json' WHEN 'configuracoes' THEN 'valor' ELSE NULL END;
+    IF k IS NOT NULL AND jsonb_typeof(resultado->'row'->k)='string' THEN resultado:=jsonb_set(resultado,ARRAY['row',k],(resultado->'row'->>k)::jsonb); END IF;
   END IF;
   RETURN resultado;
 END $$;
@@ -216,7 +273,7 @@ END LOOP; END $financeiro$;
 CREATE OR REPLACE FUNCTION sincronizacao.linhas(p_empresa uuid,p_tabela text,p_id text,p_tipo text DEFAULT NULL) RETURNS jsonb LANGUAGE plpgsql STABLE SET search_path=public,sincronizacao,pg_temp AS $$
 DECLARE resultado jsonb;
 BEGIN CASE p_tabela
-  WHEN 'servicos' THEN SELECT coalesce(jsonb_agg(jsonb_build_object('id',r.id,'nome',r.nome,'descricao_padrao',r.descricao_padrao,'unidade',r.unidade,'preco_referencia',r.preco_referencia,'ordem',r.ordem) ORDER BY r.id),'[]'::jsonb) INTO resultado FROM public.servicos r WHERE r.empresa_id=p_empresa AND r.id=p_id;
+  WHEN 'servicos' THEN SELECT coalesce(jsonb_agg(jsonb_build_object('id',r.id,'nome',r.nome,'descricao_padrao',r.descricao_padrao,'unidade',r.unidade,'preco_referencia',r.preco_referencia,'ordem',r.ordem,'codigo',r.codigo) ORDER BY r.id),'[]'::jsonb) INTO resultado FROM public.servicos r WHERE r.empresa_id=p_empresa AND r.id=p_id;
 WHEN 'observacoes_padrao' THEN SELECT coalesce(jsonb_agg(jsonb_build_object('id',r.id,'texto',r.texto,'padrao',r.padrao,'ordem',r.ordem,'aplicacao',r.aplicacao) ORDER BY r.id),'[]'::jsonb) INTO resultado FROM public.observacoes_padrao r WHERE r.empresa_id=p_empresa AND r.id=p_id;
 WHEN 'pagamentos_padrao' THEN SELECT coalesce(jsonb_agg(jsonb_build_object('id',r.id,'texto',r.texto,'padrao',r.padrao,'ordem',r.ordem,'aplicacao',r.aplicacao) ORDER BY r.id),'[]'::jsonb) INTO resultado FROM public.formas_pagamento_padrao r WHERE r.empresa_id=p_empresa AND r.id=p_id;
 WHEN 'configuracoes' THEN SELECT coalesce(jsonb_agg(jsonb_build_object('chave',r.chave,'valor',CASE WHEN r.valor IS NULL THEN NULL ELSE r.valor::text END) ORDER BY r.chave),'[]'::jsonb) INTO resultado FROM public.configuracoes_empresa r WHERE r.empresa_id=p_empresa AND r.chave=p_id;
@@ -233,7 +290,7 @@ WHEN 'relatorio_textos' THEN SELECT coalesce(jsonb_agg(jsonb_build_object('id',r
 WHEN 'relatorio_anexos' THEN SELECT coalesce(jsonb_agg(jsonb_build_object('id',r.id,'relatorio_id',r.relatorio_id,'referencia_tipo',r.referencia_tipo,'referencia_id',r.referencia_id,'ordem',r.ordem,'titulo',r.titulo,'descricao',r.descricao,'mime',r.mime,'largura',r.largura,'altura',r.altura,'imagem',r.imagem,'miniatura',r.miniatura) ORDER BY r.relatorio_id,r.id),'[]'::jsonb) INTO resultado FROM public.anexos_relatorio r WHERE r.empresa_id=p_empresa AND r.relatorio_id=p_id;
 WHEN 'versoes' THEN SELECT coalesce(jsonb_agg(jsonb_build_object('id',r.id,'tipo',r.tipo,'documento_id',r.documento_id,'numero',r.numero,'anterior_id',r.anterior_id,'criado_em',r.criado_em,'computador',r.computador,'descricao',r.descricao,'documento',CASE WHEN r.documento IS NULL THEN NULL ELSE r.documento::text END) ORDER BY r.id),'[]'::jsonb) INTO resultado FROM public.versoes_documentos r WHERE r.empresa_id=p_empresa AND r.tipo=p_tipo AND r.documento_id=p_id;
 WHEN 'recebimentos' THEN SELECT coalesce(jsonb_agg(jsonb_build_object('id',r.id,'recibo_id',r.recibo_id,'relatorio_id',r.relatorio_id,'adiantamento_id',r.adiantamento_id,'valor',r.valor,'estornado',r.estornado) ORDER BY r.id),'[]'::jsonb) INTO resultado FROM public.recebimentos r WHERE r.empresa_id=p_empresa AND r.recibo_id=p_id;
-WHEN 'clientes' THEN SELECT coalesce(jsonb_agg(jsonb_build_object('id',r.id,'nome',r.nome,'tratamento',r.tratamento,'contato',r.contato,'observacao',r.observacao,'ativo',r.ativo,'criado_em',r.criado_em,'dados_json',sincronizacao.recompor_json(to_jsonb(r), '{"id":"id","nome":"nome","tratamento":"tratamento","contato":"contato","observacao":"observacao","ativo":"ativo:boolean","criadoEm":"criado_em","tipoPessoa":"tipo_pessoa","documento":"cpf_cnpj","telefone":"telefone","email":"email","endereco":"endereco","nomeFantasia":"nome_fantasia","pessoaContato":"pessoa_contato"}'::jsonb,r.campos_presentes,r.dados_adicionais)::text)),'[]'::jsonb) INTO resultado FROM public.clientes r WHERE r.empresa_id=p_empresa AND r.id=p_id;
+WHEN 'clientes' THEN SELECT coalesce(jsonb_agg(jsonb_build_object('id',r.id,'nome',r.nome,'tratamento',r.tratamento,'contato',r.contato,'observacao',r.observacao,'ativo',r.ativo,'criado_em',r.criado_em,'dados_json',sincronizacao.recompor_json(to_jsonb(r), '{"id":"id","nome":"nome","tratamento":"tratamento","contato":"contato","observacao":"observacao","ativo":"ativo:boolean","criadoEm":"criado_em","tipoPessoa":"tipo_pessoa","documento":"cpf_cnpj","telefone":"telefone","email":"email","endereco":"endereco","nomeFantasia":"nome_fantasia","pessoaContato":"pessoa_contato","codigo":"codigo"}'::jsonb,r.campos_presentes,r.dados_adicionais)::text)),'[]'::jsonb) INTO resultado FROM public.clientes r WHERE r.empresa_id=p_empresa AND r.id=p_id;
 WHEN 'recibos' THEN SELECT coalesce(jsonb_agg(jsonb_build_object('id',r.id,'numero',r.numero,'dados',sincronizacao.recompor_json(to_jsonb(r), '{"id":"id","numero":"numero","data":"data","clienteId":"cliente_id","destinatario":"destinatario","descricao":"descricao","valor":"valor","local":"local_pagamento","formaPagamento":"forma_pagamento","status":"status","quitacao":"quitacao","origemTipo":"origem_tipo","origemId":"origem_id","adiantamentoId":"adiantamento_id","observacao":"observacao","criadoEm":"criado_em","atualizadoEm":"atualizado_em"}'::jsonb,r.campos_presentes,r.dados_adicionais)::text)),'[]'::jsonb) INTO resultado FROM public.recibos r WHERE r.empresa_id=p_empresa AND r.id=p_id;
 
   WHEN 'documento_meta' THEN SELECT coalesce(jsonb_agg(jsonb_build_object('tipo',r.tipo,'documento_id',r.documento_id,'dados',r.dados::text)),'[]'::jsonb) INTO resultado FROM documentos r WHERE r.empresa_id=p_empresa AND r.tipo=p_tipo AND r.documento_id=p_id;
@@ -364,7 +421,7 @@ SET CONSTRAINTS ALL IMMEDIATE;
 DO $permissoes$
 DECLARE nome text;schema_nome text;
 BEGIN
-  FOR nome IN SELECT unnest(ARRAY['servicos','observacoes_padrao','formas_pagamento_padrao','configuracoes_empresa','imagens','orcamentos','itens_orcamento','materiais_orcamento','textos_orcamento','anexos_orcamento','relatorios','itens_relatorio','lancamentos_relatorio','textos_relatorio','anexos_relatorio','versoes_documentos','recebimentos','clientes','recibos','documentos','imagens_versoes','computadores','reservas_numeros','entidades','operacoes']) LOOP
+  FOR nome IN SELECT unnest(ARRAY['servicos','observacoes_padrao','formas_pagamento_padrao','configuracoes_empresa','imagens','orcamentos','itens_orcamento','materiais_orcamento','textos_orcamento','anexos_orcamento','relatorios','itens_relatorio','lancamentos_relatorio','textos_relatorio','anexos_relatorio','versoes_documentos','recebimentos','clientes','recibos','documentos','imagens_versoes','codigos_cadastros','computadores','reservas_numeros','entidades','operacoes']) LOOP
     schema_nome:=CASE WHEN nome IN ('entidades','operacoes') THEN 'sincronizacao' ELSE 'public' END;
     EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY',schema_nome,nome);
     EXECUTE format('DROP POLICY IF EXISTS empresa_leitura ON %I.%I',schema_nome,nome);

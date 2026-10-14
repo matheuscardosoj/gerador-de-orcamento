@@ -1,8 +1,9 @@
-# Nuvem da empresa — protocolo 3 / esquema local 11
+# Nuvem da empresa — versão 1.5.0-rc.9 / esquema local 12
 
-> Este guia descreve a configuração existente por projeto da empresa. O acesso
-> central para múltiplas empresas está em desenvolvimento; não use seus scripts
-> em produção antes da validação e da entrega autorizada.
+> O acesso central por convite e perfis separados já está integrado. Para uma
+> empresa que já usa o Supabase, aplique apenas as migrações incrementais da
+> atualização; não execute novamente o esquema inicial nem restaure um backup
+> antigo sobre a base ativa.
 
 Use um projeto Supabase por empresa. Cada pessoa pode ter seu próprio login, vinculado à mesma empresa em **Configurações → Usuários**. Todos os membros ativos têm acesso completo; não é possível remover o último membro ativo. Preferências dos históricos e configuração da IA permanecem locais.
 
@@ -12,9 +13,9 @@ Use um projeto Supabase por empresa. Cada pessoa pode ter seu próprio login, vi
 
 1. Sincronize todos os computadores, resolva pendências e exporte um backup em **Dados e backup**. Salve as edições e feche todos os aplicativos.
 2. Guarde uma exportação remota verificada. O ensaio `scripts/verificar-migracao-colaboracao.mjs` compara essa cópia em PostgreSQL isolado, incluindo documentos, valores, imagens, versões e reservas.
-3. No SQL Editor do projeto existente, execute **schema-colaboracao.sql inteiro**, incluído com a atualização. O botão **Copiar configuração do banco** fornece esse script. Não publique novamente a base nem apague tabelas.
+3. Para a atualização rc.9, execute `migrations/004_codigos_cadastros.sql` no SQL Editor antes de conectar os computadores atualizados. Ele adiciona códigos de clientes e serviços e mantém o conteúdo existente. Não publique novamente a base nem apague tabelas.
 4. Na passagem de um protocolo anterior para o protocolo 3, a migração autorizada organiza a numeração dos documentos atuais de 1 em diante por tipo, registrando mapa e novas versões. Preserva chaves técnicas, pagamentos, imagens e versões antigas com os números anteriores. A conta atual torna-se o primeiro membro. Reexecutar o script não repete a renumeração.
-5. Atualize **todos os computadores para 1.5** antes de editar. Gravações antigas são bloqueadas pelo servidor para proteger edição e pagamentos. O SQLite local migra automaticamente para o esquema 11, com backup verificado anterior à mudança.
+5. Atualize **todos os computadores para a mesma versão** antes de editar. O SQLite local migra automaticamente para o esquema 12, com backup verificado anterior à mudança.
 6. Abra a versão atualizada com o mesmo usuário do Windows. A base e a sessão existentes continuam na pasta de dados. Confira **0 alterações aguardando envio**, ausência de conflitos e **Tempo real conectado**. Confira documentos e números nos históricos. Se houver operações antigas preservadas, revise a atualização antes de adotar a base; não serão enviadas automaticamente.
 
 Um erro no SQL deve reverter a transação. Não execute novamente o esquema antigo após concluir a migração. Restauração local e restauração da nuvem são operações distintas: preserve os backups e investigue o erro antes de publicar dados.
@@ -98,3 +99,20 @@ Backups incluem documentos, imagens, versões, recebimentos, rascunhos, chaves t
 Use dois logins vinculados e dois computadores atualizados. Salve uma alteração e confira o outro histórico; teste documento limpo e formulário alterado. Teste solicitação, transferência, preparação offline, reconexão e conciliação. Faça pagamentos de teste em base separada para evitar consumo de números e registros financeiros na empresa.
 
 Se o canal estiver indisponível, fila e recuperação periódica continuam. Se o projeto estiver pausado, reative-o no painel. Para confirmar toda a base na nuvem, confira zero pendências, ausência de erros/conflitos e comparação de documentos, valores, versões, imagens e recebimentos.
+
+# Atualização do candidato 1.5.0-rc.9
+
+Antes de instalar o rc.9 nos computadores, abra uma consulta no SQL Editor do
+projeto e execute `migrations/004_codigos_cadastros.sql`. Essa etapa adiciona os
+códigos de clientes e serviços e mantém o protocolo de sincronização atual. O
+arquivo está junto do instalador em `supabase/migrations`.
+
+Depois de confirmar que o backup da empresa está restaurável, execute
+`migrations/005_reconciliar_numero_recibos_teste.sql` uma única vez. A operação
+procura somente o recibo identificado como `TESTE-RELEASE-20261014`, exige que
+ele esteja excluído, sem recebimento e sem emissão. Antes de liberar o número,
+verifica se há outros números atribuídos ou reservas que impeçam o próximo
+recibo 000002. Em caso de dúvida, o SQL falha e a transação não altera a sequência.
+Confira a linha de auditoria retornada pelo SQL Editor antes de instalar o
+candidato. Os próximos números esperados são orçamento 000018, relatório 000005
+e recibo 000002, desde que a auditoria da nuvem confirme esses estados.

@@ -1,7 +1,7 @@
 import { mensagemErro } from '@shared/erros'
 import { ListaOrdenavel } from '../ui/ordenavel'
 import { validarCliente } from '@shared/clientes'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Trash2, Plus, Pencil, Save, FilterX } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAsync } from '../lib/hooks'
@@ -89,6 +89,7 @@ function SecaoClientes({
   const [busca, setBusca] = useState('')
   const [estado, setEstado] = useState('')
   const [tipo, setTipo] = useState('')
+  const [ordenarPorCodigo, setOrdenarPorCodigo] = useState(false)
   const [direcao, setDirecao] = useState<'asc' | 'desc'>('asc')
   const [excluir, setExcluir] = useState<Cliente | null>(null)
   const [erro, setErro] = useState<string | null>(null)
@@ -110,6 +111,7 @@ function SecaoClientes({
         (!tipo || (c.tipoPessoa ?? 'pf') === tipo) &&
         correspondeBusca(busca, [
           c.nome,
+          String(c.codigo ?? ''),
           c.nomeFantasia ?? '',
           c.documento ?? '',
           c.telefone ?? '',
@@ -119,7 +121,12 @@ function SecaoClientes({
           c.observacao ?? ''
         ])
     )
-    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR') * (direcao === 'asc' ? 1 : -1))
+    .sort(
+      (a, b) =>
+        (ordenarPorCodigo
+          ? (a.codigo ?? 0) - (b.codigo ?? 0)
+          : a.nome.localeCompare(b.nome, 'pt-BR')) * (direcao === 'asc' ? 1 : -1)
+    )
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -180,6 +187,7 @@ function SecaoClientes({
       ) : (
         <DataTableFrame minWidth="1100px">
           <colgroup>
+            <col className="w-24" />
             <col style={{ width: '30%' }} />
             <col className="w-40" />
             <col className="w-48" />
@@ -190,10 +198,28 @@ function SecaoClientes({
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
             <tr>
               <SortableHeader
-                label="Nome / razão social"
-                active
+                label="Código"
+                active={ordenarPorCodigo}
                 direction={direcao}
-                onSort={() => setDirecao(direcao === 'asc' ? 'desc' : 'asc')}
+                onSort={() => {
+                  if (ordenarPorCodigo) setDirecao(direcao === 'asc' ? 'desc' : 'asc')
+                  else {
+                    setOrdenarPorCodigo(true)
+                    setDirecao('asc')
+                  }
+                }}
+              />
+              <SortableHeader
+                label="Nome / razão social"
+                active={!ordenarPorCodigo}
+                direction={direcao}
+                onSort={() => {
+                  if (!ordenarPorCodigo) setDirecao(direcao === 'asc' ? 'desc' : 'asc')
+                  else {
+                    setOrdenarPorCodigo(false)
+                    setDirecao('asc')
+                  }
+                }}
               />
               <th scope="col" className="px-4 py-3 text-left">
                 Tipo
@@ -218,6 +244,9 @@ function SecaoClientes({
           <tbody className="divide-y divide-slate-100">
             {filtrados.map((c) => (
               <tr key={c.id} className="group/linha-historico h-[62px] hover:bg-slate-50">
+                <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-600">
+                  {c.codigo ? String(c.codigo).padStart(6, '0') : '—'}
+                </td>
                 <td className="px-4 py-3 font-medium text-slate-800">
                   <span className="line-clamp-2 break-words" title={c.nome}>
                     {c.nome}
@@ -305,6 +334,16 @@ function ClienteModal({
   const [form, setForm] = useState<Omit<Cliente, 'id' | 'criadoEm'>>(cliente ?? clienteVazio())
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
+  const [excluidoRemotamente, setExcluidoRemotamente] = useState(false)
+  useEffect(() => {
+    if (!cliente) return
+    return api.eventos.observarDados((evento) => {
+      if (evento.origem !== 'nuvem' || !evento.entidades.includes(`clientes:${cliente.id}`)) return
+      void api.clientes.list().then((atual) => {
+        if (!atual.some((c) => c.id === cliente.id)) setExcluidoRemotamente(true)
+      })
+    })
+  }, [cliente])
   const set = (patch: Partial<typeof form>): void => setForm({ ...form, ...patch })
 
   const salvar = async (): Promise<void> => {
@@ -313,8 +352,13 @@ function ClienteModal({
     setErro('')
     try {
       validarCliente({ ...form, id: cliente?.id ?? '', criadoEm: cliente?.criadoEm ?? '' })
-      if (cliente) await api.clientes.update(cliente.id, form)
-      else await api.clientes.create(form)
+      if (cliente && !excluidoRemotamente) {
+        const atualizado = await api.clientes.update(cliente.id, form)
+        if (!atualizado)
+          throw new Error(
+            'Este cliente foi excluído em outro computador. Escolha criar como novo cadastro.'
+          )
+      } else await api.clientes.create(form)
       onSaved()
     } catch (e) {
       setErro(mensagemErro(e))
@@ -335,13 +379,19 @@ function ClienteModal({
             Cancelar
           </Button>
           <Button icon={Save} onClick={() => void salvar()} disabled={salvando}>
-            {salvando ? 'Salvando…' : 'Salvar'}
+            {salvando ? 'Salvando…' : excluidoRemotamente ? 'Criar como novo cliente' : 'Salvar'}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
         {erro && <Mensagem>{erro}</Mensagem>}
+        {excluidoRemotamente && (
+          <Mensagem tom="aviso">
+            Este cliente foi excluído em outro computador. Salvar criará um novo cadastro com outro
+            código.
+          </Mensagem>
+        )}
         <Field label="Nome / razão social (obrigatório)">
           <Input value={form.nome} onChange={(e) => set({ nome: e.target.value })} autoFocus />
         </Field>
@@ -490,6 +540,8 @@ function SecaoServicos({
     reload
   } = useAsync(() => api.servicos.list(), [], ['servicos'])
   const [busca, setBusca] = useState('')
+  const [ordenarPorCodigo, setOrdenarPorCodigo] = useState(false)
+  const [direcaoCodigo, setDirecaoCodigo] = useState<'asc' | 'desc'>('asc')
   const [excluir, setExcluir] = useState<ServicoCatalogo | null>(null)
   const [reordenando, setReordenando] = useState(false)
   const [erroOrdem, setErroOrdem] = useState('')
@@ -506,9 +558,15 @@ function SecaoServicos({
     }
   }
 
-  const filtrados = (data ?? []).filter((s) =>
-    correspondeBusca(busca, [s.nome, s.descricaoPadrao, s.unidade])
-  )
+  const filtrados = (data ?? [])
+    .filter((s) =>
+      correspondeBusca(busca, [String(s.codigo ?? ''), s.nome, s.descricaoPadrao, s.unidade])
+    )
+    .sort((a, b) =>
+      ordenarPorCodigo
+        ? ((a.codigo ?? 0) - (b.codigo ?? 0)) * (direcaoCodigo === 'asc' ? 1 : -1)
+        : 0
+    )
   return (
     <div className="space-y-4">
       {erroOrdem && <Mensagem className="mb-4">{erroOrdem}</Mensagem>}
@@ -542,8 +600,9 @@ function SecaoServicos({
           }
         />
       ) : (
-        <DataTableFrame minWidth="1000px">
+        <DataTableFrame minWidth="1080px">
           <colgroup>
+            <col className="w-24" />
             <col style={{ width: '30%' }} />
             <col style={{ width: '40%' }} />
             <col className="w-40" />
@@ -552,6 +611,18 @@ function SecaoServicos({
           </colgroup>
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
             <tr>
+              <SortableHeader
+                label="Código"
+                active={ordenarPorCodigo}
+                direction={direcaoCodigo}
+                onSort={() => {
+                  if (ordenarPorCodigo) setDirecaoCodigo(direcaoCodigo === 'asc' ? 'desc' : 'asc')
+                  else {
+                    setOrdenarPorCodigo(true)
+                    setDirecaoCodigo('asc')
+                  }
+                }}
+              />
               <th scope="col" className="px-4 py-3 text-left">
                 Serviço
               </th>
@@ -575,11 +646,14 @@ function SecaoServicos({
           <tbody className="divide-y divide-slate-100">
             <ListaOrdenavel
               itens={filtrados}
-              disabled={reordenando || !!busca.trim()}
+              disabled={reordenando || !!busca.trim() || ordenarPorCodigo}
               onChange={(itens) => void reordenar(itens.map((i) => i.id))}
             >
               {filtrados.map((s) => (
                 <tr key={s.id} className="group/linha-historico h-[62px] hover:bg-slate-50">
+                  <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-600">
+                    {s.codigo ? String(s.codigo).padStart(6, '0') : '—'}
+                  </td>
                   <td className="px-4 py-3 font-medium text-slate-800">
                     <span className="line-clamp-2 break-words" title={s.nome}>
                       {s.nome}
@@ -659,13 +733,33 @@ function ServicoModal({
   onSaved: () => void
 }): JSX.Element {
   const [form, setForm] = useState<Omit<ServicoCatalogo, 'id'>>(servico ?? servicoVazio())
+  const [excluidoRemotamente, setExcluidoRemotamente] = useState(false)
+  const [erro, setErro] = useState('')
+  useEffect(() => {
+    if (!servico) return
+    return api.eventos.observarDados((evento) => {
+      if (evento.origem !== 'nuvem' || !evento.entidades.includes(`servicos:${servico.id}`)) return
+      void api.servicos.list().then((atual) => {
+        if (!atual.some((s) => s.id === servico.id)) setExcluidoRemotamente(true)
+      })
+    })
+  }, [servico])
   const set = (patch: Partial<typeof form>): void => setForm({ ...form, ...patch })
 
   const salvar = async (): Promise<void> => {
     if (!form.nome.trim()) return
-    if (servico) await api.servicos.update(servico.id, form)
-    else await api.servicos.create(form)
-    onSaved()
+    try {
+      if (servico && !excluidoRemotamente) {
+        const atualizado = await api.servicos.update(servico.id, form)
+        if (!atualizado)
+          throw new Error(
+            'Este serviço foi excluído em outro computador. Escolha criar como novo cadastro.'
+          )
+      } else await api.servicos.create(form)
+      onSaved()
+    } catch (e) {
+      setErro(mensagemErro(e))
+    }
   }
 
   return (
@@ -680,12 +774,19 @@ function ServicoModal({
             Cancelar
           </Button>
           <Button icon={Save} onClick={salvar}>
-            Salvar
+            {excluidoRemotamente ? 'Criar como novo serviço' : 'Salvar'}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
+        {erro && <Mensagem>{erro}</Mensagem>}
+        {excluidoRemotamente && (
+          <Mensagem tom="aviso">
+            Este serviço foi excluído em outro computador. Salvar criará um novo cadastro com outro
+            código.
+          </Mensagem>
+        )}
         <Field label="Nome do serviço">
           <Input value={form.nome} onChange={(e) => set({ nome: e.target.value })} autoFocus />
         </Field>

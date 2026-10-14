@@ -44,6 +44,7 @@ export interface ParametrosFinanceiros extends ParametrosEncargos {
 }
 
 export interface Cliente {
+  codigo?: number
   tipoPessoa?: 'pf' | 'pj' | null
   documento?: string
   telefone?: string
@@ -63,6 +64,7 @@ export interface Cliente {
 }
 
 export interface ServicoCatalogo {
+  codigo?: number
   id: string
   nome: string
   descricaoPadrao: string
