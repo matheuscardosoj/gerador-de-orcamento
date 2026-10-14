@@ -89,7 +89,7 @@ o app tenta o Ollama automaticamente.
 
 ## Status
 
-**Candidato para validação: 1.5.0-rc.7**, SQLite esquema 11 e protocolo central de nuvem 4.
+**Candidato para validação: 1.5.0-rc.8**, SQLite esquema 11 e protocolo central de nuvem 4.
 O aplicativo usa somente Nº do documento e mantém chaves técnicas ocultas. Inclui
 usuários vinculados, Broadcast privado, controle de edição, rascunhos offline e
 preservação de operações pendentes em backups. Código e testes isolados não

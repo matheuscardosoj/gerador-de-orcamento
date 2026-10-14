@@ -1,4 +1,4 @@
-# Acesso central — validação dos candidatos rc.6 e rc.7 (13/10/2026)
+# Acesso central — validação do candidato rc.8 (14/10/2026)
 
 ## Implementado no código
 
@@ -107,8 +107,8 @@ misturar os dados exibidos, conforme confirmação do usuário.
 1. Testar reenvio, cancelamento, expiração e rejeição de outro e-mail. Repetir
    entrega em Outlook; o único e-mail de recuperação confirmado chegou ao lixo
    eletrônico.
-2. Testar no serviço real alteração de senha, permissões entre empresas e
-   operações de administrador. Reinício e troca de conta passaram no rc.6.
+2. Testar permissões entre empresas e operações de administrador. Alteração de
+   senha, reinício e troca de conta passaram no rc.7.
 3. Testar nos dois computadores edição concorrente, numeração, pagamentos e
    recuperação de conexão. Confirmar que as 37 operações antigas seguem apenas
    como histórico preservado.
@@ -135,30 +135,63 @@ e-mails longos em até duas linhas. O executável rc.7 passou pelo ensaio das
 telas de acesso em perfil isolado. O usuário instalou o rc.7, verificou a tabela
 na largura da captura e confirmou que ficou alinhada, sem sobreposição.
 
+## Visualização de senha
+
+O usuário confirmou que conseguiu alterar a senha da conta de teste no rc.7 e
+entrar novamente com a nova senha. O rc.8 adiciona o controle animado de mostrar
+e ocultar em todos os campos de senha: login, aceite/recuperação de convite,
+Minha conta e conexão da nuvem. A interação será exercitada no ensaio do
+executável.
+
 O executável empacotado do rc.6 passou novamente pelo ensaio automatizado em
 perfil isolado, incluindo a tela de aceitação de convite e recuperação em
 larguras de 1024 e 1440 px. O envio real do convite passou no serviço após a
 correção, e o destinatário confirmou a aceitação com código e senha diretamente
 no aplicativo.
 
-O candidato rc.7 foi gerado para esses testes. Não houve merge para `main`
-nem publicação da versão final. Não recomendar o uso por outras empresas
-até concluir os ensaios reais acima.
+O executável empacotado do rc.8 passou por ensaio automatizado em perfil
+descartável: a tela de acesso e a tela de aceite do convite exibiram os
+controles de senha, e o teste confirmou a alternância entre senha visível e
+oculta. `npm run check` passou no rc.8: lint, formatação, TypeScript, 268 testes
+em 45 arquivos e compilação. Permanecem avisos de divisão de módulos do Vite,
+sem falha de build.
+
+## Limpeza autorizada em 14/10/2026
+
+Após autorização explícita do administrador, uma transação no projeto
+`gerador-orcamento` removeu os vínculos de acesso à empresa de
+`notebook@gmail.com` e `gerador.orcamentos.app+teste@gmail.com`, apagou os dois
+registros de convite do alias de teste e removeu o cadastro sem documentos
+associados `Teste de sincronização rc6`. As identidades globais de autenticação
+e a autoria histórica foram preservadas. A relação de autoria não foi reescrita;
+nenhum documento estava atribuído ao Notebook.
+
+A exclusão do cliente foi publicada como tombstone de sincronização, revisão 3,
+para que cópias locais removam o registro ao sincronizar. A verificação posterior
+retornou zero membros de teste, zero convites do alias, zero clientes com o ID
+removido e duas entradas de auditoria da limpeza. Os dois vínculos de dispositivo
+que estavam associados a Notebook e ao usuário de teste foram transferidos para
+`matheuscardosoj@outlook.com`, conforme autorização. Na próxima utilização, o
+notebook deve entrar com a conta Matheus e baixar/sincronizar a base; a operação
+antiga preservada continua no perfil anterior e não será publicada.
+
+O usuário confirmou o teste real de convite: o código chegou, a conta de teste
+entrou na empresa correta, reiniciou e saiu/entrou sem misturar dados. Também
+confirmou sincronização entre os dois computadores em menos de dois segundos no
+teste executado e validou o alinhamento da tabela de usuários no rc.7. A limpeza
+removeu depois o usuário de teste e o convite, portanto esses acessos já não
+estão disponíveis para novos ensaios.
+
+Não houve merge para `main` nem publicação da versão final. Permanecem os testes
+de reenvio, cancelamento, expiração e destinatário incorreto, entrega no Outlook,
+permissões entre empresas, criação repetida de empresas, concorrência, numeração,
+pagamentos e reconexão, além da checagem manual dos ícones de senha no rc.8.
+Não declarar o produto pronto para lançamento público até validar esses pontos.
 
 ## Artefato entregue
 
-O instalador `Gerador de Orçamentos Setup 1.5.0-rc.7.exe` está em
-`Downloads/Gerador de Orcamentos/Candidato 1.5.0-rc.7`. A cópia tem o mesmo
-SHA-256 do arquivo de saída:
-
-`B2E9066E0C6EE23899D915564868C4F32A84146160722292C0057C9D02AEF9A6`
-
-A configuração do pacote contém a URL e a chave pública do projeto. A busca
-no pacote não encontrou senha SMTP, endereço de e-mail SMTP nem valor de chave
-secreta.
-
-A configuração empacotada contém a URL e a chave pública do projeto, sem
-e-mail preenchido. Uma busca no arquivo da aplicação não encontrou valor de
-chave secreta nem a conta usada no SMTP. A biblioteca contém somente a
-expressão genérica `sb_secret_` (sem caracteres de chave após o prefixo) e
-referências genéricas a `service_role`; nenhuma delas é uma credencial.
+O instalador rc.8 está em `Downloads/Gerador de Orcamentos/Candidato
+1.5.0-rc.8` com este relatório e as instruções de teste. O rc.7 permanece na
+pasta anterior. Os pacotes incluem apenas a URL e a chave pública; não contêm
+credenciais SMTP ou administrativas. SHA-256 do instalador:
+`38836A4EFFC0AC798759A455FF9B0FC6C6CF93E909F598C9E1C83DF0FBECD8A1`.

@@ -2,6 +2,11 @@
 
 Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
+## 1.5.0-rc.8 — visualização de senha
+
+- Campos de senha permitem mostrar e ocultar o texto com um ícone animado,
+  inclusive no acesso, recuperação, Minha conta e conexão da nuvem.
+
 ## 1.5.0-rc.7 — ajuste da tabela de usuários
 
 - A tabela da empresa mantém colunas alinhadas em janelas estreitas e quebra

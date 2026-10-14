@@ -15,7 +15,7 @@ import {
   type ReactNode
 } from 'react'
 import { createPortal } from 'react-dom'
-import { X, type LucideIcon } from 'lucide-react'
+import { Eye, EyeOff, X, type LucideIcon } from 'lucide-react'
 import { mensagemErro } from '@shared/erros'
 import {
   formatarEntradaNumerica,
@@ -230,6 +230,54 @@ const fieldBase =
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   function Input({ className, ...props }, ref) {
     return <input ref={ref} className={cn(fieldBase, className)} {...props} />
+  }
+)
+
+export const PasswordInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
+  function PasswordInput({ className, type: _type, id, ...props }, ref) {
+    const [visivel, setVisivel] = useState(false)
+    const inputId = useId()
+    return (
+      <span className="relative block">
+        <input
+          ref={ref}
+          id={id ?? inputId}
+          className={cn(fieldBase, 'pr-11', className)}
+          type={visivel ? 'text' : 'password'}
+          {...props}
+        />
+        <button
+          type="button"
+          className="absolute inset-y-0 right-0 inline-flex w-10 items-center justify-center rounded-r-lg text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-teal/40"
+          aria-label={visivel ? 'Ocultar senha' : 'Mostrar senha'}
+          aria-pressed={visivel}
+          aria-controls={id ?? inputId}
+          title={visivel ? 'Ocultar senha' : 'Mostrar senha'}
+          onClick={() => setVisivel((atual) => !atual)}
+        >
+          <Eye
+            aria-hidden
+            focusable="false"
+            size={18}
+            strokeWidth={2}
+            className={cn(
+              'absolute transition-all duration-200 ease-out motion-reduce:transition-none',
+              visivel ? 'rotate-0 scale-100 opacity-100' : '-rotate-12 scale-75 opacity-0'
+            )}
+          />
+          <EyeOff
+            aria-hidden
+            focusable="false"
+            size={18}
+            strokeWidth={2}
+            className={cn(
+              'absolute transition-all duration-200 ease-out motion-reduce:transition-none',
+              visivel ? 'rotate-12 scale-75 opacity-0' : 'rotate-0 scale-100 opacity-100'
+            )}
+          />
+        </button>
+      </span>
+    )
   }
 )
 

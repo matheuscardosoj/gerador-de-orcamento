@@ -11,6 +11,7 @@ import {
   Card,
   Field,
   Input,
+  PasswordInput,
   Select,
   ConfirmDialog,
   SectionTitle,
@@ -222,8 +223,7 @@ export function NuvemSection(): JSX.Element {
             />
           </Field>
           <Field label="Senha">
-            <Input
-              type="password"
+            <PasswordInput
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
               autoComplete="current-password"

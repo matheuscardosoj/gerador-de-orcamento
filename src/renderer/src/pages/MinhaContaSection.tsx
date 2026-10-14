@@ -4,7 +4,7 @@ import { mensagemErro } from '@shared/erros'
 import { api } from '../lib/api'
 import { useBloqueioEdicao, useNav } from '../lib/nav'
 import { useConta } from '../components/ContaGate'
-import { Button, Card, Field, Input, Mensagem, SectionTitle } from '../ui/primitives'
+import { Button, Card, Field, Input, Mensagem, PasswordInput, SectionTitle } from '../ui/primitives'
 
 export function MinhaContaSection(): JSX.Element {
   const { conta, atualizar } = useConta()
@@ -90,9 +90,8 @@ export function MinhaContaSection(): JSX.Element {
             }}
           >
             <Field label="Senha atual">
-              <Input
+              <PasswordInput
                 required
-                type="password"
                 autoComplete="current-password"
                 disabled={ocupado}
                 value={atual}
@@ -100,9 +99,8 @@ export function MinhaContaSection(): JSX.Element {
               />
             </Field>
             <Field label="Nova senha" hint="Use de 8 a 128 caracteres.">
-              <Input
+              <PasswordInput
                 required
-                type="password"
                 autoComplete="new-password"
                 minLength={8}
                 maxLength={128}
@@ -112,9 +110,8 @@ export function MinhaContaSection(): JSX.Element {
               />
             </Field>
             <Field label="Confirme a nova senha">
-              <Input
+              <PasswordInput
                 required
-                type="password"
                 autoComplete="new-password"
                 minLength={8}
                 maxLength={128}

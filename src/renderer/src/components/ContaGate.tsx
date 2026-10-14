@@ -3,7 +3,16 @@ import type { EstadoConta } from '@shared/conta'
 import type { EmpresaConfig } from '@shared/types'
 import { mensagemErro } from '@shared/erros'
 import { api } from '../lib/api'
-import { Button, Card, Checkbox, Field, Input, Mensagem, SectionTitle } from '../ui/primitives'
+import {
+  Button,
+  Card,
+  Checkbox,
+  Field,
+  Input,
+  Mensagem,
+  PasswordInput,
+  SectionTitle
+} from '../ui/primitives'
 
 const ContaContext = createContext<{
   conta: EstadoConta
@@ -267,8 +276,7 @@ function Acesso({
         {modo === 'entrar' ? (
           <>
             <Field label="Senha">
-              <Input
-                type="password"
+              <PasswordInput
                 autoComplete="current-password"
                 required
                 value={senha}
@@ -301,8 +309,7 @@ function Acesso({
                 />
               </Field>
               <Field label="Nova senha" hint="Use pelo menos 8 caracteres.">
-                <Input
-                  type="password"
+                <PasswordInput
                   autoComplete="new-password"
                   minLength={8}
                   required
@@ -311,8 +318,7 @@ function Acesso({
                 />
               </Field>
               <Field label="Confirme a nova senha">
-                <Input
-                  type="password"
+                <PasswordInput
                   autoComplete="new-password"
                   minLength={8}
                   required
