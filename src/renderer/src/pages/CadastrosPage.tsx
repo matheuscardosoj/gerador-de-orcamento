@@ -244,7 +244,7 @@ function SecaoClientes({
           <tbody className="divide-y divide-slate-100">
             {filtrados.map((c) => (
               <tr key={c.id} className="group/linha-historico h-[62px] hover:bg-slate-50">
-                <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-600">
+                <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-800">
                   {c.codigo ? String(c.codigo).padStart(6, '0') : '—'}
                 </td>
                 <td className="px-4 py-3 font-medium text-slate-800">
@@ -651,7 +651,7 @@ function SecaoServicos({
             >
               {filtrados.map((s) => (
                 <tr key={s.id} className="group/linha-historico h-[62px] hover:bg-slate-50">
-                  <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-600">
+                  <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-800">
                     {s.codigo ? String(s.codigo).padStart(6, '0') : '—'}
                   </td>
                   <td className="px-4 py-3 font-medium text-slate-800">
