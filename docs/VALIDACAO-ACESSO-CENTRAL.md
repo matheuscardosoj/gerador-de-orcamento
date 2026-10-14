@@ -169,11 +169,12 @@ nenhum documento estava atribuído ao Notebook.
 A exclusão do cliente foi publicada como tombstone de sincronização, revisão 3,
 para que cópias locais removam o registro ao sincronizar. A verificação posterior
 retornou zero membros de teste, zero convites do alias, zero clientes com o ID
-removido e duas entradas de auditoria da limpeza. Os dois vínculos de dispositivo
-que estavam associados a Notebook e ao usuário de teste foram transferidos para
-`matheuscardosoj@outlook.com`, conforme autorização. Na próxima utilização, o
-notebook deve entrar com a conta Matheus e baixar/sincronizar a base; a operação
-antiga preservada continua no perfil anterior e não será publicada.
+removido, duas entradas de auditoria da remoção e uma entrada da transferência.
+Os dois vínculos de dispositivo que estavam associados a Notebook e ao usuário
+de teste foram transferidos para `matheuscardosoj@outlook.com`, conforme
+autorização. Na próxima utilização, o notebook deve entrar com a conta Matheus e
+baixar/sincronizar a base; a operação antiga preservada continua no perfil
+anterior e não será publicada.
 
 O usuário confirmou o teste real de convite: o código chegou, a conta de teste
 entrou na empresa correta, reiniciou e saiu/entrou sem misturar dados. Também
