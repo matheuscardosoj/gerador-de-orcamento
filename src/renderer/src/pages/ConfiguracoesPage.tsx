@@ -47,7 +47,7 @@ const AcoesFormulario = createContext<{
 export function ConfiguracoesPage(): JSX.Element {
   const { conta } = useConta()
   const { rota, navegar } = useNav()
-  const aba: Aba = rota.nome === 'configuracoes' ? (rota.aba ?? 'empresa') : 'empresa'
+  const aba: Aba = rota.nome === 'configuracoes' ? (rota.aba ?? 'conta') : 'conta'
   const [novoUsuario, setNovoUsuario] = useState(false)
   const [novoTexto, setNovoTexto] = useState(false)
   const [estadoSalvar, setEstadoSalvar] = useState<EstadoSalvar>({

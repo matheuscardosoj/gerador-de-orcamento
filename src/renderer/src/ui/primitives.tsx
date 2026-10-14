@@ -327,6 +327,7 @@ export function NumericInput({
 >): JSX.Element {
   const inteiro = step === 1
   const negativo = min !== undefined && min < 0
+  const casasDecimais = format === 'money' ? 2 : 10
   const [editando, setEditando] = useState(false)
   const [texto, setTexto] = useState('')
   const input = useRef<HTMLInputElement>(null)
@@ -357,7 +358,7 @@ export function NumericInput({
     input.current?.setCustomValidity(erroFaixa || '')
   }, [erroFaixa])
   const alterar = (entrada: string, posicao: number): void => {
-    const raw = lerEntradaNumerica(entrada, { inteiro, negativo })
+    const raw = lerEntradaNumerica(entrada, { inteiro, negativo, casas: casasDecimais })
     if (raw === null) return
     const mascarado = mascararNumeroEditavel(raw)
     const antes = (entrada.slice(0, posicao).match(/[\d,-]/g) ?? []).length

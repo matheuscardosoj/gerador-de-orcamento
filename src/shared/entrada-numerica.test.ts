@@ -43,4 +43,11 @@ it('preserva precisão das quantidades e mantém vazio diferente de zero nos fil
   expect(formatarEntradaNumerica(0, false, true)).toBe('0,00')
   expect(formatarEntradaNumerica(25591.4, false, true)).toBe('25.591,40')
   expect(formatarEntradaNumerica(12345, true)).toBe('12.345')
+  expect(formatarEntradaNumerica(1234.567, false, true)).toBe('1.234,57')
+})
+
+it('limita campos monetários a centavos e preserva casas em quantidades', () => {
+  expect(lerEntradaNumerica('123,45', { casas: 2 })).toBe('123,45')
+  expect(lerEntradaNumerica('123,456', { casas: 2 })).toBeNull()
+  expect(lerEntradaNumerica('1,234', { casas: 10 })).toBe('1,234')
 })

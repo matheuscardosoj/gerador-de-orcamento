@@ -57,6 +57,6 @@ export function formatarEntradaNumerica(
   if (!Number.isFinite(numero)) return ''
   return new Intl.NumberFormat('pt-BR', {
     minimumFractionDigits: inteiro ? 0 : monetario ? 2 : 0,
-    maximumFractionDigits: inteiro ? 0 : 10
+    maximumFractionDigits: inteiro ? 0 : monetario ? 2 : 10
   }).format(numero)
 }

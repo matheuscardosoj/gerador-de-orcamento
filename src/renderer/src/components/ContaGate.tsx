@@ -197,9 +197,23 @@ function Acesso({
       </TelaAcesso>
     )
   if (conta.fase === 'escolherEmpresa')
+    if (ocupado)
+      return (
+        <TelaAcesso>
+          <SectionTitle title="Abrindo sua empresa" description={`Conectado como ${conta.email}`} />
+          <p role="status" className="text-sm text-slate-500">
+            Conectando aos dados compartilhados. Isso pode levar alguns instantes…
+          </p>
+        </TelaAcesso>
+      )
+  if (conta.fase === 'escolherEmpresa')
     return (
       <TelaAcesso>
         <SectionTitle title="Escolha sua empresa" description={`Conectado como ${conta.email}`} />
+        <p className="text-sm text-slate-500">
+          Selecione a empresa para abrir os dados compartilhados. O cadastro inicial só aparece
+          quando os dados básicos dessa empresa ainda não foram preenchidos.
+        </p>
         {erro && <Mensagem>{erro}</Mensagem>}
         {conta.empresas.length ? (
           conta.empresas.map((e) => (
@@ -212,7 +226,9 @@ function Acesso({
                 void executar(async () => atualizar(await api.conta.selecionarEmpresa(e.id)))
               }
             >
-              {e.nome}
+              {e.nome.trim().toLocaleLowerCase('pt-BR') === 'empresa'
+                ? 'Minha empresa (nome não informado)'
+                : e.nome}
             </Button>
           ))
         ) : (
@@ -399,8 +415,12 @@ function AtivarEmpresa(): JSX.Element {
   return (
     <details className="rounded-lg border border-slate-200 p-4">
       <summary className="cursor-pointer text-sm font-medium text-slate-700">
-        Ativar uma empresa
+        Criar outra empresa
       </summary>
+      <p className="mt-3 text-sm text-slate-500">
+        Use esta opção para iniciar um espaço independente. Para acessar uma empresa já vinculada,
+        selecione-a acima.
+      </p>
       <form
         className="mt-4 space-y-4"
         onSubmit={(e) => {
