@@ -31,6 +31,19 @@ A migração SQL foi exercitada em PGlite com dados de teste, não na produção
 A tela Minha conta foi conferida na prévia demonstrativa, incluindo a confirmação
 de alterações não salvas. Isso não substitui os testes de autenticação real.
 
+O SMTP personalizado do Gmail foi salvo no Supabase e o endpoint oficial de
+recuperação aceitou a solicitação. O e-mail chegou ao endereço Outlook usado no
+teste, confirmando o envio real, mas foi classificado como lixo eletrônico. A
+entrega ainda precisa ser repetida em Gmail e Outlook depois da configuração dos
+demais templates. O lançamento deve orientar o usuário a marcar a primeira
+mensagem como confiável enquanto o remetente gratuito constrói reputação.
+
+Antes da migração foi criada uma cópia da base compartilhada em
+`Downloads/Gerador de Orcamentos/Migracao acesso central 2026-10-13`. O arquivo
+tem o mesmo SHA-256 da origem e passou por `PRAGMA integrity_check`, sem violações
+de chaves estrangeiras, com esquema local 11. O script somente leitura
+`scripts/verificar-backup-local.mjs` permite repetir essa verificação.
+
 ## Organização dos arquivos do usuário
 
 Oito artefatos antigos foram preservados em
@@ -40,14 +53,21 @@ mantidos. Não houve exclusão desses arquivos nem liberação de espaço alegad
 
 ## Pendências obrigatórias da entrega
 
-1. Concluir SMTP no painel com a senha de aplicativo informada pelo usuário e
-   testar recebimento efetivo, código, reenvio e recuperação. O formulário foi
-   preparado, mas salvar a credencial não foi confirmado.
-2. Ensaiar a migração com uma cópia atualizada da base compartilhada e comparar
-   documentos, numeração, valores, pagamentos, imagens e versões. Guardar backup
-   restaurável e confirmar que os dois computadores estão sincronizados e fechados.
-3. Publicar SQL e função central, configurar templates e cadastro por convite;
-   registrar o operador explicitamente. O projeto ecoplay está fora do escopo.
+1. Configurar o template de convite/código e repetir os testes reais de entrega,
+   código, reenvio e recuperação em Gmail e Outlook. O SMTP e a recuperação já
+   foram confirmados; falta reduzir a classificação como lixo eletrônico.
+2. Depois de backup verificado e dos dois aplicativos fechados/sincronizados,
+   `001_servico_central.sql` foi aplicado ao projeto `gerador-orcamento` e o
+   Supabase retornou `Success. No rows returned`. Uma consulta de leitura confirmou
+   o protocolo v4, as três tabelas centrais (`convites`, `limites_email`,
+   `operadores`), uma empresa, 17 orçamentos, 4 relatórios, 1 recibo, 4
+   recebimentos, 11 clientes, 81 versões e dois membros. A conta
+   `matheuscardosoj@outlook.com` aparece ativa como administradora. O backup
+   verificado permanece em Downloads.
+3. A função central `central-contas` foi publicada no projeto e o template
+   personalizado de código de acesso foi salvo. Falta atribuir a permissão de
+   operador central após autorização do responsável e validar convites de ponta a
+   ponta. O projeto ecoplay está fora do escopo.
 4. Validar a conta do operador sem empresa vinculada, repetição após perda da
    resposta ao criar empresa, expiração/revogação e alterações simultâneas.
 5. Validar o executável em perfis separados, SMTP real e dois computadores.

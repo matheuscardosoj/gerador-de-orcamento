@@ -1,7 +1,9 @@
 # Serviço central — preparação e validação
 
-Estado: implementação em validação. Não distribuir o aplicativo como versão final
-antes de concluir os testes remotos e de recuperação listados abaixo.
+Estado: protocolo central instalado no projeto `gerador-orcamento`, função
+`central-contas` publicada e template de código de acesso salvo. A validação
+funcional continua pendente; não distribuir o aplicativo como versão final antes
+de concluir os testes remotos e de recuperação listados abaixo.
 
 ## Projeto e migração
 
@@ -18,7 +20,8 @@ cadastrar cartão ou criar outra conta para contornar limites de projetos.
    administrador, a migração é revertida para conferência.
 5. Registrar explicitamente o UUID da conta do operador em `central.operadores`.
    Não promover todos os membros a operador. Operadores ativam novas empresas;
-   administradores gerenciam apenas suas empresas.
+   administradores gerenciam apenas suas empresas. A inserção deve ser autorizada
+   pelo responsável da conta no momento da ativação.
 6. Publicar a função `central-contas` e configurar o SMTP antes de enviar convites.
 7. Distribuir apenas depois de testar login e sincronização em dois perfis.
 
@@ -81,4 +84,7 @@ Fontes: [Google — SMTP](https://support.google.com/mail/answer/7104828),
 - Membro sem permissões administrativas, último administrador protegido e revogação online.
 - Banco anterior restaurável, pendências preservadas e números/valores/imagens invariantes.
 - E-mails recebidos de verdade; ter aceitação SMTP não comprova entrega na caixa de entrada.
+- O template de código de acesso foi salvo. A recuperação foi enviada com sucesso,
+  mas caiu no lixo eletrônico do Outlook; validar a classificação em Gmail e
+  Outlook antes da entrega.
 - Conferir o pacote instalado e os dois computadores antes de autorizar versão final.

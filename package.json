@@ -26,6 +26,7 @@
     "ia": "node scripts/preparar-ia.mjs",
     "pack": "npm run build && electron-builder --dir",
     "servico:configurar": "node scripts/preparar-servico-central.mjs",
+    "backup:verificar": "node scripts/verificar-backup-local.mjs",
     "dist:central": "npm run servico:configurar && npm run dist",
     "predist": "node scripts/preparar-ia.mjs",
     "dist": "npm run build && electron-builder"
