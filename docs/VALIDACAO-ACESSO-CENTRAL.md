@@ -208,3 +208,44 @@ O instalador rc.8 está em `Downloads/Gerador de Orcamentos/Candidato
 pasta anterior. Os pacotes incluem apenas a URL e a chave pública; não contêm
 credenciais SMTP ou administrativas. SHA-256 do instalador:
 `38836A4EFFC0AC798759A455FF9B0FC6C6CF93E909F598C9E1C83DF0FBECD8A1`.
+
+## Auditoria final antes da versão estável — 14/10/2026
+
+O convite cancelado `Teste 2` que ainda aparecia na captura foi identificado
+como cancelado e removido da empresa correta. A consulta posterior confirmou
+zero convites, zero cancelados e zero pendentes. Se a tela já estava aberta,
+ela precisa ser reaberta para consultar novamente; nenhuma migração SQL é
+necessária.
+
+Verificação refeita no rc.8: `npm run check` passou (ESLint, Prettier,
+TypeScript, 45 arquivos de teste e 268 testes, além da compilação). O build
+mantém avisos do Vite sobre módulos importados de forma estática e dinâmica;
+não são erros e não impediram a geração do executável. O ensaio automatizado
+do executável instalado em perfil descartável voltou a passar, incluindo
+mostrar/ocultar senha. O SHA-256 do instalador foi confirmado como
+`38836A4EFFC0AC798759A455FF9B0FC6C6CF93E909F598C9E1C83DF0FBECD8A1`.
+
+Os fluxos de convite e recuperação foram exercitados com o serviço real e um
+usuário temporário: o convite chegou, foi aceito, e a conta manteve o acesso à
+empresa correta após reinício. A sincronização entre os dois PCs foi confirmada
+pelo usuário em menos de dois segundos. A troca de senha e a entrada posterior
+com a nova senha também foram confirmadas. Após os testes, as contas, vínculos,
+convites e cliente temporários foram removidos conforme solicitado. Por isso,
+não há um segundo usuário ativo para repetir testes reais de concorrência,
+isolamento entre empresas ou operação financeira sincronizada sem recriar dados
+temporários.
+
+Os testes automatizados financeiros cobrem recebimentos parciais, adiantamentos
+existentes, estornos, atomicidade, reenvio idempotente e conciliação. A etapa que
+permanece sem evidência real é um recebimento de teste sincronizado entre dois
+computadores; não foi lançado pagamento artificial na base comercial. A entrega
+de e-mail no Outlook ainda foi observada em lixo eletrônico e não há teste atual
+de reenvio, expiração ou destinatário incorreto após a limpeza dos convites.
+Esses casos têm cobertura automatizada/parcial, mas não foram todos repetidos
+no serviço de produção. Os ícones de senha foram validados pelo ensaio
+automatizado do executável; falta apenas confirmação visual manual do usuário
+no rc.8, se ele quiser conferir esse detalhe.
+
+O rc.8 está tecnicamente íntegro e pode ser submetido à sua revisão como
+candidato. Este relatório não declara os testes externos acima como aprovados.
+Nenhum merge para `main` nem versão estável foi criado.
