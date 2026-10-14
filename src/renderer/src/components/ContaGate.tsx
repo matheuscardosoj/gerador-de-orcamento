@@ -134,10 +134,18 @@ function Acesso({
     [lembrar, setLembrar] = useState(conta.lembrar)
   const [modo, setModo] = useState<'entrar' | 'convite' | 'recuperacao'>('entrar'),
     [codigo, setCodigo] = useState(''),
-    [enviado, setEnviado] = useState(false)
+    [enviado, setEnviado] = useState(false),
+    [proximoEnvio, setProximoEnvio] = useState(0),
+    [agora, setAgora] = useState(Date.now())
   const [confirmacao, setConfirmacao] = useState(''),
     [erro, setErro] = useState(''),
     [ocupado, setOcupado] = useState(false)
+  const segundosParaReenviar = Math.max(0, Math.ceil((proximoEnvio - agora) / 1000))
+  useEffect(() => {
+    if (!enviado || segundosParaReenviar === 0) return
+    const timer = window.setInterval(() => setAgora(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [enviado, segundosParaReenviar])
   const executar = async (tarefa: () => Promise<void>) => {
     setOcupado(true)
     setErro('')
@@ -156,6 +164,14 @@ function Acesso({
     setConfirmacao('')
     setCodigo('')
     setEnviado(false)
+    setProximoEnvio(0)
+  }
+  const solicitarCodigo = async () => {
+    await api.conta.enviarCodigo(email.trim(), modo === 'convite' ? 'convite' : 'recuperacao')
+    setEnviado(true)
+    setCodigo('')
+    setAgora(Date.now())
+    setProximoEnvio(Date.now() + 60_000)
   }
   if (!conta.servicoConfigurado)
     return (
@@ -228,8 +244,7 @@ function Acesso({
           void executar(async () => {
             if (modo === 'entrar') atualizar(await api.conta.entrar(email.trim(), senha, lembrar))
             else if (!enviado) {
-              await api.conta.enviarCodigo(email.trim(), modo)
-              setEnviado(true)
+              await solicitarCodigo()
             } else {
               if (senha !== confirmacao)
                 throw new Error('As senhas não coincidem. Confira os dois campos.')
@@ -269,8 +284,9 @@ function Acesso({
           enviado && (
             <>
               <Mensagem tom="info">
-                Se este e-mail estiver habilitado, você receberá um código. Confira também a pasta
-                de spam.
+                Se este e-mail estiver habilitado, você receberá um código. Procure uma mensagem de
+                Gerador de Orçamentos na caixa de entrada e no spam ou lixo eletrônico. Use o código
+                da mensagem mais recente.
               </Mensagem>
               <Field label="Código recebido por e-mail">
                 <Input
@@ -325,9 +341,37 @@ function Acesso({
             </Button>
           </>
         ) : (
-          <Button variant="ghost" disabled={ocupado} onClick={() => mudar('entrar')}>
-            Voltar para entrar
-          </Button>
+          <>
+            {enviado && (
+              <>
+                <Button
+                  variant="outline"
+                  disabled={ocupado || segundosParaReenviar > 0}
+                  onClick={() => void executar(solicitarCodigo)}
+                >
+                  {segundosParaReenviar > 0
+                    ? `Reenviar em ${segundosParaReenviar}s`
+                    : 'Reenviar código'}
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={ocupado}
+                  onClick={() => {
+                    setEnviado(false)
+                    setCodigo('')
+                    setSenha('')
+                    setConfirmacao('')
+                    setErro('')
+                  }}
+                >
+                  Corrigir e-mail
+                </Button>
+              </>
+            )}
+            <Button variant="ghost" disabled={ocupado} onClick={() => mudar('entrar')}>
+              Voltar para entrar
+            </Button>
+          </>
         )}
       </div>
     </TelaAcesso>
