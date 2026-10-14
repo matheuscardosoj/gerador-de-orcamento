@@ -89,16 +89,16 @@ o app tenta o Ollama automaticamente.
 
 ## Status
 
-**Versão declarada no código: 1.5.0-rc.4**, SQLite esquema 11 e protocolo de nuvem 3.
-O candidato usa somente Nº do documento e mantém chaves técnicas ocultas. Inclui
+**Candidato para validação: 1.5.0-rc.5**, SQLite esquema 11 e protocolo central de nuvem 4.
+O aplicativo usa somente Nº do documento e mantém chaves técnicas ocultas. Inclui
 usuários vinculados, Broadcast privado, controle de edição, rascunhos offline e
 preservação de operações pendentes em backups. Código e testes isolados não
 comprovam, por si, a adoção correta de uma atualização em todos os computadores.
 
-**Em desenvolvimento:** acesso central para múltiplas empresas e reorganização
-interna. A presença de scripts e telas não significa que a configuração central
-já esteja publicada ou validada no ambiente real. Cada entrega deve registrar
-verificações, migrações autorizadas e resultados dos testes físicos entre PCs.
+**Em validação:** acesso central para múltiplas empresas. A migração central e a
+função de convites já foram publicadas no projeto existente; os fluxos de convite,
+isolamento e recuperação ainda precisam de validação no executável e nos dois PCs.
+Confira [Primeiros passos](docs/PRIMEIROS-PASSOS.md) para o fluxo de usuário.
 
 Os recursos das versões anteriores abaixo são um histórico, não instruções para
 configurar a numeração ou a nuvem atual.

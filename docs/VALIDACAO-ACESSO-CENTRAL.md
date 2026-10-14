@@ -1,4 +1,4 @@
-# Acesso central — validação de 13/10/2026
+# Acesso central — validação do candidato 1.5.0-rc.5 (13/10/2026)
 
 ## Implementado no código
 
@@ -29,7 +29,11 @@ persistência da identidade das solicitações para repetir envios sem duplicar 
 A migração SQL foi exercitada em PGlite com dados de teste, não na produção.
 
 A tela Minha conta foi conferida na prévia demonstrativa, incluindo a confirmação
-de alterações não salvas. Isso não substitui os testes de autenticação real.
+de alterações não salvas. O executável empacotado do rc.5 passou por um ensaio
+automatizado em perfil descartável: telas de convite e recuperação, código inicial
+do convite, reenvio, correção de e-mail e ausência de rolagem horizontal nas
+larguras de 1024 e 1440 px. O envio de código nesse ensaio foi simulado; não
+substitui os testes de autenticação real.
 
 O SMTP personalizado do Gmail foi salvo no Supabase e o endpoint oficial de
 recuperação aceitou a solicitação. O e-mail chegou ao endereço Outlook usado no
@@ -62,28 +66,49 @@ Oito artefatos antigos foram preservados em
 SHA-256 antes/depois e inventário JSON. O atalho atual e o backup pessoal foram
 mantidos. Não houve exclusão desses arquivos nem liberação de espaço alegada.
 
-## Pendências obrigatórias da entrega
+## Migração real já concluída
 
-1. Configurar o template de convite/código e repetir os testes reais de entrega,
-   código, reenvio e recuperação em Gmail e Outlook. O SMTP e a recuperação já
-   foram confirmados; falta reduzir a classificação como lixo eletrônico.
-2. Depois de backup verificado e dos dois aplicativos fechados/sincronizados,
-   `001_servico_central.sql` foi aplicado ao projeto `gerador-orcamento` e o
-   Supabase retornou `Success. No rows returned`. Uma consulta de leitura confirmou
-   o protocolo v4, as três tabelas centrais (`convites`, `limites_email`,
-   `operadores`), uma empresa, 17 orçamentos, 4 relatórios, 1 recibo, 4
-   recebimentos, 11 clientes, 81 versões e dois membros. A conta
-   `matheuscardosoj@outlook.com` aparece ativa como administradora. O backup
-   verificado permanece em Downloads.
-3. A função central `central-contas` foi publicada no projeto, os templates de
-   código de acesso e recuperação foram configurados e a conta
-   `matheuscardosoj@outlook.com` foi registrada como operadora após autorização.
-   Falta validar convites de ponta a ponta e a entrega em Gmail e Outlook. O
-   projeto ecoplay está fora do escopo.
-4. Validar a conta do operador sem empresa vinculada, repetição após perda da
-   resposta ao criar empresa, expiração/revogação e alterações simultâneas.
-5. Validar o executável em perfis separados, SMTP real e dois computadores.
-   Só então gerar e entregar o candidato central. Manter a versão anterior
-   funcionando até a troca coordenada.
+Depois de backup verificado e dos dois aplicativos fechados/sincronizados,
+`001_servico_central.sql` foi aplicado ao projeto `gerador-orcamento` e o
+Supabase retornou `Success. No rows returned`. Uma consulta de leitura confirmou
+o protocolo v4, as três tabelas centrais (`convites`, `limites_email`,
+`operadores`), uma empresa, 17 orçamentos, 4 relatórios, 1 recibo, 4
+recebimentos, 11 clientes, 81 versões e dois membros naquele momento. Esses
+números são uma fotografia da migração, não um retrato necessariamente atual.
+O backup verificado permanece em Downloads. Não reaplicar a migração nem
+restaurar esse backup sobre a base atual.
 
-Não foi realizado merge para main, publicação de versão final ou migração real.
+A função `central-contas` foi publicada no projeto, os templates de código de
+acesso e recuperação foram configurados e a conta
+`matheuscardosoj@outlook.com` foi registrada como operadora após autorização.
+O projeto ecoplay está fora do escopo.
+
+## Pendências de validação real
+
+1. Testar convite novo no alias Gmail autorizado, código, definição de senha,
+   reenvio, cancelamento, expiração e rejeição de outro e-mail. Repetir entrega
+   em Outlook; o único e-mail de recuperação confirmado chegou ao lixo eletrônico.
+2. Testar no serviço real alteração de senha, manter conectado, troca de conta,
+   permissões entre empresas e operações de administrador.
+3. Repetir no notebook e no computador principal sincronização após salvar,
+   edição concorrente, numeração, pagamentos e recuperação de conexão. Confirmar
+   que as 37 operações antigas seguem apenas como histórico preservado.
+4. Validar a operadora sem empresa vinculada, repetição após perda da resposta
+   ao criar empresa e convite, expiração/revogação e alterações simultâneas.
+
+O candidato rc.5 foi gerado para esses testes. Não houve merge para `main`
+nem publicação da versão final. Não recomendar o uso por outras empresas
+até concluir os ensaios reais acima.
+
+## Artefato entregue
+
+O instalador `Gerador de Orçamentos Setup 1.5.0-rc.5.exe` está em
+`Downloads/Gerador de Orcamentos/Candidato 1.5.0-rc.5`. A cópia tem o mesmo
+SHA-256 da saída do build:
+
+`E483D3EB0C72B7A1A3996A1EE60347B1ABF7A475E74A9943A65C37DABF96C145`
+
+A configuração empacotada contém a URL e a chave pública do projeto, sem
+e-mail preenchido. Uma busca no arquivo da aplicação não encontrou chave
+`sb_secret_` literal nem a conta usada no SMTP. Referências genéricas a
+`service_role` fazem parte do código da biblioteca e não são uma credencial.

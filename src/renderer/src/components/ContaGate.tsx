@@ -163,7 +163,8 @@ function Acesso({
     setSenha('')
     setConfirmacao('')
     setCodigo('')
-    setEnviado(false)
+    // O convite enviado pelo administrador já contém o primeiro código.
+    setEnviado(m === 'convite')
     setProximoEnvio(0)
   }
   const solicitarCodigo = async () => {
@@ -259,7 +260,7 @@ function Acesso({
             autoComplete="username"
             required
             value={email}
-            disabled={ocupado || enviado}
+            disabled={ocupado || (enviado && proximoEnvio > 0)}
             onChange={(e) => setEmail(e.target.value)}
           />
         </Field>
@@ -284,9 +285,11 @@ function Acesso({
           enviado && (
             <>
               <Mensagem tom="info">
-                Se este e-mail estiver habilitado, você receberá um código. Procure uma mensagem de
-                Gerador de Orçamentos na caixa de entrada e no spam ou lixo eletrônico. Use o código
-                da mensagem mais recente.
+                {modo === 'convite'
+                  ? 'Digite o código enviado com seu convite. Se precisar de outro, use Reenviar código.'
+                  : 'Se este e-mail estiver habilitado, você receberá um código.'}{' '}
+                Procure a mensagem de Gerador de Orçamentos na caixa de entrada e no spam ou lixo
+                eletrônico. Use o código mais recente.
               </Mensagem>
               <Field label="Código recebido por e-mail">
                 <Input
@@ -353,19 +356,22 @@ function Acesso({
                     ? `Reenviar em ${segundosParaReenviar}s`
                     : 'Reenviar código'}
                 </Button>
-                <Button
-                  variant="ghost"
-                  disabled={ocupado}
-                  onClick={() => {
-                    setEnviado(false)
-                    setCodigo('')
-                    setSenha('')
-                    setConfirmacao('')
-                    setErro('')
-                  }}
-                >
-                  Corrigir e-mail
-                </Button>
+                {proximoEnvio > 0 && (
+                  <Button
+                    variant="ghost"
+                    disabled={ocupado}
+                    onClick={() => {
+                      setEnviado(false)
+                      setProximoEnvio(0)
+                      setCodigo('')
+                      setSenha('')
+                      setConfirmacao('')
+                      setErro('')
+                    }}
+                  >
+                    Corrigir e-mail
+                  </Button>
+                )}
               </>
             )}
             <Button variant="ghost" disabled={ocupado} onClick={() => mudar('entrar')}>

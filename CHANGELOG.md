@@ -2,6 +2,18 @@
 
 Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
+## 1.5.0-rc.5 — candidato para validação
+
+- Acesso central por convite, com perfis locais separados por empresa e usuário,
+  tela de entrada, troca de conta, recuperação e alteração de senha.
+- Primeiros passos da empresa, área Minha conta e gestão de membros com controles
+  conferidos no servidor. A migração central foi aplicada ao projeto atual após
+  backup verificado; o cadastro público foi desativado.
+- A tela de código orienta a procurar o e-mail no spam, permite corrigir o endereço
+  e mostra a espera antes de reenviar.
+- Validação real de convites, entrega dos e-mails e uso nos dois computadores ainda
+  necessária antes de recomendar esta versão para outras empresas.
+
 ## 1.5.0-rc.1 — 2026-10-12
 
 - Empresas com vários logins, autoria por usuário/computador e canal privado Supabase Broadcast após salvar; recuperação incremental e fila persistente.
