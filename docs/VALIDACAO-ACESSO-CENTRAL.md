@@ -176,6 +176,14 @@ autorização. Na próxima utilização, o notebook deve entrar com a conta Math
 baixar/sincronizar a base; a operação antiga preservada continua no perfil
 anterior e não será publicada.
 
+Após essa limpeza, a captura do usuário revelou mais um convite cancelado de
+teste, ainda visível na tela. O registro foi conferido pelo ID e pelo estado
+cancelado, removido do schema `central`, e a contagem da empresa foi verificada:
+zero convites, zero cancelados e zero pendentes. A tela de convites consulta a
+lista ao ser aberta; se já estava aberta durante a limpeza, feche e abra a aba
+Usuários para buscar o estado atualizado. A trilha de auditoria guarda apenas o
+ID técnico e o motivo, sem manter o endereço do convite.
+
 O usuário confirmou o teste real de convite: o código chegou, a conta de teste
 entrou na empresa correta, reiniciou e saiu/entrou sem misturar dados. Também
 confirmou sincronização entre os dois computadores em menos de dois segundos no
@@ -183,11 +191,15 @@ teste executado e validou o alinhamento da tabela de usuários no rc.7. A limpez
 removeu depois o usuário de teste e o convite, portanto esses acessos já não
 estão disponíveis para novos ensaios.
 
-Não houve merge para `main` nem publicação da versão final. Permanecem os testes
-de reenvio, cancelamento, expiração e destinatário incorreto, entrega no Outlook,
-permissões entre empresas, criação repetida de empresas, concorrência, numeração,
-pagamentos e reconexão, além da checagem manual dos ícones de senha no rc.8.
-Não declarar o produto pronto para lançamento público até validar esses pontos.
+Não houve merge para `main` nem publicação da versão final. Os testes automatizados
+de recebimentos parciais, adiantamentos existentes, estornos, atomicidade,
+reenvio idempotente e conciliação financeira passaram no `npm run check`. Ainda
+falta confirmar uma operação financeira no ambiente real entre dois computadores.
+Também permanecem os testes de reenvio/cancelamento/expiração de convites,
+destinatário incorreto, entrega no Outlook, permissões entre empresas, criação
+repetida de empresas, concorrência, numeração e reconexão, além da checagem
+manual dos ícones de senha no rc.8. Não declarar o produto pronto para lançamento
+público até validar esses pontos.
 
 ## Artefato entregue
 
