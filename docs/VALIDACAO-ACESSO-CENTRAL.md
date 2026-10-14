@@ -96,16 +96,18 @@ tipos de código ao concluir o convite. O convite pendente foi preservado.
 A função corrigida foi publicada no projeto. Ao repetir o envio pelo rc.5,
 o usuário confirmou que o convite foi enviado e chegou à caixa Gmail de teste.
 O template Invite foi salvo em português, com o código de acesso. Esse teste
-confirma o envio real, mas ainda não a aceitação do código e a definição da
-senha; essas etapas exigem o rc.6 no aplicativo.
+confirma o envio real. Depois de instalar o rc.6, o destinatário confirmou
+que informou o código, definiu uma senha e entrou na empresa pelo aplicativo.
+O convite apareceu como aceito, a conta permaneceu na empresa correta após
+reiniciar o aplicativo e a saída/entrada com a conta principal funcionou sem
+misturar os dados exibidos, conforme confirmação do usuário.
 
 ## Pendências de validação real
 
-1. Testar aceitação do convite no alias Gmail autorizado, definição de senha,
-   reenvio, cancelamento, expiração e rejeição de outro e-mail. Repetir entrega
+1. Testar reenvio, cancelamento, expiração e rejeição de outro e-mail. Repetir entrega
    em Outlook; o único e-mail de recuperação confirmado chegou ao lixo eletrônico.
-2. Testar no serviço real alteração de senha, manter conectado, troca de conta,
-   permissões entre empresas e operações de administrador.
+2. Testar no serviço real alteração de senha, permissões entre empresas e
+   operações de administrador. Reinício e troca de conta passaram no rc.6.
 3. Repetir no notebook e no computador principal sincronização após salvar,
    edição concorrente, numeração, pagamentos e recuperação de conexão. Confirmar
    que as 37 operações antigas seguem apenas como histórico preservado.
@@ -115,8 +117,8 @@ senha; essas etapas exigem o rc.6 no aplicativo.
 O executável empacotado do rc.6 passou novamente pelo ensaio automatizado em
 perfil isolado, incluindo a tela de aceitação de convite e recuperação em
 larguras de 1024 e 1440 px. O envio real do convite passou no serviço após a
-correção; a aceitação ainda depende do teste pelo destinatário com o código
-recebido diretamente no aplicativo.
+correção, e o destinatário confirmou a aceitação com código e senha diretamente
+no aplicativo.
 
 O candidato rc.6 foi gerado para esses testes. Não houve merge para `main`
 nem publicação da versão final. Não recomendar o uso por outras empresas
