@@ -104,13 +104,14 @@ misturar os dados exibidos, conforme confirmação do usuário.
 
 ## Pendências de validação real
 
-1. Testar reenvio, cancelamento, expiração e rejeição de outro e-mail. Repetir entrega
-   em Outlook; o único e-mail de recuperação confirmado chegou ao lixo eletrônico.
+1. Testar reenvio, cancelamento, expiração e rejeição de outro e-mail. Repetir
+   entrega em Outlook; o único e-mail de recuperação confirmado chegou ao lixo
+   eletrônico.
 2. Testar no serviço real alteração de senha, permissões entre empresas e
    operações de administrador. Reinício e troca de conta passaram no rc.6.
-3. Repetir no notebook e no computador principal sincronização após salvar,
-   edição concorrente, numeração, pagamentos e recuperação de conexão. Confirmar
-   que as 37 operações antigas seguem apenas como histórico preservado.
+3. Testar nos dois computadores edição concorrente, numeração, pagamentos e
+   recuperação de conexão. Confirmar que as 37 operações antigas seguem apenas
+   como histórico preservado.
 4. Validar a operadora sem empresa vinculada, repetição após perda da resposta
    ao criar empresa e convite, expiração/revogação e alterações simultâneas.
 
@@ -123,14 +124,16 @@ menos de dois segundos em cada sentido, sem mencionar erro ou pendência nova.
 Esse resultado confirma a meta no teste realizado, embora não seja uma garantia
 de latência constante em toda conexão.
 
+Após esse teste, o usuário confirmou que ambos os computadores estão no rc.6.
+
 ## Ajuste da tabela de usuários
 
 Uma captura do rc.6 em janela estreita mostrou e-mail e perfil de acesso
 invadindo colunas adjacentes. O rc.7 define larguras proporcionais para as cinco
 colunas no mesmo componente compartilhado das outras tabelas e quebra nomes e
 e-mails longos em até duas linhas. O executável rc.7 passou pelo ensaio das
-telas de acesso em perfil isolado; a conferência visual da tabela na janela
-estreita ainda deve ser feita após a instalação pelo usuário.
+telas de acesso em perfil isolado. O usuário instalou o rc.7, verificou a tabela
+na largura da captura e confirmou que ficou alinhada, sem sobreposição.
 
 O executável empacotado do rc.6 passou novamente pelo ensaio automatizado em
 perfil isolado, incluindo a tela de aceitação de convite e recuperação em
