@@ -68,6 +68,13 @@ export interface AtualizacaoNumeracaoPendente {
     situacao: 'equivalente' | 'divergente' | 'ausente'
   }>
 }
+export interface RascunhoCadastro {
+  tipo: 'cliente' | 'servico' | 'observacoes' | 'pagamentos'
+  idOrigem: string
+  dados: Record<string, unknown>
+  criadoEm: string
+}
+
 export interface StatusNuvem {
   configurada: boolean
   autenticada: boolean
@@ -78,10 +85,19 @@ export interface StatusNuvem {
   erro: string | null
   bytesBanco: number
   atualizandoNumeracao?: boolean
+  atualizacaoBasePendente?: boolean
   atualizacaoPendente?: AtualizacaoNumeracaoPendente | null
   backupAtualizacao?: string | null
   pendenciasPreservadas?: number
-  falhas?: Array<{ id: string; entidade: string; detalhe: string }>
+  falhas?: Array<{
+    id: string
+    entidade: string
+    detalhe: string
+    codigo?: string
+    causa?: string
+    detalhes?: string
+    dica?: string
+  }>
   reservas: Record<TipoDocumento, number>
   empresaId?: string
   usuarioId?: string
@@ -90,7 +106,16 @@ export interface StatusNuvem {
   erroTempoReal?: string | null
 }
 
+export interface EstadoControleEdicao {
+  empresaId: string
+  sessao: number
+  sequencia: number
+  tipo: TipoDocumento
+  documentoId: string
+  controle: ControleEdicao | null
+}
 export interface EventoDados {
+  controleEdicao?: EstadoControleEdicao
   origem: 'local' | 'nuvem'
   entidades: string[]
   status?: boolean
@@ -103,6 +128,7 @@ export interface MembroEmpresa {
   ativo: boolean
 }
 export interface ControleEdicao {
+  pedidoPendente?: boolean
   solicitacoes?: Array<{ usuarioNome: string; computador: string; criadoEm: string }>
   tipo: TipoDocumento
   documentoId: string

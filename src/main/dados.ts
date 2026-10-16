@@ -5,7 +5,7 @@ import { randomUUID as novoId } from 'crypto'
 import { aplicarMigracoes, VERSAO_BANCO } from './db/schema'
 import { app, dialog } from 'electron'
 import { copyFileSync, existsSync, mkdirSync, rmSync } from 'fs'
-import { join } from 'path'
+import { join, resolve } from 'path'
 import { Database } from 'node-sqlite3-wasm'
 import { createHash, randomUUID } from 'crypto'
 import { abrirBanco, caminhoBanco, fecharBanco, get, run, tx, type Linha } from './db/sqlite'
@@ -110,6 +110,7 @@ function validar(caminho: string): void {
         'auditoria_colaboracao'
       )
     if (versao >= 10) obrigatorias.push('numeros_atribuidos')
+    if (versao >= 13) obrigatorias.push('rascunhos_cadastros')
     const faltantes = obrigatorias.filter(
       (nome) =>
         !fonte.get("SELECT 1 AS existe FROM sqlite_master WHERE type = 'table' AND name = ?", [
@@ -331,6 +332,10 @@ export async function exportarDados(): Promise<{ caminho: string | null }> {
 
 /** Exportação sem diálogo, usada pela interface e pelos testes de integridade. */
 export function exportarDadosPara(destino: string): void {
+  const normalizarCaminho = (p: string): string =>
+    process.platform === 'win32' ? resolve(p).toLowerCase() : resolve(p)
+  if (normalizarCaminho(destino) === normalizarCaminho(caminhoBanco()))
+    throw new Error('Escolha outro arquivo para a cópia. O banco em uso não pode ser sobrescrito.')
   idOrigemAtual()
   comBancoFechado(() => copiarEValidar(caminhoBanco(), destino))
   limparAutorizacoesDaCopia(destino)
@@ -1105,6 +1110,23 @@ function mesclar(fonte: Database): Resumo {
       ])
       run("INSERT INTO importacoes_documentos VALUES ('rascunho',?,?)", [chave, id])
       r.importados.rascunhos = (r.importados.rascunhos ?? 0) + 1
+    }
+  }
+  if (temTabela(fonte, 'rascunhos_cadastros')) {
+    for (const x of linhas(fonte, 'SELECT * FROM rascunhos_cadastros')) {
+      const tipo = String(x.tipo)
+      const idOrigem = String(x.id_origem)
+      if (!['cliente', 'servico'].includes(tipo)) continue
+      const id = mesmaOrigem ? idOrigem : `${origem.id}:${idOrigem}`
+      if (get('SELECT 1 FROM rascunhos_cadastros WHERE tipo=? AND id_origem=?', [tipo, id]))
+        continue
+      run('INSERT OR IGNORE INTO rascunhos_cadastros VALUES (?,?,?,?)', [
+        tipo,
+        id,
+        x.dados_json,
+        x.criado_em
+      ])
+      r.importados.rascunhosCadastros = (r.importados.rascunhosCadastros ?? 0) + 1
     }
   }
   if (get('PRAGMA foreign_key_check'))

@@ -96,7 +96,13 @@ export function criarRascunho(
   edicao?: Documento
 ): RascunhoCompartilhado {
   const atual = repo(tipo).get(id) as Documento | null
-  if (!atual) throw new Error('Documento não encontrado.')
+  if (!atual && (!edicao || edicao.id !== id)) throw new Error('Documento não encontrado.')
+  const snapshot = JSON.stringify(prepararSnapshot((edicao ?? atual)!))
+  const identico = get(
+    "SELECT id FROM rascunhos_compartilhados WHERE tipo=? AND documento_id=? AND documento=? AND estado<>'aplicado' ORDER BY atualizado_em DESC LIMIT 1",
+    [tipo, id, snapshot]
+  )
+  if (identico) return obterRascunho(texto(identico.id))
   const conhecido = get(
     'SELECT documento,revisao FROM bases_documento WHERE tipo=? AND documento_id=?',
     [tipo, id]
@@ -112,7 +118,7 @@ export function criarRascunho(
     ? (JSON.parse(texto(conhecido.documento)) as Documento)
     : primeira
       ? (JSON.parse(texto(primeira.documento)) as Documento)
-      : atual
+      : (atual ?? edicao!)
   const agora = new Date().toISOString(),
     novo = randomUUID()
   run('INSERT INTO rascunhos_compartilhados VALUES (?,?,?,?,?,?,?,?,?,?,?)', [
@@ -125,7 +131,7 @@ export function criarRascunho(
       get('SELECT revisao FROM sincronizacao WHERE entidade=?', [`${tipo}:${id}`])?.revisao ?? 0
     ),
     JSON.stringify(prepararSnapshot(base)),
-    JSON.stringify(prepararSnapshot(edicao ?? atual)),
+    JSON.stringify(prepararSnapshot((edicao ?? atual)!)),
     agora,
     agora,
     'local'
@@ -289,7 +295,11 @@ export function copiarRascunho(id: string): Documento {
     c.reembolsos = []
     c.totais = calcularTotaisRelatorio(c.itensServico, [], [])
   }
-  return (repo(r.tipo).create as (dto: unknown) => Documento)(dto)
+  return tx(() => {
+    const novo = (repo(r.tipo).create as (dto: unknown) => Documento)(dto)
+    run("UPDATE rascunhos_compartilhados SET estado='aplicado' WHERE id=?", [id])
+    return novo
+  })
 }
 export function descartarRascunho(id: string): void {
   run('DELETE FROM rascunhos_compartilhados WHERE id=?', [id])

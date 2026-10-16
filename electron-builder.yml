@@ -1,5 +1,9 @@
 appId: com.gerador.orcamentos
 productName: Gerador de Orçamentos
+protocols:
+  - name: Gerador de Orçamentos
+    schemes:
+      - geradororcamento
 directories:
   output: release
   buildResources: build
@@ -25,6 +29,13 @@ extraResources:
     filter:
       - 004_codigos_cadastros.sql
       - 005_reconciliar_numero_recibos_teste.sql
+      - 006_corrigir_fk_codigos_cadastros.sql
+      - 007_padroes_empresa_e_codigo_servico.sql
+      - 008_nome_empresa_selecao.sql
+      - 009_operador_acesso_global.sql
+      - 010_operador_protegido_e_excluir_empresa.sql
+      - 011_sessao_edicao_e_isolamento.sql
+      - 012_geracao_manutencao_empresa.sql
   # Runtime de IA (llama-server.exe + modelo GGUF), baixado por `npm run ia`.
   - from: resources/ia
     to: ia
@@ -41,7 +52,13 @@ win:
       arch:
         - x64
 nsis:
+  include: build/installer.nsh
   oneClick: false
+  installerLanguages:
+    - pt_BR
+  unicode: true
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
   perMachine: false
   allowToChangeInstallationDirectory: true
   deleteAppDataOnUninstall: false

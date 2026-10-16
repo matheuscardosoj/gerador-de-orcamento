@@ -2,6 +2,7 @@ import { criarEntradaCalculo } from './engine'
 import { describe, it, expect } from 'vitest'
 import { calcularCustoServico, normalizarEntrada } from './engine'
 import type { EntradaCalculo, ParametrosEncargos } from './types'
+import { validarEntradaCalculo } from '../validacao'
 
 const params: ParametrosEncargos = {
   percentualFerias: 10,
@@ -30,6 +31,58 @@ function base(over: Partial<EntradaCalculo> = {}): EntradaCalculo {
     ...over
   }
 }
+
+it('substitui o lucro geral por item, preserva repasses e aplica imposto ao subtotal', () => {
+  const entrada = base({
+    dias: 2,
+    margemLucroPercent: 30,
+    aliquotaNotaPercent: 10,
+    avulsos: [
+      { id: 'geral', descricao: 'Geral', valor: 100, modo: 'cheio' },
+      {
+        id: 'proprio',
+        descricao: 'Próprio',
+        valor: 50,
+        modo: 'diario',
+        acrescimoPersonalizadoPercent: 10
+      },
+      {
+        id: 'zero',
+        descricao: 'Zero',
+        valor: 100,
+        modo: 'cheio',
+        acrescimoPersonalizadoPercent: 0
+      },
+      { id: 'repasse', descricao: 'Repasse', valor: 100, modo: 'cheio', aplicarAcrescimo: false }
+    ]
+  })
+  expect(calcularCustoServico(entrada)).toMatchObject({
+    custoTotal: 400,
+    valorMargemGeral: 30,
+    valorMargemPersonalizada: 10,
+    valorMargem: 40,
+    precoFinal: 440
+  })
+  entrada.emitirNota = true
+  expect(calcularCustoServico(entrada).precoFinal).toBe(488.89)
+  entrada.modoImposto = 'simples'
+  expect(calcularCustoServico(entrada).precoFinal).toBe(484)
+  entrada.avulsos[1].acrescimoPersonalizadoPercent = 101
+  entrada.margemLucroPercent = 150
+  expect(validarEntradaCalculo(entrada)).toEqual([])
+})
+
+it('arredonda lucro personalizado em centavos e mantém a entrada antiga', () => {
+  const entrada = base({
+    margemLucroPercent: 30,
+    avulsos: [
+      { id: 'a', descricao: '', valor: 10.05, modo: 'cheio', acrescimoPersonalizadoPercent: 10 }
+    ]
+  })
+  expect(calcularCustoServico(entrada).valorMargem).toBe(1.01)
+  delete entrada.avulsos[0].acrescimoPersonalizadoPercent
+  expect(calcularCustoServico(entrada).valorMargem).toBe(3.02)
+})
 
 describe('mão de obra', () => {
   it('diária: valor × dias × funcionários', () => {
@@ -579,4 +632,37 @@ it('não aplica lucro a repasses, mas inclui imposto na nota', () => {
   expect(calcularCustoServico(entrada).precoFinal).toBe(3118.28)
   entrada.modoImposto = 'simples'
   expect(calcularCustoServico(entrada).precoFinal).toBe(3103)
+})
+
+it('apresenta todos os acréscimos dos itens adicionais dentro da base do serviço', () => {
+  const r = calcularCustoServico(
+    base({
+      margemLucroPercent: 30,
+      avulsos: [
+        {
+          id: 'frete-sem-lucro',
+          descricao: 'Frete',
+          valor: 800,
+          modo: 'cheio',
+          aplicarAcrescimo: false
+        },
+        {
+          id: 'frete-proprio',
+          descricao: 'Entrega',
+          valor: 800,
+          modo: 'cheio',
+          acrescimoPersonalizadoPercent: 10
+        },
+        { id: 'geral', descricao: 'Serviço', valor: 100, modo: 'cheio' }
+      ]
+    })
+  )
+  expect(r).toMatchObject({
+    custoTotal: 1700,
+    custoServicoExibido: 1810,
+    acrescimoGeralExibido: 0,
+    valorMargemGeral: 30,
+    valorMargemPersonalizada: 80,
+    precoComMargem: 1810
+  })
 })

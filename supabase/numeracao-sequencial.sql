@@ -230,3 +230,23 @@ BEGIN
  RETURN NEW;
 END $$;
 NOTIFY pgrst,'reload schema';
+-- Padrões são criados uma vez para cada empresa central, antes de qualquer perfil baixar o delta.
+CREATE OR REPLACE FUNCTION sincronizacao.criar_padroes_empresa() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,sincronizacao,pg_temp AS $$
+DECLARE observacao_id text:='00000000-0000-4000-8000-000000000001'; pagamento_id text:='00000000-0000-4000-8000-000000000002';
+BEGIN
+  -- No modo legado, a empresa é auth.users(id) e publica os padrões locais.
+  IF EXISTS(SELECT 1 FROM auth.users WHERE id=NEW.id) THEN RETURN NEW; END IF;
+  INSERT INTO public.observacoes_padrao(empresa_id,id,texto,padrao,ordem,aplicacao)
+    VALUES(NEW.id,observacao_id,'O valor considera o escopo e as quantidades informadas nesta proposta. Alterações serão acordadas entre as partes.',1,0,'orcamento');
+  INSERT INTO public.formas_pagamento_padrao(empresa_id,id,texto,padrao,ordem,aplicacao)
+    VALUES(NEW.id,pagamento_id,'Pagamento conforme combinado entre as partes.',1,0,'orcamento');
+  INSERT INTO sincronizacao.entidades(empresa_id,entidade,revisao,sequencia,excluido)
+    VALUES(NEW.id,'observacoes_padrao:'||observacao_id,1,nextval('public.gdo_changes'),false),
+          (NEW.id,'pagamentos_padrao:'||pagamento_id,1,nextval('public.gdo_changes'),false);
+  RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION sincronizacao.criar_padroes_empresa() FROM PUBLIC,anon,authenticated;
+DROP TRIGGER IF EXISTS gdo_padroes_empresa ON public.empresas;
+CREATE TRIGGER gdo_padroes_empresa AFTER INSERT ON public.empresas
+  FOR EACH ROW EXECUTE FUNCTION sincronizacao.criar_padroes_empresa();

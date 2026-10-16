@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { app } from 'electron'
 import type { EmpresaConta } from '../../shared/conta'
@@ -9,6 +9,8 @@ export interface PerfilConta {
   id: string
   usuario: string
   email: string
+  emailPendente?: string
+  emailConfirmacaoRecebida?: boolean
   nome: string
   empresa: EmpresaConta
   lembrar: boolean
@@ -75,4 +77,13 @@ export function concluirSolicitacao(conta: string, dados: unknown): void {
 export function perfilAtual(): PerfilConta | null {
   const r = lerPerfis()
   return r.perfis.find((p) => p.id === r.atual) ?? null
+}
+/** Remove somente o perfil que o servidor confirmou como empresa excluída. */
+export function removerPerfil(id: string): void {
+  if (!/^[a-f0-9]{64}$/.test(id)) throw new Error('Perfil local inválido.')
+  const registro = lerPerfis()
+  registro.perfis = registro.perfis.filter((perfil) => perfil.id !== id)
+  if (registro.atual === id) registro.atual = null
+  gravarRegistro(registro)
+  rmSync(join(app.getPath('userData'), 'perfis', id), { recursive: true, force: true })
 }

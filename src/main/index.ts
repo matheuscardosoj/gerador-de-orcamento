@@ -2,7 +2,9 @@ import { registrarVersao } from './versoes'
 import { orcamentosRepo, relatoriosRepo } from './repositories'
 import { mensagemErro } from '@shared/erros'
 import { recibosRepo } from './recibos'
-import { inicializarContas } from './contas/servico'
+import { concluirCallbackEmail, inicializarContas } from './contas/servico'
+import { callbacksNosArgumentos } from './contas/callback-email'
+import { registrarAvisoEmail } from './contas/avisos-email'
 import { pararTempoReal } from './tempo-real'
 import { observarDados } from './eventos'
 import { app, shell, dialog, BrowserWindow } from 'electron'
@@ -22,6 +24,26 @@ if (process.env.GERADOR_USER_DATA_DIR) {
 
 const temTrava = app.requestSingleInstanceLock()
 if (!temTrava) app.quit()
+if (temTrava && !process.env.GERADOR_USER_DATA_DIR) {
+  if (process.defaultApp && process.argv[1])
+    app.setAsDefaultProtocolClient('geradororcamento', process.execPath, [process.argv[1]])
+  else app.setAsDefaultProtocolClient('geradororcamento')
+}
+const callbacksPendentes = callbacksNosArgumentos(process.argv)
+let prontoParaCallback = false
+let processandoCallback = false
+async function processarCallbacks(): Promise<void> {
+  if (!prontoParaCallback || processandoCallback) return
+  processandoCallback = true
+  try {
+    while (callbacksPendentes.length) {
+      const url = callbacksPendentes.shift()!
+      registrarAvisoEmail(await concluirCallbackEmail(url))
+    }
+  } finally {
+    processandoCallback = false
+  }
+}
 
 /**
  * Abre o banco e, quando ele ainda está vazio, importa o `banco.json` legado.
@@ -130,29 +152,34 @@ if (temTrava)
       }
     })
     app.once('before-quit', pararEventos)
+    app.on('browser-window-created', (_, window) => {
+      optimizer.watchWindowShortcuts(window)
+    })
+    const contasProntas = inicializarContas()
+    createWindow()
     try {
-      await inicializarContas()
+      await contasProntas
     } catch (erro) {
       dialog.showErrorBox('Não foi possível recuperar seu acesso', mensagemErro(erro))
     }
     app.once('before-quit', pararTempoReal)
 
-    app.on('browser-window-created', (_, window) => {
-      optimizer.watchWindowShortcuts(window)
-    })
-
-    createWindow()
+    prontoParaCallback = true
+    void processarCallbacks()
 
     app.on('activate', function () {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()
     })
   })
 
-app.on('second-instance', () => {
+app.on('second-instance', (_evento, args) => {
+  callbacksPendentes.push(...callbacksNosArgumentos(args))
   const win = BrowserWindow.getAllWindows()[0]
-  if (!win) return
-  if (win.isMinimized()) win.restore()
-  win.focus()
+  if (win) {
+    if (win.isMinimized()) win.restore()
+    win.focus()
+  }
+  void processarCallbacks()
 })
 
 app.on('window-all-closed', () => {

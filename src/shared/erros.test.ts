@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { mensagemErro } from './erros'
+import { diagnosticoErro, mensagemErro } from './erros'
+
+it('preserva diagnóstico PostgreSQL sem expor valores pessoais nem tokens', () => {
+  const d = diagnosticoErro({
+    code: '23503',
+    message: 'constraint codigos_cadastros_empresa_id_fkey for pessoa@exemplo.com',
+    details: 'Key (email)=(pessoa@exemplo.com) is not present in table "users".',
+    hint: 'access_token=segredo123'
+  })
+  expect(d.codigo).toBe('23503')
+  expect(d.causa).toContain('codigos_cadastros_empresa_id_fkey')
+  expect(JSON.stringify(d)).not.toContain('pessoa@exemplo.com')
+  expect(JSON.stringify(d)).not.toContain('segredo123')
+})
 
 describe('mensagens de erro para a interface', () => {
   it('remove invólucros repetidos do Electron sem perder a validação', () => {
@@ -76,6 +89,13 @@ describe('mensagens de erro para a interface', () => {
     expect(mensagemErro({ message: 'write', code: 'ENOSPC' })).toContain('espaço suficiente')
   })
 
+  it('explica conflitos de autorização e alterações simultâneas de usuários', () => {
+    expect(mensagemErro('Responsabilidade inválida')).toContain('autorização do documento mudou')
+    expect(mensagemErro('Aguarde a operação de acesso em andamento.')).toContain(
+      'Outra alteração de usuários'
+    )
+  })
+
   it('aceita o código e status usados pelo transporte da nuvem', () => {
     expect(mensagemErro({ message: 'detail', codigo: 'PGRST202', status: 404 })).toContain(
       'script indicado'
@@ -105,6 +125,14 @@ describe('mensagens de erro para a interface', () => {
       })
     ).toContain('Já existe um registro')
     expect(mensagemErro({ message: 'foreign key', code: '23503' })).toContain('vínculos')
+    expect(
+      mensagemErro({
+        message:
+          'insert or update on table "codigos_cadastros" violates foreign key constraint "codigos_cadastros_empresa_id_fkey"',
+        code: '23503',
+        details: 'Key (empresa_id) is not present in table "users".'
+      })
+    ).toContain('configuração de códigos')
     expect(
       mensagemErro({ message: 'permission denied for table imagens', code: '42501' })
     ).toContain('vínculo do usuário')

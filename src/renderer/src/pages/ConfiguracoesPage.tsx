@@ -29,7 +29,6 @@ import type {
   StatusIA,
   CampoCliente
 } from '@shared/types'
-import type { InfoNumeracao } from '@shared/api'
 import {
   mensagemValidacao,
   validarParametrosFinanceiros,
@@ -99,7 +98,6 @@ export function ConfiguracoesPage(): JSX.Element {
             { id: 'parametros', label: 'Parâmetros financeiros' },
             { id: 'observacoes', label: 'Observações padrão' },
             { id: 'pagamentos', label: 'Formas de pagamento' },
-            { id: 'numeracao', label: 'Numeração dos documentos' },
             { id: 'dados', label: 'Dados e backup' },
             { id: 'nuvem', label: 'Nuvem / Sincronização' },
             { id: 'usuarios', label: 'Usuários' },
@@ -117,7 +115,6 @@ export function ConfiguracoesPage(): JSX.Element {
         {aba === 'pagamentos' && (
           <PadroesConfig tipo="pagamentos" novo={novoTexto} setNovo={setNovoTexto} />
         )}
-        {aba === 'numeracao' && <SecaoNumeracao />}
         {aba === 'dados' && <SecaoDados />}
         {aba === 'ia' && <SecaoIA />}
       </PageShell>
@@ -516,15 +513,14 @@ function SecaoParametros(): JSX.Element {
           description="Valores iniciais sugeridos ao criar um cálculo"
         />
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-          <Field label="Acréscimo padrão sobre o custo (%)">
+          <Field label="Percentual padrão de lucro sobre o custo (%)">
             <NumberField
               value={form.margemLucroPadrao}
               onChange={(v) => set({ margemLucroPadrao: v })}
               min={0}
-              max={100}
             />
           </Field>
-          <Field label="Alíquota NFS padrão (%)">
+          <Field label="Alíquota do imposto padrão (%)">
             <NumberField
               value={form.aliquotaNotaPadrao}
               onChange={(v) => set({ aliquotaNotaPadrao: v })}
@@ -555,7 +551,10 @@ function SecaoParametros(): JSX.Element {
               min={0}
             />
           </Field>
-          <Field label="Modo do imposto padrão" hint="Gross-up preserva o valor líquido calculado">
+          <Field
+            label="Cálculo do imposto padrão"
+            hint="O modo de preservar valor líquido incorpora o imposto ao preço final."
+          >
             <Select
               value={form.modoImpostoPadrao}
               onChange={(e) =>
@@ -564,8 +563,8 @@ function SecaoParametros(): JSX.Element {
                 })
               }
             >
-              <option value="gross_up">Gross-up (dividir por 1 − alíquota)</option>
-              <option value="simples">Simples (somar alíquota)</option>
+              <option value="gross_up">Preservar valor líquido (gross-up)</option>
+              <option value="simples">Somar imposto ao preço</option>
             </Select>
           </Field>
         </div>
@@ -705,145 +704,6 @@ function SecaoIA(): JSX.Element {
           </Button>
           <BotaoSalvar salvando={salvando} ok={ok} disabled={ocupado} />
         </div>
-      </Card>
-    </form>
-  )
-}
-
-// ------------------------------------------------------------------ Numeração
-function SecaoNumeracao(): JSX.Element {
-  return (
-    <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-      <PainelNumeracao
-        titulo="Numeração dos orçamentos"
-        documento="orçamento"
-        carregar={() => api.orcamentos.numeracao()}
-        definirNumero={(numero) => api.orcamentos.definirProximoNumero(numero)}
-      />
-      <PainelNumeracao
-        titulo="Numeração dos relatórios"
-        documento="relatório"
-        carregar={() => api.relatorios.numeracao()}
-        definirNumero={(numero) => api.relatorios.definirProximoNumero(numero)}
-      />
-      <PainelNumeracao
-        titulo="Numeração dos recibos"
-        documento="recibo"
-        carregar={() => api.recibos.numeracao()}
-        definirNumero={(numero) => api.recibos.definirProximoNumero(numero)}
-      />
-    </div>
-  )
-}
-
-function PainelNumeracao({
-  titulo,
-  documento,
-  carregar,
-  definirNumero
-}: {
-  titulo: string
-  documento: string
-  carregar: () => Promise<InfoNumeracao>
-  definirNumero: (numero: number) => Promise<{ ok: boolean; erro?: string }>
-}): JSX.Element {
-  const {
-    data,
-    error: erroCarga,
-    reload
-  } = useAsync(carregar, [], ['numeracao', 'orcamento', 'relatorio', 'recibo'])
-  const [proximo, setProximo] = useState<number | null>(null)
-  const [editado, setEditado] = useState(false)
-  const { operacao, ocupado, erro, executar, limparErro } = useMutacao<'salvar'>()
-  const [ok, setOk] = useState(false)
-  useEffect(() => {
-    if (data && !editado) setProximo(data.proximoNumero)
-  }, [data, editado])
-  if (!data || proximo === null)
-    return (
-      <p className={erroCarga ? 'text-sm text-red-700' : 'text-sm text-slate-500'}>
-        {erroCarga ? `Não foi possível carregar a numeração. ${erroCarga}` : 'Carregando…'}
-      </p>
-    )
-  const legado = data.usaReservas && !data.atribuicaoServidor
-  const salvar = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault()
-    const salvo = await executar('salvar', async () => {
-      const r = await definirNumero(proximo)
-      if (!r.ok) throw new Error(r.erro ?? 'Não foi possível definir o próximo número.')
-      setEditado(false)
-      reload()
-    })
-    if (salvo) setOk(true)
-  }
-  return (
-    <form onSubmit={salvar}>
-      <Card className="p-6">
-        <SectionTitle
-          title={titulo}
-          description={
-            data.atribuicaoServidor
-              ? 'Sequência compartilhada pela empresa. O servidor confirma o número ao aceitar um documento novo.'
-              : `Define o próximo ${documento}. Números atribuídos não são reutilizados.`
-          }
-        />
-        <dl className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div>
-            <dt className="text-sm text-slate-500">Último número atribuído</dt>
-            <dd className="mt-1 text-lg font-semibold text-slate-800">
-              {data.ultimoNumero ?? data.maiorEmUso}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-sm text-slate-500">Próximo número previsto</dt>
-            <dd className="mt-1 text-lg font-semibold text-slate-800">
-              {data.proximoNumero || 'Aguardando sincronização'}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-sm text-slate-500">Documentos cadastrados</dt>
-            <dd className="mt-1 text-lg font-semibold text-slate-800">{data.totalDocumentos}</dd>
-          </div>
-        </dl>
-        {legado ? (
-          <Mensagem>
-            Atualize a configuração da nuvem para usar a sequência compartilhada, sem reservas por
-            computador.
-          </Mensagem>
-        ) : (
-          <>
-            <Field
-              label="Próximo número"
-              hint={
-                data.atribuicaoServidor
-                  ? 'Avançar a sequência deixa um salto intencional. Outro usuário pode consumir o número previsto antes do seu próximo salvamento.'
-                  : 'Escolha um número ainda não utilizado.'
-              }
-            >
-              <NumberField
-                value={proximo}
-                onChange={(n) => {
-                  setProximo(n)
-                  setEditado(true)
-                  setOk(false)
-                  limparErro()
-                }}
-                min={data.minimoProximo ?? 1}
-                max={999999}
-                step={1}
-                disabled={ocupado}
-              />
-            </Field>
-            {erro && (
-              <Mensagem className="mt-4">
-                Não foi possível definir o próximo número. {erro}
-              </Mensagem>
-            )}
-            <div className="mt-5 flex justify-end">
-              <BotaoSalvar salvando={operacao === 'salvar'} ok={ok} disabled={ocupado} />
-            </div>
-          </>
-        )}
       </Card>
     </form>
   )

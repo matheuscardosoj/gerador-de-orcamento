@@ -9,6 +9,31 @@ export const filaParaEnvio = (): Linha[] =>
   )
 export const temOperacaoAtiva = (entidade: string): boolean =>
   !!get("SELECT 1 FROM fila_nuvem WHERE entidade=? AND estado<>'preservada' LIMIT 1", [entidade])
+export function preservarOperacoesEntidade(entidade: string, motivo: string): string[] {
+  const grupos = all(
+    "SELECT DISTINCT grupo FROM fila_nuvem WHERE entidade=? AND estado<>'preservada'",
+    [entidade]
+  ).map((l) => texto(l.grupo))
+  const entidades = grupos.length
+    ? all(
+        `SELECT DISTINCT entidade FROM fila_nuvem WHERE grupo IN (${grupos.map(() => '?').join(',')})`,
+        grupos
+      ).map((l) => texto(l.entidade))
+    : []
+  tx(() => {
+    if (entidades.length)
+      run(
+        `DELETE FROM conflitos_nuvem WHERE entidade IN (${entidades.map(() => '?').join(',')})`,
+        entidades
+      )
+    for (const grupo of grupos)
+      run(
+        "UPDATE fila_nuvem SET estado='preservada',erro=? WHERE grupo=? AND estado<>'preservada'",
+        [motivo, grupo]
+      )
+  })
+  return entidades
+}
 export const ultimaBaseAtiva = (entidade: string): number | null => {
   const n = get(
     "SELECT MAX(base) AS base FROM fila_nuvem WHERE entidade=? AND estado<>'preservada'",

@@ -137,7 +137,7 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
       .channel(`empresa:${identidade.empresa}`, { config: { private: true } })
       .on('broadcast', { event: 'alteracao' }, (evento) => {
         if (encerrado) return
-        solicitar()
+        solicitar(evento.payload?.empresaExcluida === true)
         const entidade = evento.payload?.entidade
         if (
           typeof entidade === 'string' &&

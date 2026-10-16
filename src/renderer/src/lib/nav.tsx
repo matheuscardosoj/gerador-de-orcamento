@@ -8,6 +8,7 @@ import {
   type ReactNode
 } from 'react'
 import { api } from './api'
+import { notificar, type NivelNotificacao } from './notificacoes'
 import { ConfirmDialog } from '../ui/primitives'
 
 export type AbaConfiguracoes =
@@ -18,7 +19,6 @@ export type AbaConfiguracoes =
   | 'parametros'
   | 'observacoes'
   | 'pagamentos'
-  | 'numeracao'
   | 'dados'
   | 'ia'
 
@@ -37,7 +37,8 @@ interface NavContexto {
   navegar: (rota: Rota) => void
   navegarAposSalvar: (rota: Rota) => void
   registrarBloqueio: (bloqueio: (() => boolean) | null) => void
-  executarComConfirmacao: (acao: () => void) => void
+  executarComConfirmacao: (acao: () => void, aoCancelar?: () => void) => void
+  avisar: (mensagem: string, nivel?: NivelNotificacao) => void
 }
 
 const Ctx = createContext<NavContexto | null>(null)
@@ -45,13 +46,15 @@ const Ctx = createContext<NavContexto | null>(null)
 export function NavProvider({ children }: { children: ReactNode }): JSX.Element {
   const [rota, setRota] = useState<Rota>({ nome: 'historico' })
   const [revisaoRota, setRevisaoRota] = useState(0)
-  const [pendente, setPendente] = useState<{ executar: () => void } | null>(null)
+  const [pendente, setPendente] = useState<{ executar: () => void; cancelar?: () => void } | null>(
+    null
+  )
   const bloqueio = useRef<(() => boolean) | null>(null)
   const registrarBloqueio = useCallback((proximo: (() => boolean) | null) => {
     bloqueio.current = proximo
   }, [])
-  const executarComConfirmacao = useCallback((acao: () => void) => {
-    if (bloqueio.current?.()) setPendente({ executar: acao })
+  const executarComConfirmacao = useCallback((acao: () => void, aoCancelar?: () => void) => {
+    if (bloqueio.current?.()) setPendente({ executar: acao, cancelar: aoCancelar })
     else acao()
   }, [])
   const navegar = useCallback(
@@ -83,7 +86,8 @@ export function NavProvider({ children }: { children: ReactNode }): JSX.Element 
         navegar,
         navegarAposSalvar,
         registrarBloqueio,
-        executarComConfirmacao
+        executarComConfirmacao,
+        avisar: (mensagem, nivel = 'info') => notificar(mensagem, nivel)
       }}
     >
       {children}
@@ -93,7 +97,10 @@ export function NavProvider({ children }: { children: ReactNode }): JSX.Element 
         description="Se você sair agora, as alterações feitas desde o último salvamento serão perdidas."
         confirmLabel="Descartar alterações"
         cancelLabel="Continuar editando"
-        onCancel={() => setPendente(null)}
+        onCancel={() => {
+          pendente?.cancelar?.()
+          setPendente(null)
+        }}
         onConfirm={descartar}
       />
     </Ctx.Provider>

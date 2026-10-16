@@ -5,7 +5,7 @@ SELECT pg_advisory_xact_lock(hashtextextended('gdo-codigos-cadastros-v1',0));
 ALTER TABLE public.clientes ADD COLUMN IF NOT EXISTS codigo bigint;
 ALTER TABLE public.servicos ADD COLUMN IF NOT EXISTS codigo bigint;
 CREATE TABLE IF NOT EXISTS public.codigos_cadastros (
-  empresa_id uuid NOT NULL REFERENCES auth.users(id),
+  empresa_id uuid NOT NULL REFERENCES public.empresas(id),
   tipo text NOT NULL CHECK(tipo IN ('cliente','servico')),
   codigo bigint NOT NULL CHECK(codigo > 0),
   cadastro_id text NOT NULL,

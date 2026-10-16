@@ -410,8 +410,31 @@ const v12 = (d: Database): void => {
     d.run('INSERT OR IGNORE INTO codigos_cadastros VALUES (?,?,?)', ['servico', i + 1, s.id])
   })
 }
-export const VERSAO_BANCO = 12
-const MIGRACOES: Array<(d: Database) => void> = [v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12]
+const v13 = (d: Database): void => {
+  d.exec(`CREATE TABLE rascunhos_cadastros (
+    tipo TEXT NOT NULL CHECK(tipo IN ('cliente','servico','observacoes','pagamentos')),
+    id_origem TEXT NOT NULL,
+    dados_json TEXT NOT NULL,
+    criado_em TEXT NOT NULL,
+    PRIMARY KEY(tipo,id_origem)
+  );`)
+}
+export const VERSAO_BANCO = 13
+const MIGRACOES: Array<(d: Database) => void> = [
+  v1,
+  v2,
+  v3,
+  v4,
+  v5,
+  v6,
+  v7,
+  v8,
+  v9,
+  v10,
+  v11,
+  v12,
+  v13
+]
 
 export function aplicarMigracoes(d: Database, ate = MIGRACOES.length): void {
   const linha = d.get('PRAGMA user_version') as { user_version?: number } | null

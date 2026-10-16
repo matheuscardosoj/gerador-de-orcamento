@@ -109,6 +109,15 @@ describe('validação compartilhada', () => {
     )
   })
 
+  it('aceita lucro acima de 100%, mas não aceita percentual negativo', () => {
+    expect(validarParametrosFinanceiros({ ...parametros, margemLucroPadrao: 250 })).toEqual([])
+    expect(
+      validarParametrosFinanceiros({ ...parametros, margemLucroPadrao: -1 }).some(
+        (erro) => erro.campo === 'margemLucroPadrao'
+      )
+    ).toBe(true)
+  })
+
   it('normaliza espaços sem destruir quebras intencionais', () => {
     expect(normalizarEspacos('  VS   Prestadora ')).toBe('VS Prestadora')
     const normalizado = normalizarOrcamento({

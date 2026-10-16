@@ -64,6 +64,32 @@ Deno.serve(async (request) => {
       auth: { persistSession: false },
       global: { headers: { Authorization: authorization } }
     })
+    if (body.acao === 'capacidades') return json({ versao: 2, excluirEmpresa: true })
+    if (body.acao === 'excluirEmpresa') {
+      const empresaId = typeof body.empresaId === 'string' ? body.empresaId : ''
+      if (
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          empresaId
+        )
+      )
+        return json({ erro: 'Empresa inválida' }, 400)
+      const { error } = await admin.rpc('gdo_excluir_empresa', {
+        p_ator: auth.user.id,
+        p_empresa: empresaId
+      })
+      if (error) {
+        // Preserve the PostgreSQL cause for an operator to diagnose in the
+        // Edge Function logs; the renderer still sanitizes its user message.
+        console.error('gdo_excluir_empresa falhou', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        })
+        return json({ erro: error.message, codigo: error.code }, 403)
+      }
+      return json({ ok: true })
+    }
     if (body.acao === 'listar' || body.acao === 'cancelar') {
       const { data, error } = await usuario.rpc('gdo_convites_operador', {
         p_empresa: body.empresaId ?? null,

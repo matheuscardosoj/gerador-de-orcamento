@@ -1,3 +1,5 @@
+import { FilaControleEdicao } from './fila-controle-edicao'
+import { identidadeSessaoNuvem } from './nuvem'
 import { mensagemErro } from '@shared/erros'
 import { randomUUID } from 'crypto'
 import { all, get, run, texto, tx } from './db/sqlite'
@@ -7,6 +9,7 @@ import type { ControleEdicao, MembroEmpresa, TipoDocumento } from '@shared/evolu
 import { avisarDados } from './eventos'
 import type { InfoNumeracao, ResultadoNumeracao } from '@shared/api'
 import { filaAtiva, temOperacaoAtiva } from './fila-nuvem'
+import { pararTempoReal } from './tempo-real'
 
 export async function numeracaoCompartilhada(
   tipo: TipoDocumento,
@@ -67,35 +70,77 @@ export async function definirNumeracaoCompartilhada(
     return { ok: false, erro: mensagemErro(e) }
   }
 }
-const editoresAtivos = new Set<string>()
-export function encerrarEdicoesConta(): void {
-  editoresAtivos.clear()
-}
 export async function acompanharEdicao(
   tipo: TipoDocumento,
   id: string,
   ativo: boolean
 ): Promise<void> {
   const chave = `${tipo}:${id}`
-  if (ativo) {
-    editoresAtivos.add(chave)
-    return
-  }
-  editoresAtivos.delete(chave)
+  // A autorização pertence à sessão do app, não à montagem da tela.
+  // O usuário pode continuar responsável e receber pedidos enquanto navega.
+  void chave
+  void ativo
+}
+
+/** Libera leases online ao encerrar ou trocar a conta; a navegação entre telas não chama isto. */
+export async function encerrarEdicoesConta(): Promise<void> {
+  epocaControle++
+  pararTempoReal()
   if (protocoloNuvem() < 2) return
-  const c = get('SELECT * FROM edicoes_documento WHERE tipo=? AND documento_id=?', [tipo, id])
-  if (
-    !c ||
-    Number(c.offline) ||
-    c.usuario !== statusNuvem().usuarioId ||
-    c.computador !== computadorId()
+  const status = statusNuvem()
+  // Alterações ainda não enviadas continuam vinculadas ao controle local.
+  // Ao sair, o lease online expira; a fila permanece para a próxima entrada.
+  if (status.pendentes || status.conflitos.length) return
+  const linhas = all(
+    'SELECT tipo,documento_id,geracao FROM edicoes_documento WHERE usuario=? AND computador=? AND offline=0 AND expira_em>?',
+    [status.usuarioId, computadorId(), new Date().toISOString()]
   )
-    return
-  try {
-    await controlarEdicao(tipo, id, 'liberar')
-  } catch {
-    /* Sem rede, o bloqueio online expira sem renovação. */
+  await Promise.allSettled(
+    linhas.map(async (linha) => {
+      // Evita sincronizar a base inteira uma vez para cada documento ao sair.
+      await pedidoNuvem(
+        `/rest/v1/rpc/${protocoloNuvem() >= 3 ? 'gdo_edicao_v3' : 'gdo_edicao_v2'}`,
+        {
+          p_tipo: texto(linha.tipo),
+          p_id: texto(linha.documento_id),
+          p_dispositivo: computadorId(),
+          p_acao: 'liberar',
+          p_geracao: linha.geracao,
+          p_destino: null
+        },
+        false,
+        undefined,
+        2000
+      )
+      run('DELETE FROM edicoes_documento WHERE tipo=? AND documento_id=? AND geracao=?', [
+        linha.tipo,
+        linha.documento_id,
+        linha.geracao
+      ])
+    })
+  )
+}
+
+/** Documentos locais desta instalação que já estiveram sob acompanhamento colaborativo. */
+export function documentosAcompanhados(
+  somenteResponsavel = false
+): Array<{ tipo: TipoDocumento; id: string }> {
+  const ids = new Map<string, { tipo: TipoDocumento; id: string }>()
+  for (const linha of all(
+    'SELECT tipo,documento_id FROM edicoes_documento WHERE (offline=1 OR expira_em>?) AND (?=0 OR (usuario=? AND computador=?))',
+    [
+      new Date().toISOString(),
+      somenteResponsavel ? 1 : 0,
+      statusNuvem().usuarioId ?? null,
+      computadorId()
+    ]
+  )) {
+    const tipo = texto(linha.tipo)
+    const id = texto(linha.documento_id)
+    if (['orcamento', 'relatorio', 'recibo'].includes(tipo))
+      ids.set(`${tipo}:${id}`, { tipo: tipo as TipoDocumento, id })
   }
+  return [...ids.values()].sort((a, b) => a.tipo.localeCompare(b.tipo) || a.id.localeCompare(b.id))
 }
 
 function exigirProtocolo(): void {
@@ -132,14 +177,58 @@ export async function ativarMembro(usuario: string, ativo: boolean): Promise<Mem
     }
   )) as MembroEmpresa[]
 }
+let sequenciaControle = 0
+let epocaControle = 0
+const filaControle = new FilaControleEdicao()
 export async function controlarEdicao(
   tipo: TipoDocumento,
   id: string,
   acao = 'obter',
   destino?: string
 ): Promise<ControleEdicao | null> {
+  return (await estadoControleEdicao(tipo, id, acao, destino)).controle
+}
+export function estadoControleEdicao(
+  tipo: TipoDocumento,
+  id: string,
+  acao = 'obter',
+  destino?: string
+): Promise<import('@shared/evolucao').EstadoControleEdicao> {
+  const sessao = identidadeSessaoNuvem()
+  const epoca = epocaControle
+  const empresaId = statusNuvem().empresaId ?? ''
+  const validar = (): void => {
+    if (sessao !== identidadeSessaoNuvem() || epoca !== epocaControle)
+      throw new Error('A sessão mudou. Abra o documento novamente.')
+  }
+  return filaControle.executar(
+    JSON.stringify([sessao, epoca, empresaId, tipo, id]),
+    acao === 'obter',
+    async () => {
+      validar()
+      const controle = await executarControleEdicao(tipo, id, acao, destino, validar)
+      validar()
+      const estado = {
+        empresaId,
+        sessao,
+        sequencia: ++sequenciaControle,
+        tipo,
+        documentoId: id,
+        controle
+      }
+      avisarDados({ origem: 'nuvem', entidades: [], controleEdicao: estado })
+      return estado
+    }
+  )
+}
+async function executarControleEdicao(
+  tipo: TipoDocumento,
+  id: string,
+  acao = 'obter',
+  destino: string | undefined,
+  validar: () => void
+): Promise<ControleEdicao | null> {
   exigirProtocolo()
-  const atual = get('SELECT * FROM edicoes_documento WHERE tipo=? AND documento_id=?', [tipo, id])
   if (['offline', 'liberar', 'transferir', 'recuperar'].includes(acao)) {
     const status = await sincronizarNuvem()
     const conflitoPreservado =
@@ -192,6 +281,8 @@ export async function controlarEdicao(
       }
     }
   }
+  validar()
+  const atual = get('SELECT * FROM edicoes_documento WHERE tipo=? AND documento_id=?', [tipo, id])
   const controle = (await pedidoNuvem(
     `/rest/v1/rpc/${protocoloNuvem() >= 3 ? 'gdo_edicao_v3' : 'gdo_edicao_v2'}`,
     {
@@ -203,6 +294,13 @@ export async function controlarEdicao(
       p_destino: destino ?? null
     }
   )) as ControleEdicao | null
+  validar()
+  const salvo = get('SELECT geracao FROM edicoes_documento WHERE tipo=? AND documento_id=?', [
+    tipo,
+    id
+  ])
+  if (salvo && Number(salvo.geracao) > (controle?.geracao ?? Number(atual?.geracao ?? 0)))
+    throw new Error('O controle mudou durante a consulta. Atualize o documento.')
   tx(() => {
     if (controle)
       run(
@@ -285,10 +383,10 @@ export async function renovarEdicoes(): Promise<void> {
   if (protocoloNuvem() < 2) return
   const uid = statusNuvem().usuarioId
   for (const controle of all(
-    'SELECT tipo,documento_id FROM edicoes_documento WHERE usuario=? AND computador=? AND offline=0',
+    'SELECT tipo,documento_id,expira_em FROM edicoes_documento WHERE usuario=? AND computador=? AND offline=0',
     [uid, computadorId()]
   )) {
-    if (!editoresAtivos.has(`${controle.tipo}:${controle.documento_id}`)) continue
+    if (!controle.expira_em || Date.parse(texto(controle.expira_em)) <= Date.now()) continue
     try {
       await controlarEdicao(
         texto(controle.tipo) as TipoDocumento,

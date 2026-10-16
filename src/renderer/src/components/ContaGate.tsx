@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { Trash2 } from 'lucide-react'
 import type { EstadoConta } from '@shared/conta'
 import type { EmpresaConfig } from '@shared/types'
 import { mensagemErro } from '@shared/erros'
@@ -11,7 +12,8 @@ import {
   Input,
   Mensagem,
   PasswordInput,
-  SectionTitle
+  SectionTitle,
+  Modal
 } from '../ui/primitives'
 
 const ContaContext = createContext<{
@@ -85,6 +87,44 @@ export function ContaGate({ children }: { children: ReactNode }): JSX.Element {
         {erro ? <Mensagem>{erro}</Mensagem> : <p role="status">Carregando…</p>}
       </TelaAcesso>
     )
+  if (conta.fase === 'empresaIndisponivel')
+    return (
+      <TelaAcesso>
+        <SectionTitle
+          title={
+            conta.indisponibilidade?.motivo === 'empresaExcluida'
+              ? 'Esta empresa foi excluída pelo Administrador do Sistema.'
+              : conta.indisponibilidade?.motivo === 'sessaoExpirada'
+                ? 'Sua sessão expirou'
+                : 'Seu acesso a esta empresa foi removido'
+          }
+        />
+        <p className="text-sm text-slate-600">
+          {conta.indisponibilidade?.nome}.{' '}
+          {conta.indisponibilidade?.concluida
+            ? 'O acesso foi encerrado.'
+            : 'Encerrando as operações desta empresa…'}
+        </p>
+        {(erro || conta.indisponibilidade?.erro) && (
+          <Mensagem>{erro || conta.indisponibilidade?.erro}</Mensagem>
+        )}
+        <Button
+          disabled={!conta.indisponibilidade?.concluida && !conta.indisponibilidade?.erro}
+          onClick={() =>
+            void api.conta
+              .continuarAposIndisponibilidade()
+              .then(setConta)
+              .catch((e) => setErro(mensagemErro(e)))
+          }
+        >
+          {conta.indisponibilidade?.erro
+            ? 'Tentar concluir encerramento'
+            : conta.operador && conta.indisponibilidade?.motivo !== 'sessaoExpirada'
+              ? 'Escolher outra empresa'
+              : 'Voltar ao acesso'}
+        </Button>
+      </TelaAcesso>
+    )
   if (conta.fase !== 'pronto') return <Acesso conta={conta} atualizar={setConta} />
   if (verificando)
     return (
@@ -117,7 +157,7 @@ export function ContaGate({ children }: { children: ReactNode }): JSX.Element {
       {empresa && !empresa.nome.trim() && conta.empresa?.papel === 'administrador' ? (
         <PrimeirosPassos empresa={empresa} concluir={setEmpresa} />
       ) : (
-        <div key={`${conta.email}:${conta.empresa?.id}`} className="h-full">
+        <div key={conta.empresa?.id ?? 'empresa'} className="h-full">
           {children}
         </div>
       )}
@@ -149,6 +189,9 @@ function Acesso({
   const [confirmacao, setConfirmacao] = useState(''),
     [erro, setErro] = useState(''),
     [ocupado, setOcupado] = useState(false)
+  const [empresaExcluir, setEmpresaExcluir] = useState<(typeof conta.empresas)[number] | null>(null)
+  const [nomeDigitado, setNomeDigitado] = useState('')
+  const [erroExclusao, setErroExclusao] = useState('')
   const segundosParaReenviar = Math.max(0, Math.ceil((proximoEnvio - agora) / 1000))
   useEffect(() => {
     if (!enviado || segundosParaReenviar === 0) return
@@ -209,7 +252,14 @@ function Acesso({
   if (conta.fase === 'escolherEmpresa')
     return (
       <TelaAcesso>
-        <SectionTitle title="Escolha sua empresa" description={`Conectado como ${conta.email}`} />
+        <SectionTitle
+          title="Escolha sua empresa"
+          description={
+            conta.operador
+              ? `Conectado como ${conta.email} · Administrador do Sistema`
+              : `Conectado como ${conta.email}`
+          }
+        />
         <p className="text-sm text-slate-500">
           Selecione a empresa para abrir os dados compartilhados. O cadastro inicial só aparece
           quando os dados básicos dessa empresa ainda não foram preenchidos.
@@ -217,19 +267,35 @@ function Acesso({
         {erro && <Mensagem>{erro}</Mensagem>}
         {conta.empresas.length ? (
           conta.empresas.map((e) => (
-            <Button
-              className="w-full"
-              variant="outline"
-              key={e.id}
-              disabled={ocupado}
-              onClick={() =>
-                void executar(async () => atualizar(await api.conta.selecionarEmpresa(e.id)))
-              }
-            >
-              {e.nome.trim().toLocaleLowerCase('pt-BR') === 'empresa'
-                ? 'Minha empresa (nome não informado)'
-                : e.nome}
-            </Button>
+            <div className="flex items-stretch gap-2" key={e.id}>
+              <Button
+                className="min-w-0 flex-1 justify-start whitespace-normal text-left"
+                variant="outline"
+                disabled={ocupado}
+                onClick={() =>
+                  void executar(async () => atualizar(await api.conta.selecionarEmpresa(e.id)))
+                }
+              >
+                {e.nome}
+              </Button>
+              {conta.operador && (
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  icon={Trash2}
+                  aria-label={`Excluir empresa ${e.nome}`}
+                  disabled={ocupado}
+                  onClick={() => {
+                    setEmpresaExcluir(e)
+                    setNomeDigitado('')
+                    setErroExclusao('')
+                  }}
+                >
+                  Excluir
+                </Button>
+              )}
+            </div>
           ))
         ) : (
           <Mensagem tom="info">
@@ -244,6 +310,67 @@ function Acesso({
         >
           Entrar com outra conta
         </Button>
+        <Modal
+          open={!!empresaExcluir}
+          title="Excluir empresa permanentemente"
+          size="md"
+          busy={ocupado}
+          onClose={() => {
+            if (!ocupado) setEmpresaExcluir(null)
+          }}
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                disabled={ocupado}
+                onClick={() => setEmpresaExcluir(null)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="danger"
+                disabled={ocupado || !empresaExcluir || nomeDigitado.trim() !== empresaExcluir.nome}
+                onClick={() => {
+                  if (!empresaExcluir || ocupado) return
+                  setOcupado(true)
+                  setErroExclusao('')
+                  void api.conta
+                    .excluirEmpresa(empresaExcluir.id, nomeDigitado)
+                    .then((atualizada) => {
+                      atualizar(atualizada)
+                      setEmpresaExcluir(null)
+                      setNomeDigitado('')
+                    })
+                    .catch((e) => setErroExclusao(mensagemErro(e)))
+                    .finally(() => setOcupado(false))
+                }}
+              >
+                {ocupado ? 'Excluindo…' : 'Excluir permanentemente'}
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <Mensagem tom="aviso">
+              {empresaExcluir
+                ? `Todos os documentos, cadastros, vínculos e dados sincronizados de “${empresaExcluir.nome}” serão removidos. As contas de autenticação das pessoas serão preservadas. Ao reconectar, os computadores encerrarão o acesso e removerão o perfil local, incluindo rascunhos e alterações pendentes.`
+                : ''}
+            </Mensagem>
+            {erroExclusao && <Mensagem>{erroExclusao}</Mensagem>}
+            <Field
+              label={
+                empresaExcluir ? `Digite exatamente: ${empresaExcluir.nome}` : 'Nome da empresa'
+              }
+            >
+              <Input
+                autoComplete="off"
+                value={nomeDigitado}
+                disabled={ocupado}
+                onChange={(e) => setNomeDigitado(e.target.value)}
+              />
+            </Field>
+          </div>
+        </Modal>
       </TelaAcesso>
     )
   return (
@@ -411,7 +538,16 @@ function AtivarEmpresa(): JSX.Element {
   const [administrador, setAdministrador] = useState('')
   const [erro, setErro] = useState('')
   const [aviso, setAviso] = useState('')
+  const [atualizacaoPendente, setAtualizacaoPendente] = useState(false)
   const [ocupado, setOcupado] = useState(false)
+  const atualizarLista = async (): Promise<void> => {
+    try {
+      await api.conta.atualizarEmpresas()
+      setAtualizacaoPendente(false)
+    } catch {
+      setAtualizacaoPendente(true)
+    }
+  }
   return (
     <details className="rounded-lg border border-slate-200 p-4">
       <summary className="cursor-pointer text-sm font-medium text-slate-700">
@@ -430,7 +566,8 @@ function AtivarEmpresa(): JSX.Element {
           setAviso('')
           void api.conta
             .criarEmpresa(nome.trim(), email.trim(), administrador.trim())
-            .then(() => {
+            .then(async () => {
+              await atualizarLista()
               setAviso(
                 'Convite enviado ao administrador. Ele poderá configurar a empresa ao entrar.'
               )
@@ -444,6 +581,14 @@ function AtivarEmpresa(): JSX.Element {
       >
         {erro && <Mensagem>{erro}</Mensagem>}
         {aviso && <Mensagem tom="info">{aviso}</Mensagem>}
+        {atualizacaoPendente && (
+          <Mensagem tom="aviso">
+            Empresa criada. Não foi possível atualizar a lista.{' '}
+            <Button type="button" onClick={() => void atualizarLista()}>
+              Atualizar lista
+            </Button>
+          </Mensagem>
+        )}
         <Field label="Nome da empresa">
           <Input
             required

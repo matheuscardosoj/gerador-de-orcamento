@@ -3,14 +3,17 @@
 import { afterAll, beforeAll, expect, it, vi } from 'vitest'
 import { PGlite } from '@electric-sql/pglite'
 import { randomUUID } from 'crypto'
-import { mkdtempSync, readFileSync, rmSync } from 'fs'
+import { Database } from 'node-sqlite3-wasm'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
-const estado = vi.hoisted(() => ({ perfil: '' }))
+const estado = vi.hoisted(() => ({ perfil: '', backup: '', cancelarBackup: false }))
 const raiz = mkdtempSync(join(tmpdir(), 'gdo-v2-perfis-'))
 vi.mock('electron', () => ({
   app: { getPath: () => estado.perfil, isPackaged: false, getAppPath: () => estado.perfil },
-  dialog: {},
+  dialog: {
+    showSaveDialog: async () => ({ canceled: estado.cancelarBackup, filePath: estado.backup })
+  },
   safeStorage: {
     isEncryptionAvailable: () => true,
     encryptString: (s: string) => Buffer.from(s),
@@ -37,6 +40,7 @@ const config = {
 }
 let reciboId = '',
   offline = false
+let leiturasRetidas = 0
 let reterControles: Promise<void> | null = null
 let renovacoes = 0
 let lotesPublicados = 0
@@ -98,15 +102,26 @@ beforeAll(async () => {
       const token = new Headers(options.headers).get('Authorization')?.replace('Bearer ', '')
       await pg.query("SELECT set_config('request.jwt.claim.sub',$1,false)", [token])
       let result: unknown
-      if (u.pathname === '/rest/v1/gdo_entities')
-        result = (
-          await pg.query(
-            'SELECT * FROM gdo_entities WHERE usuario=gdo_empresa() ORDER BY sequencia LIMIT 1'
-          )
-        ).rows
-      else if (u.pathname === '/rest/v1/edicoes_documento') {
+      if (u.pathname === '/rest/v1/gdo_entities') {
+        const filtro = u.searchParams.get('entidade')
+        result = filtro?.startsWith('in.(')
+          ? (
+              await pg.query(
+                'SELECT * FROM gdo_entities WHERE usuario=gdo_empresa() AND entidade=ANY($1::text[]) ORDER BY sequencia',
+                [filtro.slice(4, -1).split(',')]
+              )
+            ).rows
+          : (
+              await pg.query(
+                'SELECT * FROM gdo_entities WHERE usuario=gdo_empresa() ORDER BY sequencia LIMIT 1'
+              )
+            ).rows
+      } else if (u.pathname === '/rest/v1/edicoes_documento') {
         result = (await pg.query('SELECT * FROM edicoes_documento')).rows
-        if (reterControles) await reterControles
+        if (reterControles) {
+          leiturasRetidas++
+          await reterControles
+        }
       } else if (u.pathname === '/rest/v1/mapa_numeracao')
         result = (await pg.query('SELECT tipo,documento_id,anterior,novo FROM mapa_numeracao')).rows
       else if (u.pathname === '/rest/v1/pedidos_edicao')
@@ -216,6 +231,45 @@ it('publica, atribui número no servidor e baixa a mesma empresa em outro login'
     descricao: 'Serviço original'
   })
 })
+it('restaura o perfil a partir da nuvem após salvar a cópia no local escolhido', async () => {
+  estado.backup = join(raiz, 'copia-escolhida.gdo-backup')
+  const local = repos.observacoesRepo.create({
+    texto: 'Alteração guardada apenas neste computador',
+    padrao: false,
+    aplicacao: 'orcamento'
+  })
+  estado.cancelarBackup = true
+  expect(await nuvem.restaurarBaseDaNuvem()).toBeNull()
+  expect(repos.observacoesRepo.get(local.id)).not.toBeNull()
+  estado.cancelarBackup = false
+  const dados = await import('../dados')
+  const falha = vi.spyOn(dados, 'exportarDadosPara').mockImplementation(() => {
+    throw new Error('Falha de backup de teste')
+  })
+  await expect(nuvem.restaurarBaseDaNuvem()).rejects.toThrow('backup de teste')
+  expect(repos.observacoesRepo.get(local.id)).not.toBeNull()
+  falha.mockRestore()
+  sql.run(
+    "CREATE TRIGGER falha_restauracao BEFORE INSERT ON recibos BEGIN SELECT RAISE(ABORT,'Falha de restauração de teste'); END"
+  )
+  try {
+    await expect(nuvem.restaurarBaseDaNuvem()).rejects.toThrow('restauração de teste')
+    expect(repos.observacoesRepo.get(local.id)).not.toBeNull()
+    expect(recibos.recibosRepo.get(reciboId)).not.toBeNull()
+  } finally {
+    sql.run('DROP TRIGGER falha_restauracao')
+  }
+  const resultado = await nuvem.restaurarBaseDaNuvem()
+  expect(resultado?.backup).toBe(estado.backup)
+  expect(existsSync(estado.backup)).toBe(true)
+  const copia = new Database(estado.backup)
+  expect(
+    copia.get('SELECT texto FROM observacoes_padrao WHERE id=?', [local.id] as never)
+  ).not.toBeNull()
+  copia.close()
+  expect(repos.observacoesRepo.get(local.id)).toBeNull()
+  expect(recibos.recibosRepo.get(reciboId)).not.toBeNull()
+})
 it('coordena edição entre os logins e preserva a revisão recebida', async () => {
   await expect(colaboracao.autorizarGravacao('recibo', reciboId)).rejects.toThrow('outro usuário')
   await perfil('a')
@@ -233,6 +287,30 @@ it('coordena edição entre os logins e preserva a revisão recebida', async () 
     valor: 100,
     numero: 1
   })
+})
+it('mantém o responsável e renova a autorização depois de sair da tela do documento', async () => {
+  await perfil('b')
+  await colaboracao.controlarEdicao('recibo', reciboId, 'liberar')
+  await perfil('a')
+  const controle = await colaboracao.controlarEdicao('recibo', reciboId, 'adquirir')
+  expect(controle?.podeEditar).toBe(true)
+  await colaboracao.acompanharEdicao('recibo', reciboId, false)
+  const antes = await pg.query<{ expira_em: string }>(
+    'SELECT expira_em FROM edicoes_documento WHERE empresa_id=$1 AND tipo=$2 AND documento_id=$3',
+    [empresa, 'recibo', reciboId]
+  )
+  await colaboracao.renovarEdicoes()
+  const depois = await pg.query<{ expira_em: string }>(
+    'SELECT expira_em FROM edicoes_documento WHERE empresa_id=$1 AND tipo=$2 AND documento_id=$3',
+    [empresa, 'recibo', reciboId]
+  )
+  expect(Date.parse(depois.rows[0].expira_em)).toBeGreaterThanOrEqual(
+    Date.parse(antes.rows[0].expira_em)
+  )
+  expect((await colaboracao.controlarEdicao('recibo', reciboId))?.podeEditar).toBe(true)
+  await colaboracao.controlarEdicao('recibo', reciboId, 'liberar')
+  await perfil('b')
+  await colaboracao.controlarEdicao('recibo', reciboId, 'adquirir')
 })
 it('mantém a geração do salvamento ao ficar offline e não usa a geração nova após recuperação', async () => {
   await perfil('b')
@@ -502,6 +580,32 @@ it('confirma a referência do relatório criado offline antes da numeração da 
   expect(repos.relatoriosRepo.get(rel.id)?.origemOrcamento?.numero).toBe(confirmado.numero)
 })
 
+it('cria cliente e serviço offline, mantém ambos na fila e entrega ao outro computador', async () => {
+  await perfil('a')
+  offline = true
+  const cliente = repos.clientesRepo.create({
+    nome: 'Cliente criado sem internet',
+    tratamento: 'A',
+    ativo: true
+  })
+  const servico = repos.servicosRepo.create({
+    nome: 'Serviço criado sem internet',
+    descricaoPadrao: '',
+    unidade: 'unidade',
+    precoReferencia: 10
+  })
+  nuvem.capturarCadastros()
+  expect(
+    sql.all("SELECT entidade FROM fila_nuvem WHERE estado='pendente'").map((l) => l.entidade)
+  ).toEqual(expect.arrayContaining([`clientes:${cliente.id}`, `servicos:${servico.id}`]))
+  offline = false
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  await perfil('b')
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  expect(repos.clientesRepo.get(cliente.id)?.nome).toBe('Cliente criado sem internet')
+  expect(repos.servicosRepo.get(servico.id)?.nome).toBe('Serviço criado sem internet')
+})
+
 it('não reenfileira cadastros recebidos quando o JSON remoto muda a ordem das propriedades', async () => {
   expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
   expect(sql.get('SELECT COUNT(*) AS n FROM fila_nuvem')?.n).toBe(0)
@@ -738,4 +842,213 @@ it('recupera a exclusão row:null já pendente mesmo sem atualizar a função da
   await perfil('falha-a')
   await nuvem.sincronizarNuvem()
   expect(repos.clientesRepo.get(c.id)).toBeNull()
+})
+
+it('aplica a exclusão remota apesar de edição local e preserva a edição sem ressuscitar o cadastro', async () => {
+  await perfil('tombstone-a')
+  expect((await nuvem.conectarNuvem(config, 'teste', 'baixar')).erro).toBeNull()
+  const cliente = repos.clientesRepo.create({
+    nome: 'Cliente com exclusão concorrente',
+    tratamento: '',
+    ativo: true
+  })
+  nuvem.capturarCadastros()
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+
+  await perfil('tombstone-b')
+  expect(
+    (await nuvem.conectarNuvem({ ...config, email: 'b@example.com' }, 'teste', 'baixar')).erro
+  ).toBeNull()
+  await perfil('tombstone-a')
+  await repetirCliente(cliente.id, randomUUID(), 'Alteração local que deve ser preservada')
+  const antiga = sql.get('SELECT * FROM fila_nuvem WHERE entidade=?', [`clientes:${cliente.id}`])!
+
+  await perfil('tombstone-b')
+  repos.clientesRepo.remove(cliente.id)
+  const { enfileirar } = await import('../versoes')
+  const { criarPayloadCadastroExcluido } = await import('@shared/cadastros-sincronizacao')
+  enfileirar(`clientes:${cliente.id}`, criarPayloadCadastroExcluido('clientes', cliente.id))
+  nuvem.capturarCadastros()
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  await perfil('tombstone-a')
+  await nuvem.sincronizarNuvem()
+
+  expect(repos.clientesRepo.get(cliente.id)).toBeNull()
+  expect(sql.get('SELECT estado,erro FROM fila_nuvem WHERE id=?', [antiga.id])).toMatchObject({
+    estado: 'preservada',
+    erro: expect.stringContaining('excluído em outro computador')
+  })
+  expect(nuvem.statusNuvem().pendentes).toBe(0)
+  expect(nuvem.statusNuvem().conflitos).toHaveLength(0)
+  expect(nuvem.statusNuvem().erro ?? '').not.toContain('conflito')
+  await perfil('tombstone-b')
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  expect(repos.clientesRepo.get(cliente.id)).toBeNull()
+})
+
+it('sincroniza clientes e serviços novos, incluindo seus códigos canônicos, entre perfis', async () => {
+  await perfil('catalogo-a')
+  expect((await nuvem.conectarNuvem(config, 'teste', 'baixar')).erro).toBeNull()
+  const cliente = repos.clientesRepo.create({
+    nome: 'Cliente criado no computador A',
+    tratamento: 'A',
+    contato: 'contato de teste',
+    ativo: true
+  })
+  const servico = repos.servicosRepo.create({
+    nome: 'Serviço de teste de sincronização',
+    descricaoPadrao: 'Item marcado para teste automatizado',
+    unidade: 'hora',
+    precoReferencia: 125
+  })
+  nuvem.capturarCadastros()
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  const clienteCanonico = repos.clientesRepo.get(cliente.id)!
+  const servicoCanonico = repos.servicosRepo.get(servico.id)!
+  expect(clienteCanonico.codigo).not.toBeUndefined()
+  expect(servicoCanonico.codigo).not.toBeUndefined()
+  // Cadastros antigos não incluíam codigo em campos_presentes.
+  await pg.exec('RESET ROLE')
+  await pg.query(
+    "UPDATE clientes SET campos_presentes=array_remove(campos_presentes,'codigo') WHERE id=$1",
+    [cliente.id]
+  )
+
+  await perfil('catalogo-b')
+  expect(
+    (await nuvem.conectarNuvem({ ...config, email: 'b@example.com' }, 'teste', 'baixar')).erro
+  ).toBeNull()
+  expect(repos.servicosRepo.get(servico.id)).toMatchObject({
+    codigo: servicoCanonico.codigo,
+    nome: servico.nome,
+    descricaoPadrao: servico.descricaoPadrao,
+    unidade: servico.unidade,
+    precoReferencia: servico.precoReferencia
+  })
+  expect(repos.clientesRepo.get(cliente.id)).toMatchObject({
+    codigo: clienteCanonico.codigo,
+    nome: cliente.nome,
+    contato: cliente.contato
+  })
+})
+
+it('reconfere código antigo depois de resolver uma operação pendente sem avançar a revisão remota', async () => {
+  const servico = repos.servicosRepo
+    .list()
+    .find((s) => s.nome === 'Serviço de teste de sincronização')!
+  const codigo = servico.codigo
+  const cliente = repos.clientesRepo
+    .list()
+    .find((c) => c.nome === 'Cliente criado no computador A')!
+  const dadosCliente = JSON.parse(
+    String(sql.get('SELECT dados_json FROM clientes WHERE id=?', [cliente.id])?.dados_json)
+  )
+  delete dadosCliente.codigo
+  sql.run('UPDATE clientes SET dados_json=? WHERE id=?', [JSON.stringify(dadosCliente), cliente.id])
+  repos.servicosRepo.update(servico.id, { nome: 'Alteração local preservada' })
+  nuvem.capturarCadastros()
+  sql.run("UPDATE fila_nuvem SET estado='falha',erro='Falha de teste' WHERE entidade=?", [
+    `servicos:${servico.id}`
+  ])
+  sql.run('UPDATE servicos SET codigo=NULL WHERE id=?', [servico.id])
+  sql.run("UPDATE configuracoes SET valor='false' WHERE chave='codigosCadastrosRevisados'")
+  await nuvem.sincronizarNuvem(false)
+  expect(repos.clientesRepo.get(cliente.id)?.codigo).toBe(cliente.codigo)
+  expect(
+    sql.get("SELECT valor FROM configuracoes WHERE chave='codigosCadastrosRevisados'")?.valor
+  ).toBe('false')
+  expect(sql.get('SELECT codigo FROM servicos WHERE id=?', [servico.id])?.codigo).toBeNull()
+  sql.run('DELETE FROM fila_nuvem WHERE entidade=?', [`servicos:${servico.id}`])
+  await nuvem.sincronizarNuvem(false)
+  expect(repos.servicosRepo.get(servico.id)?.codigo).toBe(codigo)
+  expect(
+    sql.get("SELECT valor FROM configuracoes WHERE chave='codigosCadastrosRevisados'")?.valor
+  ).toBe('true')
+})
+
+it('usa o dispositivo solicitante no pacote colaborativo mesmo se a autoria antiga apontar outro computador', async () => {
+  await perfil('a')
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  const documento = repos.orcamentosRepo.list()[0]
+  const meta = sql.get(
+    "SELECT dados FROM documento_meta WHERE tipo='orcamento' AND documento_id=?",
+    [documento.id]
+  )
+  const dados = JSON.parse(String(meta?.dados ?? '{}'))
+  dados.computadorResponsavel = randomUUID()
+  sql.run("UPDATE documento_meta SET dados=? WHERE tipo='orcamento' AND documento_id=?", [
+    JSON.stringify(dados),
+    documento.id
+  ])
+  const { pacoteDocumento, computadorId } = await import('../versoes')
+  const pacote = pacoteDocumento('orcamento', documento.id) as {
+    responsavel: string
+    rows: { documento_meta: Array<{ dados: string }> }
+  }
+  expect(pacote.responsavel).toBe(computadorId())
+  expect(JSON.parse(pacote.rows.documento_meta[0].dados).computadorResponsavel).toBe(computadorId())
+})
+
+it('exclui relatório depois de transferir a edição sem falha de metadados', async () => {
+  await perfil('a')
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  const orcamento = repos.orcamentosRepo.list()[0]
+  const relatorio = repos.relatoriosRepo.criarDeOrcamento(orcamento.id)!
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  await colaboracao.controlarEdicao('relatorio', relatorio.id, 'liberar')
+  await perfil('b-novo')
+  expect(
+    (await nuvem.conectarNuvem({ ...config, email: 'b@example.com' }, 'teste', 'baixar')).erro
+  ).toBeNull()
+  await colaboracao.autorizarGravacao('relatorio', relatorio.id)
+  const meta = sql.get('SELECT dados FROM documento_meta WHERE tipo=? AND documento_id=?', [
+    'relatorio',
+    relatorio.id
+  ])!
+  const dados = JSON.parse(String(meta.dados))
+  dados.computadorResponsavel = randomUUID()
+  sql.run('UPDATE documento_meta SET dados=? WHERE tipo=? AND documento_id=?', [
+    JSON.stringify(dados),
+    'relatorio',
+    relatorio.id
+  ])
+  repos.relatoriosRepo.remove(relatorio.id)
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  expect(
+    (await pg.query('SELECT excluido FROM documentos WHERE documento_id=$1', [relatorio.id])).rows
+  ).toMatchObject([{ excluido: true }])
+})
+
+it('sincronização atrasada não reduz a geração já confirmada pela RPC', async () => {
+  await perfil('a')
+  expect((await nuvem.sincronizarNuvem()).erro).toBeNull()
+  const documento = repos.orcamentosRepo.list()[0]
+  const original = await colaboracao.controlarEdicao('orcamento', documento.id, 'recuperar')
+  let liberar!: () => void
+  const antes = leiturasRetidas
+  reterControles = new Promise<void>((resolve) => {
+    liberar = resolve
+  })
+  const sincronizacao = nuvem.sincronizarNuvem()
+  try {
+    await vi.waitFor(() => expect(leiturasRetidas).toBeGreaterThan(antes))
+    await pg.query(
+      "UPDATE edicoes_documento SET geracao=geracao+1 WHERE empresa_id=$1 AND tipo='orcamento' AND documento_id=$2",
+      [empresa, documento.id]
+    )
+    const novo = await colaboracao.controlarEdicao('orcamento', documento.id)
+    expect(novo?.geracao).toBe(original!.geracao + 1)
+    liberar()
+    expect((await sincronizacao).erro).toBeNull()
+    expect(
+      sql.get('SELECT geracao FROM edicoes_documento WHERE tipo=? AND documento_id=?', [
+        'orcamento',
+        documento.id
+      ])?.geracao
+    ).toBe(novo!.geracao)
+  } finally {
+    reterControles = null
+    liberar()
+    await sincronizacao
+  }
 })

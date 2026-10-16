@@ -35,14 +35,28 @@ export function ConvitesSection({
   const [email, setEmail] = useState(''),
     [nome, setNome] = useState(''),
     [papel, setPapel] = useState<PapelConta>('membro')
+  const [listaPendente, setListaPendente] = useState(false)
+  const atualizarLista = async (): Promise<void> => {
+    try {
+      atualizar(await api.conta.atualizarEmpresas())
+      setListaPendente(false)
+    } catch {
+      setListaPendente(true)
+    }
+  }
   const [empresa, setEmpresa] = useState(''),
     [novaEmpresa, setNovaEmpresa] = useState(false)
   const [erro, setErro] = useState(''),
     [aviso, setAviso] = useState(''),
     [ocupado, setOcupado] = useState(false)
-  const [confirmar, setConfirmar] = useState<{ texto: string; acao: () => Promise<void> } | null>(
-    null
-  )
+  const [confirmar, setConfirmar] = useState<{
+    texto: string
+    acao: () => Promise<void>
+    titulo: string
+    rotulo: string
+    destrutivo: boolean
+    erro?: string
+  } | null>(null)
   useBloqueioEdicao((novo || novaEmpresa) && !!(nome || email || empresa))
   const { data, error, loading, reload } = useAsync(
     async () => ({
@@ -51,6 +65,9 @@ export function ConvitesSection({
     }),
     [admin, conta.operador],
     ['membros']
+  )
+  const membrosVisiveis = (data?.membros ?? []).filter(
+    (m) => !(conta.operador && m.email.toLowerCase() === conta.email.toLowerCase())
   )
   const executar = async (acao: () => Promise<void>): Promise<void> => {
     setOcupado(true)
@@ -80,6 +97,9 @@ export function ConvitesSection({
   }
   const alternar = (m: MembroEmpresa): void =>
     setConfirmar({
+      titulo: m.ativo ? 'Desativar usuário' : 'Reativar usuário',
+      rotulo: m.ativo ? 'Desativar' : 'Reativar',
+      destrutivo: m.ativo,
       texto: `${m.ativo ? 'Desativar' : 'Reativar'} o acesso de ${m.nome}? Documentos e histórico serão preservados. Computadores offline recebem a mudança ao reconectar.`,
       acao: async () => {
         await api.colaboracao.ativarMembro(m.usuarioId, !m.ativo)
@@ -94,12 +114,24 @@ export function ConvitesSection({
         description="Convide por e-mail. Cada pessoa define sua senha e usa seu próprio acesso. Administradores também gerenciam pessoas e configurações."
       />
       {(error || (erro && !novo && !novaEmpresa)) && <Mensagem>{error || erro}</Mensagem>}
-      {aviso && <Mensagem tom="info">{aviso}</Mensagem>}
+      {listaPendente && (
+        <Mensagem tom="aviso">
+          Empresa criada. Não foi possível atualizar a lista.{' '}
+          <Button type="button" onClick={() => void atualizarLista()}>
+            Atualizar lista
+          </Button>
+        </Mensagem>
+      )}
+      {aviso && (
+        <Mensagem tom="info" temporaria>
+          {aviso}
+        </Mensagem>
+      )}
       {loading && !data ? (
         <p role="status" className="text-sm text-slate-500">
           Carregando usuários…
         </p>
-      ) : !data?.membros.length ? (
+      ) : !membrosVisiveis.length ? (
         <EmptyState
           title="Nenhum usuário encontrado"
           description="Confira sua conexão e tente novamente."
@@ -123,7 +155,7 @@ export function ConvitesSection({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {data.membros.map((m) => (
+            {membrosVisiveis.map((m) => (
               <tr key={m.usuarioId} className="h-[62px] hover:bg-slate-50">
                 <td className="px-4 py-3 font-medium text-slate-800">
                   <span className="line-clamp-2 break-words" title={m.nome}>
@@ -144,6 +176,9 @@ export function ConvitesSection({
                       onChange={(e) => {
                         const destino = e.target.value as PapelConta
                         setConfirmar({
+                          titulo: 'Confirmar alteração de acesso',
+                          rotulo: 'Confirmar',
+                          destrutivo: false,
                           texto: `Alterar o acesso de ${m.nome} para ${destino === 'administrador' ? 'administrador' : 'membro'}?`,
                           acao: async () =>
                             atualizar(await api.conta.alterarPapel(m.usuarioId, destino))
@@ -214,6 +249,9 @@ export function ConvitesSection({
                         disabled={ocupado}
                         onClick={() =>
                           setConfirmar({
+                            titulo: 'Cancelar convite',
+                            rotulo: 'Cancelar convite',
+                            destrutivo: true,
                             texto: `Cancelar o convite para ${c.email}?`,
                             acao: () => api.conta.cancelarConvite(c.id)
                           })
@@ -260,9 +298,10 @@ export function ConvitesSection({
           onSubmit={(e) => {
             e.preventDefault()
             void executar(async () => {
-              if (novaEmpresa)
+              if (novaEmpresa) {
                 await api.conta.criarEmpresa(empresa.trim(), email.trim(), nome.trim())
-              else await api.conta.convidar(email.trim(), nome.trim(), papel)
+                await atualizarLista()
+              } else await api.conta.convidar(email.trim(), nome.trim(), papel)
               setNovo(false)
               setNovaEmpresa(false)
               setNome('')
@@ -318,13 +357,33 @@ export function ConvitesSection({
       </Modal>
       <ConfirmDialog
         open={!!confirmar}
-        title="Confirmar alteração de acesso"
-        description={confirmar?.texto ?? ''}
-        onCancel={() => setConfirmar(null)}
+        title={confirmar?.titulo ?? 'Confirmar alteração'}
+        description={
+          confirmar?.erro ? (
+            <span className="text-red-700">{confirmar.erro}</span>
+          ) : (
+            (confirmar?.texto ?? '')
+          )
+        }
+        confirmLabel={confirmar?.rotulo ?? 'Confirmar'}
+        danger={confirmar?.destrutivo ?? false}
+        busy={ocupado}
+        onCancel={() => {
+          if (!ocupado) setConfirmar(null)
+        }}
         onConfirm={async () => {
-          const acao = confirmar?.acao
-          setConfirmar(null)
-          if (acao) await executar(acao)
+          if (!confirmar || ocupado) return
+          setOcupado(true)
+          setErro('')
+          try {
+            await confirmar.acao()
+            setConfirmar(null)
+            reload()
+          } catch (e) {
+            setConfirmar((atual) => (atual ? { ...atual, erro: mensagemErro(e) } : atual))
+          } finally {
+            setOcupado(false)
+          }
         }}
       />
     </div>

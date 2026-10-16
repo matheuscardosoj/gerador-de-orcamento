@@ -217,8 +217,79 @@ export function calcularCustoServico(entrada: EntradaCalculo): ResultadoCalculo 
     linhas.filter((l) => repasses.has(l.chave)).reduce((s, l) => s + l.valor, 0)
   )
   const custoComAcrescimo = round2(custoTotal - custoRepassado)
-  const valorMargem = round2(custoComAcrescimo * (margemLucroPercent / 100))
-  const precoComMargem = round2(custoTotal + valorMargem)
+  const personalizados = new Map<string, number>(
+    e.avulsos
+      .filter((a) => a.aplicarAcrescimo !== false && a.acrescimoPersonalizadoPercent != null)
+      .map((a) => [`avulso:${a.id}`, a.acrescimoPersonalizadoPercent!] as const)
+  )
+  const custoPersonalizado = round2(
+    linhas.filter((l) => personalizados.has(l.chave)).reduce((s, l) => s + l.valor, 0)
+  )
+  const valorMargemGeral = round2(
+    (custoComAcrescimo - custoPersonalizado) * (margemLucroPercent / 100)
+  )
+  const valorMargemPersonalizada = round2(
+    linhas.reduce((s, l) => s + round2(l.valor * ((personalizados.get(l.chave) ?? 0) / 100)), 0)
+  )
+  const valorMargem = round2(valorMargemGeral + valorMargemPersonalizada)
+  const ajustePreco = Math.max(0, round2(e.ajustePreco ?? 0))
+  const precoComMargem = round2(custoTotal + valorMargem + ajustePreco)
+
+  // Rateio em centavos preserva o total histórico do acréscimo geral, inclusive
+  // quando arredondar cada item isoladamente produziria um centavo a mais.
+  const avulsos = new Map(e.avulsos.map((a) => [`avulso:${a.id}`, a]))
+  const gruposGerais = linhas.filter((l) => !repasses.has(l.chave) && !personalizados.has(l.chave))
+  const rateio = gruposGerais.map((l) => {
+    const exato = l.valor * margemLucroPercent
+    return {
+      chave: l.chave,
+      centavos: Math.floor(exato + 1e-8),
+      fracao: exato - Math.floor(exato + 1e-8)
+    }
+  })
+  let restantes = Math.round(valorMargemGeral * 100) - rateio.reduce((s, l) => s + l.centavos, 0)
+  for (const item of [...rateio].sort(
+    (a, b) => b.fracao - a.fracao || a.chave.localeCompare(b.chave)
+  )) {
+    if (restantes <= 0) break
+    item.centavos++
+    restantes--
+  }
+  const geraisPorLinha = new Map(rateio.map((l) => [l.chave, l.centavos / 100]))
+  let acrescimoAvulsos = 0
+  const linhasApresentadas = linhas.map((l) => {
+    const avulso = avulsos.get(l.chave)
+    if (!avulso) return { ...l, valorApresentado: l.valor }
+    const percentual =
+      avulso.aplicarAcrescimo === false
+        ? 0
+        : (avulso.acrescimoPersonalizadoPercent ?? margemLucroPercent)
+    const acrescimo = personalizados.has(l.chave)
+      ? round2((l.valor * percentual) / 100)
+      : (geraisPorLinha.get(l.chave) ?? 0)
+    acrescimoAvulsos += acrescimo
+    return {
+      ...l,
+      valorApresentado: round2(l.valor + acrescimo),
+      acrescimoAplicado: acrescimo,
+      detalhe: `${l.detalhe}. Custo original: ${formatMoeda(l.valor)}; lucro aplicado de ${percentual}%: ${formatMoeda(acrescimo)}.`
+    }
+  })
+  const custoServicoExibido = round2(custoTotal + acrescimoAvulsos)
+  const acrescimoGeralExibido = round2(valorMargem - acrescimoAvulsos)
+  const custoServico = round2(
+    linhas.filter((l) => !avulsos.has(l.chave)).reduce((s, l) => s + l.valor, 0)
+  )
+  const outrosCustosRepasses = round2(
+    linhasApresentadas
+      .filter((l) => avulsos.has(l.chave))
+      .reduce((s, l) => s + (l.valorApresentado ?? l.valor), 0)
+  )
+  const lucroServico = round2(
+    [...geraisPorLinha]
+      .filter(([chave]) => !avulsos.has(chave))
+      .reduce((s, [, valor]) => s + valor, 0)
+  )
 
   // Imposto da nota: incide sobre o faturamento.
   //  - gross_up: divide por (1 - alíquota) para preservar o valor líquido (padrão).
@@ -237,10 +308,32 @@ export function calcularCustoServico(entrada: EntradaCalculo): ResultadoCalculo 
     }
   }
 
+  // Na meta explícita, o imposto é extraído do preço desejado. Assim os
+  // arredondamentos fecham a decomposição em centavos, mesmo nos saltos do gross-up.
+  let metaAplicada = false
+  if (Number.isFinite(e.precoFinalDesejado) && (e.precoFinalDesejado ?? 0) >= 0) {
+    const alvo = round2(e.precoFinalDesejado!)
+    const impostoAlvo = impostoParaMeta(e, alvo)
+    if (round2(precoComMargem + impostoAlvo) === alvo) {
+      impostoNota = impostoAlvo
+      precoFinal = alvo
+      metaAplicada = true
+    }
+  }
   return {
+    acrescimoGeralExibido,
+    ajustePreco,
+    lucroItensAdicionais: round2(acrescimoAvulsos),
+    metaAplicada,
+    valorMargemGeral,
+    valorMargemPersonalizada,
     custoComAcrescimo,
     custoRepassado,
-    breakdown: linhas,
+    custoServico,
+    outrosCustosRepasses,
+    lucroServico,
+    custoServicoExibido,
+    breakdown: linhasApresentadas,
     custoTotal,
     margemLucroPercent,
     valorMargem,
@@ -249,6 +342,105 @@ export function calcularCustoServico(entrada: EntradaCalculo): ResultadoCalculo 
     aliquotaNotaPercent,
     impostoNota,
     precoFinal
+  }
+}
+
+/** Imposto contido na meta final, respeitando a modalidade já escolhida. */
+function impostoParaMeta(e: EntradaCalculo, alvo: number): number {
+  if (!e.emitirNota || e.aliquotaNotaPercent <= 0) return 0
+  const taxa = e.aliquotaNotaPercent / 100
+  return round2(e.modoImposto === 'gross_up' ? alvo * taxa : (alvo * taxa) / (1 + taxa))
+}
+
+/** Invalida somente o ajuste por meta; mantém o percentual geral calculado. */
+export function retirarMetaPreco(e: EntradaCalculo): EntradaCalculo {
+  const { precoFinalDesejado: _meta, ajustePreco: _ajuste, ...resto } = e
+  return resto
+}
+
+export type ResultadoMetaPreco = { alterado: boolean; entrada: EntradaCalculo; mensagem: string }
+/** Ajusta somente o percentual geral. Percentuais próprios e repasses são preservados. */
+export function atingirPrecoDesejado(
+  entrada: EntradaCalculo,
+  desejado: number
+): ResultadoMetaPreco {
+  if (
+    !Number.isFinite(desejado) ||
+    desejado <= 0 ||
+    !Number.isSafeInteger(Math.round(desejado * 100))
+  )
+    throw new Error('Informe um preço desejado válido, maior que zero.')
+  if (
+    !Number.isFinite(entrada.aliquotaNotaPercent) ||
+    entrada.aliquotaNotaPercent < 0 ||
+    entrada.aliquotaNotaPercent > 100 ||
+    (entrada.emitirNota && entrada.modoImposto === 'gross_up' && entrada.aliquotaNotaPercent >= 100)
+  )
+    throw new Error('Revise a alíquota do imposto antes de calcular o preço desejado.')
+  const alvo = round2(desejado)
+  const atual = calcularCustoServico(entrada)
+  if (atual.precoFinal === alvo)
+    return {
+      alterado: false,
+      entrada,
+      mensagem: 'O preço atual já é igual ao desejado. Nenhuma alteração foi feita.'
+    }
+  const limpa = retirarMetaPreco(normalizarEntrada(entrada))
+  const semGeral = calcularCustoServico({ ...limpa, margemLucroPercent: 0 })
+  const baseGeral = round2(
+    (semGeral.custoComAcrescimo ?? 0) -
+      limpa.avulsos
+        .filter((a) => a.aplicarAcrescimo !== false && a.acrescimoPersonalizadoPercent != null)
+        .reduce((s, a) => s + round2(a.valor * (a.modo === 'diario' ? limpa.dias : 1)), 0)
+  )
+  const liquido = round2(alvo - impostoParaMeta(limpa, alvo))
+  const disponivel = round2(liquido - semGeral.precoComMargem)
+  if (alvo < semGeral.precoFinal) {
+    const nova = {
+      ...limpa,
+      margemLucroPercent: 0,
+      precoFinalDesejado: alvo,
+      ajustePreco: 0
+    }
+    return {
+      alterado: true,
+      entrada: nova,
+      mensagem: `A meta não cobre o custo do serviço, os outros custos e repasses com seus percentuais próprios e o imposto. O preço mínimo foi aplicado: ${formatMoeda(semGeral.precoFinal)}.`
+    }
+  }
+  let percentual =
+    baseGeral > 0
+      ? Math.max(0, Math.floor((disponivel / baseGeral) * 100 * 1e10) / 1e10)
+      : limpa.margemLucroPercent
+  if (!Number.isFinite(percentual))
+    throw new Error('O percentual calculado excede o limite numérico. Revise os valores.')
+  let calculado = calcularCustoServico({ ...limpa, margemLucroPercent: percentual })
+  // Protege a fronteira de arredondamento sem reduzir percentuais próprios.
+  if (calculado.precoComMargem > liquido && baseGeral > 0) {
+    let inferior = 0,
+      superior = percentual
+    for (let i = 0; i < 64; i++) {
+      const meio = (inferior + superior) / 2
+      if (calcularCustoServico({ ...limpa, margemLucroPercent: meio }).precoComMargem <= liquido)
+        inferior = meio
+      else superior = meio
+    }
+    percentual = Math.floor(inferior * 1e10) / 1e10
+    calculado = calcularCustoServico({ ...limpa, margemLucroPercent: percentual })
+  }
+  const nova = {
+    ...limpa,
+    margemLucroPercent: percentual,
+    precoFinalDesejado: alvo,
+    ajustePreco: Math.max(0, round2(liquido - calculado.precoComMargem))
+  }
+  const resultado = calcularCustoServico(nova)
+  if (!resultado.metaAplicada || resultado.precoFinal !== alvo)
+    throw new Error('Não foi possível fechar o preço desejado. Revise os valores.')
+  return {
+    alterado: true,
+    entrada: nova,
+    mensagem: 'Preço desejado aplicado. Os percentuais próprios e repasses foram preservados.'
   }
 }
 

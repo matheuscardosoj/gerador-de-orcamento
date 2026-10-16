@@ -297,7 +297,13 @@ export function pacoteDocumento(tipo: TipoDocumento, id: string): unknown {
   rows.documento_meta = all('SELECT * FROM documento_meta WHERE tipo=? AND documento_id=?', [
     tipo,
     id
-  ])
+  ]).map((linha) => {
+    if (!contexto || JSON.parse(texto(contexto.valor)).protocolo < 2) return linha
+    const dados = JSON.parse(texto(linha.dados)) as Record<string, unknown>
+    // A concessão de edição muda o responsável no servidor. O snapshot local
+    // pode preceder essa concessão; o pacote deve refletir a licença atual.
+    return { ...linha, dados: JSON.stringify({ ...dados, computadorResponsavel: computadorId() }) }
+  })
   rows.versoes = all('SELECT * FROM versoes WHERE tipo=? AND documento_id=?', [tipo, id])
   if (tipo === 'recibo')
     rows.recebimentos = all('SELECT * FROM recebimentos WHERE recibo_id=?', [id])
@@ -306,7 +312,13 @@ export function pacoteDocumento(tipo: TipoDocumento, id: string): unknown {
     id,
     rows,
     excluido: !principal,
-    responsavel: lerMeta(tipo, id).computadorResponsavel,
+    // O protocolo colaborativo autoriza pela reserva de edição atual. A
+    // responsabilidade enviada é a identidade do dispositivo que solicita a
+    // operação, não o último dispositivo que gravou os metadados do documento.
+    responsavel:
+      contexto && JSON.parse(texto(contexto.valor)).protocolo >= 2
+        ? computadorId()
+        : lerMeta(tipo, id).computadorResponsavel,
     ...(contexto && JSON.parse(texto(contexto.valor)).protocolo >= 2
       ? {
           emissao:

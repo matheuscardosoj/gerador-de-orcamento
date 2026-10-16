@@ -37,6 +37,7 @@ import {
   validarRelatorioFinal,
   type ErroValidacao
 } from '@shared/validacao'
+import { notificar } from '../lib/notificacoes'
 
 function mensagemDoCampo(erros: ErroValidacao[], campo: string): string | undefined {
   return erros.find((erro) => erro.campo === campo)?.mensagem
@@ -56,7 +57,6 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
   const [ocupado, setOcupado] = useState<'salvar' | 'pdf' | 'docx' | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [errosValidacao, setErrosValidacao] = useState<ErroValidacao[]>([])
-  const [mensagem, setMensagem] = useState<string | null>(null)
   const [snapshotSalvo, setSnapshotSalvo] = useState<string | null>(null)
   const [previa, setPrevia] = useState(false)
   const [rascunhoId, setRascunhoId] = useState<string>()
@@ -188,7 +188,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
         const d = r.documento as Relatorio
         setRel(d)
         setSnapshotSalvo(JSON.stringify(d))
-        setMensagem('Rascunho guardado neste computador.')
+        notificar('Rascunho do relatório guardado neste computador.', 'sucesso')
         return d
       }
       if (exigirFinal || payload.status !== 'rascunho') {
@@ -224,8 +224,9 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
       setRel(gravado)
       setSnapshotSalvo(JSON.stringify(gravado))
       setNumeroOriginal(gravado.numero)
-      setMensagem(
-        `Alterações salvas às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`
+      notificar(
+        `Relatório ${gravado.numero > 0 ? `nº ${String(gravado.numero).padStart(6, '0')}` : ''} salvo.`,
+        'sucesso'
       )
       if (!rel.id && numeroMudou && gravado.numero !== rel.numero)
         setErro(
@@ -243,7 +244,6 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
   ): Promise<void> => {
     if (ocupado) return
     setOcupado(operacao)
-    setMensagem(null)
     try {
       await tarefa()
     } finally {
@@ -264,7 +264,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
           tipo === 'pdf'
             ? await api.documentos.gerarRelatorioPdf(gravado.id)
             : await api.documentos.gerarRelatorioDocx(gravado.id)
-        if (resultado.caminho) setMensagem(`Documento gerado com sucesso: ${resultado.caminho}`)
+        if (resultado.caminho) notificar('Arquivo do relatório gerado.', 'sucesso')
       } catch (e) {
         setErro(`Não foi possível gerar o documento. ${mensagemErro(e)}`)
       }
@@ -350,11 +350,6 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
           <p className="mt-1">{mensagemValidacao(errosValidacao)}</p>
         </Mensagem>
       )}
-      {mensagem && (
-        <Mensagem tom="sucesso" className="mb-4">
-          {mensagem}
-        </Mensagem>
-      )}
       {rel.origemOrcamento && (
         <Mensagem tom="info" className="mb-4">
           Gerado da proposta Nº{' '}
@@ -366,6 +361,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
         <AvisoAtualizacao {...atualizacao} sujo={sujo} />
         <ColaboracaoDocumento
           tipo="relatorio"
+          onSalvar={() => persistir(false)}
           documento={rel}
           sujo={sujo}
           rascunhoId={rascunhoId}
@@ -500,6 +496,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
           dados={dados}
           total={totais.servicos}
           titulo="Serviços prestados"
+          rotuloDocumento="relatório"
           rotuloTotal="Valor total dos serviços"
           errosValidacao={errosValidacao.filter(
             (erro) => erro.campo === 'itensServico' || erro.campo.startsWith('itensServico.')

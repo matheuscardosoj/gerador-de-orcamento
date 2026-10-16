@@ -1,6 +1,7 @@
 import { mensagemErro } from '@shared/erros'
 import { RevisaoIA } from '../components/RevisaoIA'
 import { ColaboracaoDocumento } from '../components/ColaboracaoDocumento'
+import { notificar } from '../lib/notificacoes'
 import { useDocumentoRemoto, AvisoAtualizacao } from '../lib/atualizacao-remota'
 import { HistoricoDocumentos, registroRecibo } from '../components/HistoricoDocumentos'
 import { useEffect, useState } from 'react'
@@ -200,6 +201,7 @@ export function RecibosPage({
       const d = salvo.documento as Recibo
       setR(d)
       setSalvo(JSON.stringify(d))
+      notificar('Rascunho do recibo guardado neste computador.', 'sucesso')
       return d
     }
     if (r.id) {
@@ -214,6 +216,10 @@ export function RecibosPage({
     setR(d)
     setSalvo(JSON.stringify(d))
     await recarregar()
+    notificar(
+      `Recibo ${d.numero > 0 ? `nº ${String(d.numero).padStart(6, '0')}` : ''} salvo.`,
+      'sucesso'
+    )
     return d
   }
   const fechar = (): void => {
@@ -353,6 +359,7 @@ export function RecibosPage({
           <AvisoAtualizacao {...atualizacao} sujo={!!r && JSON.stringify(r) !== salvo} />
           <ColaboracaoDocumento
             tipo="recibo"
+            onSalvar={salvar}
             documento={r}
             sujo={JSON.stringify(r) !== salvo}
             rascunhoId={rascunhoId}

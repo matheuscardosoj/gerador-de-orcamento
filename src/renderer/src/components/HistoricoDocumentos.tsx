@@ -10,6 +10,7 @@ import {
   Trash2,
   FilterX
 } from 'lucide-react'
+import { RascunhosHistorico } from './RascunhosHistorico'
 import { api } from '../lib/api'
 import { useNav } from '../lib/nav'
 import {
@@ -399,6 +400,7 @@ export function HistoricoDocumentos({
           ))}
         </div>
       )}
+      <RascunhosHistorico tipo={tipo} registros={registros} onAbrir={onAbrir} />
       {loading ? (
         <p className="text-sm text-slate-500">Carregando…</p>
       ) : !filtrados.length ? (

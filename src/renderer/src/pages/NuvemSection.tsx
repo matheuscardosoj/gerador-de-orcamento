@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Cloud, RefreshCw, LogOut } from 'lucide-react'
+import { Cloud, RefreshCw, LogOut, CloudDownload } from 'lucide-react'
 import { api } from '../lib/api'
 import { useNav } from '../lib/nav'
 import { useConta } from '../components/ContaGate'
@@ -30,6 +30,8 @@ export function NuvemSection(): JSX.Element {
   const [conciliar, setConciliar] = useState<string | null>(null)
   const [instalacaoCopiada, setInstalacaoCopiada] = useState(false)
   const [atualizarBase, setAtualizarBase] = useState(false)
+  const [restaurarBase, setRestaurarBase] = useState(false)
+  const [backupRestauracao, setBackupRestauracao] = useState('')
   useEffect(() => {
     void api.nuvem.config().then(setC)
     void api.nuvem.status().then(setS)
@@ -315,6 +317,20 @@ export function NuvemSection(): JSX.Element {
               className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"
             >
               <p>{x.detalhe}</p>
+              <p className="break-all text-xs">
+                Operação: {x.id} · Entidade: {x.entidade}
+              </p>
+              {(x.codigo || x.causa || x.detalhes || x.dica) && (
+                <details className="rounded border border-amber-200 p-2 text-xs">
+                  <summary className="cursor-pointer font-medium">
+                    Detalhes técnicos da falha
+                  </summary>
+                  {x.codigo && <p>Código: {x.codigo}</p>}
+                  {x.causa && <p>Causa: {x.causa}</p>}
+                  {x.detalhes && <p>Detalhe: {x.detalhes}</p>}
+                  {x.dica && <p>Orientação: {x.dica}</p>}
+                </details>
+              )}
               <p>
                 A operação continua guardada neste computador. Outras alterações podem ser recebidas
                 e enviadas.
@@ -361,7 +377,7 @@ export function NuvemSection(): JSX.Element {
           </p>
           <p>
             {(s.protocolo ?? 1) >= 3
-              ? 'Documentos novos offline ficam aguardando numeração. Sincronize para emitir o PDF ou DOCX oficial.'
+              ? 'Documentos novos offline ficam aguardando numeração. Sincronize para emitir o PDF ou Word oficial.'
               : `Atualize a configuração da nuvem para substituir as reservas antecipadas.`}
           </p>
           <p className="text-xs text-slate-500">Identificação deste computador: {s.computador}</p>
@@ -412,6 +428,54 @@ export function NuvemSection(): JSX.Element {
           ))}
         </div>
       )}
+      {conta.central && s?.autenticada && (
+        <div className="mt-6 space-y-3 border-t border-slate-200 pt-6">
+          <SectionTitle
+            title="Recuperar os dados deste computador"
+            description="Substitui a base local deste perfil pelos dados confirmados da empresa na nuvem."
+          />
+          <p className="text-sm text-slate-600">
+            Você escolherá onde guardar uma cópia verificada da base atual. Alterações ainda não
+            enviadas e rascunhos ficarão nessa cópia para conferência; eles não serão reenviados
+            automaticamente.
+          </p>
+          {backupRestauracao && (
+            <Mensagem tom="info" temporaria>
+              Base recuperada. Cópia anterior guardada em: {backupRestauracao}
+            </Mensagem>
+          )}
+          <Button
+            icon={CloudDownload}
+            variant="outline"
+            disabled={ocupado}
+            onClick={() => setRestaurarBase(true)}
+          >
+            Restaurar este computador pela nuvem
+          </Button>
+        </div>
+      )}
+      <ConfirmDialog
+        open={restaurarBase}
+        title="Restaurar dados deste computador"
+        confirmLabel="Escolher local do backup"
+        description={`A base local deste perfil será substituída somente após baixar a empresa inteira e verificar uma cópia salva no local que você escolher. ${s?.pendentes ?? 0} operação(ões) pendente(s) e os rascunhos locais permanecerão no backup, sem envio automático. Outros computadores e a nuvem não serão apagados.`}
+        onCancel={() => setRestaurarBase(false)}
+        onConfirm={() => {
+          setRestaurarBase(false)
+          setOcupado(true)
+          setErro('')
+          void api.nuvem
+            .restaurarBase()
+            .then((resultado) => {
+              if (resultado) {
+                setS(resultado.status)
+                setBackupRestauracao(resultado.backup)
+              }
+            })
+            .catch((e) => setErro(mensagemErro(e)))
+            .finally(() => setOcupado(false))
+        }}
+      />
       <ConfirmDialog
         open={atualizarBase}
         title="Preservar pendências e atualizar base"

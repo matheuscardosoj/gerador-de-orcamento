@@ -21,7 +21,7 @@ export function useDocumentoRemoto<T>(
   guardarRascunhoESair: () => Promise<void>
   erroRascunho: string | null
 } {
-  const { navegarAposSalvar } = useNav()
+  const { navegarAposSalvar, avisar } = useNav()
   const estado = useRef({ sujo, documento, carregar, adotar })
   estado.current = { sujo, documento, carregar, adotar }
   const [pendente, setPendente] = useState(false)
@@ -30,6 +30,7 @@ export function useDocumentoRemoto<T>(
   const [erro, setErro] = useState<unknown>(null)
   const contexto = useRef({ tipo, id, ativo: true, pedido: 0 })
   const carregarAtual = async (manual: boolean): Promise<void> => {
+    if (!id) return
     const origem = contexto.current
     const pedido = ++origem.pedido
     const inicio = JSON.stringify(estado.current.documento)
@@ -39,6 +40,27 @@ export function useDocumentoRemoto<T>(
       if (!atual) {
         setPendente(false)
         setExcluido(true)
+        if (estado.current.sujo && estado.current.documento) {
+          try {
+            await api.rascunhos.create(tipo, id, estado.current.documento as unknown as Documento)
+          } catch {
+            setErroRascunho(
+              'Não foi possível guardar as alterações locais. Elas continuam nesta tela.'
+            )
+            return
+          }
+        }
+        avisar(
+          `Este ${tipo === 'orcamento' ? 'orçamento' : tipo === 'relatorio' ? 'relatório' : 'recibo'} foi excluído em outro computador. A tela foi fechada.${estado.current.sujo ? ' Suas alterações foram guardadas como rascunho local para criar outro documento.' : ''}`
+        )
+        navegarAposSalvar({
+          nome:
+            tipo === 'orcamento'
+              ? 'historico'
+              : tipo === 'relatorio'
+                ? 'historicoRelatorios'
+                : 'recibos'
+        })
         return
       }
       if (JSON.stringify(estado.current.documento) !== inicio || (!manual && estado.current.sujo)) {

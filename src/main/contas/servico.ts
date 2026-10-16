@@ -1,12 +1,14 @@
 import { app } from 'electron'
 import { createHash } from 'crypto'
-import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'fs'
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 import type { ConfigNuvem } from '../../shared/types'
+import { diagnosticoErro } from '../../shared/erros'
 import type { ContaApi, ConviteConta, EmpresaConta, EstadoConta } from '../../shared/conta'
 import { abrirBanco, fecharBanco, get, run, selecionarPerfilDados, texto } from '../db/sqlite'
 import { bancoVazio, semear } from '../repositories'
 import { avisarDados } from '../eventos'
+import { retirarAvisosEmail } from './avisos-email'
 import { encerrarIA } from '../ia'
 import { encerrarEdicoesConta } from '../colaboracao'
 import {
@@ -23,12 +25,15 @@ import {
   observarAcessoNuvem
 } from '../nuvem'
 import { aguardarOperacoes, definirAcesso } from './acesso'
+import { avaliarConfirmacaoEmail, lerCallbackEmail } from './callback-email'
+import { destinoAposLogin } from './entrada-empresa'
 import {
   gravarPerfil,
   idPerfil,
   perfilAtual,
   idSolicitacao,
   concluirSolicitacao,
+  removerPerfil,
   type PerfilConta
 } from './perfis'
 
@@ -45,6 +50,7 @@ let estado: EstadoConta = {
   fase: 'desconectado',
   servicoConfigurado: false,
   email: '',
+  emailPendente: undefined,
   nome: '',
   lembrar: false,
   operador: false,
@@ -52,6 +58,8 @@ let estado: EstadoConta = {
   empresas: []
 }
 let mudando = false
+let concluirEncerramento: (() => Promise<void>) | null = null
+let inicializacaoContas: Promise<void> | null = null
 
 function emitir(): EstadoConta {
   avisarDados({ origem: 'nuvem', entidades: [], status: true })
@@ -82,25 +90,90 @@ async function requisitar(
   token?: string,
   method?: string
 ): Promise<unknown> {
-  const resposta = await fetch(config.url + path, {
-    method: method ?? (body === undefined ? 'GET' : 'POST'),
-    headers: {
-      apikey: config.chavePublica,
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(30000)
-  })
+  let resposta: Response
+  try {
+    resposta = await fetch(config.url + path, {
+      method: method ?? (body === undefined ? 'GET' : 'POST'),
+      headers: {
+        apikey: config.chavePublica,
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(30000)
+    })
+  } catch (erro) {
+    throw Object.assign(
+      new Error(
+        `Falha de rede ao acessar o serviço${erro instanceof Error ? `: ${erro.message}` : '.'}`
+      ),
+      { causaOriginal: erro instanceof Error ? erro.message : String(erro) }
+    )
+  }
   const dados = await resposta.json().catch(() => null)
   if (!resposta.ok)
     throw Object.assign(
       new Error(
-        dados?.msg ?? dados?.message ?? dados?.erro ?? 'Não foi possível acessar o serviço.'
+        dados?.msg ??
+          dados?.message ??
+          dados?.erro ??
+          `HTTP ${resposta.status}: resposta inválida do serviço.`
       ),
-      { status: resposta.status, codigo: dados?.code }
+      {
+        status: resposta.status,
+        code: dados?.code ?? dados?.codigo,
+        codigo: dados?.codigo ?? dados?.code,
+        details: typeof dados?.details === 'string' ? dados.details : undefined,
+        hint: typeof dados?.hint === 'string' ? dados.hint : undefined
+      }
     )
   return dados
+}
+
+export async function concluirCallbackEmail(url: string): Promise<string> {
+  const retorno = lerCallbackEmail(url)
+  if (!retorno) return 'O link de confirmação não pertence a este aplicativo.'
+  if (retorno.tipo === 'erro')
+    return 'Este link não foi confirmado. Confira o estado da troca em Minha conta; se a mudança não concluir, solicite novos links.'
+  const atual = perfil ?? perfilAtual()
+  if (!atual?.emailPendente)
+    return 'Confirmação recebida. Entre na conta para consultar o endereço atualizado.'
+  try {
+    const usuario = (await requisitar(
+      atual.configuracao,
+      '/auth/v1/user',
+      undefined,
+      retorno.token
+    )) as { id?: string; email?: string }
+    const resultado = avaliarConfirmacaoEmail(usuario, {
+      usuario: atual.usuario,
+      emailPendente: atual.emailPendente
+    })
+    if (resultado === 'outra-conta')
+      return 'Este link pertence a outra conta. Entre na conta correspondente para conferir a alteração.'
+    if (resultado === 'aguardando') {
+      perfil = { ...atual, emailConfirmacaoRecebida: true }
+      gravarPerfil(perfil)
+      estado.emailConfirmacaoRecebida = true
+      emitir()
+      return 'Esta confirmação foi recebida. Confirme também o link enviado ao outro endereço de e-mail.'
+    }
+    perfil = {
+      ...atual,
+      email: usuario.email!,
+      emailPendente: undefined,
+      emailConfirmacaoRecebida: undefined,
+      configuracao: { ...atual.configuracao, email: usuario.email! }
+    }
+    gravarPerfil(perfil)
+    estado.email = usuario.email!
+    estado.emailPendente = undefined
+    estado.emailConfirmacaoRecebida = undefined
+    emitir()
+    return 'Troca de e-mail confirmada. Para renovar o acesso, saia e entre com o novo endereço.'
+  } catch {
+    return 'Não foi possível verificar esta confirmação. Entre na conta e confira o endereço de e-mail atual.'
+  }
 }
 function configuracaoAcesso(): ConfigNuvem {
   const config =
@@ -123,8 +196,8 @@ async function exclusiva<T>(acao: () => Promise<T>): Promise<T> {
 async function fecharPerfil(): Promise<void> {
   definirAcesso(false)
   await aguardarOperacoes()
+  await encerrarEdicoesConta()
   await suspenderNuvemConta()
-  encerrarEdicoesConta()
   encerrarIA()
   fecharBanco()
 }
@@ -134,8 +207,69 @@ function gravar(chave: string, valor: unknown): void {
     [chave, JSON.stringify(valor)]
   )
 }
-export async function inicializarContas(): Promise<void> {
-  observarAcessoNuvem((contexto) => {
+export function inicializarContas(): Promise<void> {
+  inicializacaoContas ??= recuperarContas()
+  return inicializacaoContas
+}
+async function recuperarContas(): Promise<void> {
+  observarAcessoNuvem((contexto, motivo) => {
+    if (!contexto && estado.fase === 'empresaIndisponivel') return
+    if (!contexto && motivo && perfil) {
+      if (estado.fase === 'empresaIndisponivel') return
+      const anterior = perfil
+      const token = lerSessaoConta() as Token | null
+      definirAcesso(false)
+      estado = {
+        ...estado,
+        fase: 'empresaIndisponivel',
+        empresa: null,
+        indisponibilidade: {
+          motivo,
+          empresaId: anterior.empresa.id,
+          nome: anterior.empresa.nome,
+          concluida: false
+        }
+      }
+      emitir()
+      // Não esperar a própria sincronização/renovação de dentro de seu callback.
+      concluirEncerramento = async () => {
+        try {
+          await fecharPerfil()
+          selecionarPerfilDados(null)
+          if (motivo === 'empresaExcluida') removerPerfil(anterior.id)
+          perfil = null
+          tokenEntrada = motivo !== 'sessaoExpirada' && anterior.operador ? token : null
+          configEntrada = anterior.configuracao
+          estado = {
+            ...estado,
+            empresas: estado.empresas.filter((e) => e.id !== anterior.empresa.id),
+            indisponibilidade: {
+              motivo,
+              empresaId: anterior.empresa.id,
+              nome: anterior.empresa.nome,
+              concluida: true
+            }
+          }
+          emitir()
+        } catch {
+          // Mantém a tela de encerramento; nunca reabre um perfil excluído.
+          estado = {
+            ...estado,
+            indisponibilidade: {
+              motivo,
+              empresaId: anterior.empresa.id,
+              nome: anterior.empresa.nome,
+              concluida: false,
+              erro: 'Não foi possível concluir o encerramento dos dados locais. Tente novamente.'
+            }
+          }
+          emitir()
+        }
+      }
+      const concluir = concluirEncerramento
+      setTimeout(() => void concluir(), 0)
+      return
+    }
     if (!contexto) {
       definirAcesso(false)
       estado = { ...estado, fase: 'desconectado', empresa: null }
@@ -167,6 +301,8 @@ export async function inicializarContas(): Promise<void> {
     central: !!servico(),
     servicoConfigurado: !!config.url,
     email: salvo?.email ?? config.email,
+    emailPendente: salvo?.emailPendente,
+    emailConfirmacaoRecebida: salvo?.emailConfirmacaoRecebida,
     lembrar: salvo?.lembrar ?? false
   }
   if (!salvo?.lembrar) return
@@ -182,6 +318,8 @@ export async function inicializarContas(): Promise<void> {
     empresa: salvo.empresa,
     empresas: [salvo.empresa],
     email: salvo.email,
+    emailPendente: salvo.emailPendente,
+    emailConfirmacaoRecebida: salvo.emailConfirmacaoRecebida,
     nome: salvo.nome,
     central: salvo.central,
     operador: salvo.operador
@@ -190,10 +328,27 @@ export async function inicializarContas(): Promise<void> {
   try {
     await inicializarNuvem()
   } catch (erro) {
+    if ((erro as { codigo?: string })?.codigo === 'EMPRESA_EXCLUIDA') {
+      await fecharPerfil()
+      selecionarPerfilDados(null)
+      removerPerfil(salvo.id)
+      perfil = null
+      estado = {
+        ...estado,
+        fase: 'desconectado',
+        lembrar: false,
+        empresa: null,
+        empresas: [],
+        operador: false
+      }
+      emitir()
+      return
+    }
     definirAcesso(false)
     estado = { ...estado, fase: 'desconectado', empresa: null }
     throw erro
   }
+  if (estado.fase === 'empresaIndisponivel') return
   const erro = statusNuvem().erro
   if (erro && /sessão expirou|não tem acesso|não autorizad|Entre novamente/i.test(erro)) {
     definirAcesso(false)
@@ -234,6 +389,8 @@ async function listarAposAutenticar(
       ]
     }
   }
+  contas = normalizarContas(contas)
+  const destino = destinoAposLogin(contas.operador, contas.empresas)
   nomeEntrada = contas.empresas[0]?.usuarioNome ?? token.user.user_metadata?.name ?? config.email
   estado = {
     ...estado,
@@ -246,7 +403,37 @@ async function listarAposAutenticar(
     empresa: null,
     operador: contas.operador
   }
-  return contas.empresas.length === 1 ? selecionar(contas.empresas[0].id) : emitir()
+  // A seleção é uma função do operador. Usuários comuns entram direto no único vínculo.
+  return destino.tipo === 'selecionar' ? emitir() : selecionar(destino.empresaId)
+}
+
+function normalizarContas(valor: unknown): ContasRemotas {
+  if (!valor || typeof valor !== 'object')
+    throw new Error('A resposta de empresas não é válida. Entre novamente.')
+  const bruto = valor as { operador?: unknown; empresas?: unknown }
+  if (!Array.isArray(bruto.empresas))
+    throw new Error('A resposta de empresas não é válida. Entre novamente.')
+  const ids = new Set<string>()
+  const empresas = bruto.empresas.map((item) => {
+    const empresa = item as Partial<EmpresaConta & { usuarioNome: string }>
+    const id = typeof empresa.id === 'string' ? empresa.id.trim() : ''
+    const nome = typeof empresa.nome === 'string' ? empresa.nome.trim() : ''
+    const papel = empresa.papel
+    const usuarioNome = typeof empresa.usuarioNome === 'string' ? empresa.usuarioNome.trim() : ''
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) ||
+      !nome ||
+      nome.length > 120 ||
+      (papel !== 'administrador' && papel !== 'membro') ||
+      ids.has(id)
+    )
+      throw new Error(
+        'Uma empresa retornou dados inválidos. Atualize o cadastro e entre novamente.'
+      )
+    ids.add(id)
+    return { id, nome, papel, usuarioNome }
+  })
+  return { operador: bruto.operador === true, empresas }
 }
 async function selecionar(id: string): Promise<EstadoConta> {
   const empresa = estado.empresas.find((e) => e.id === id)
@@ -280,7 +467,9 @@ async function selecionar(id: string): Promise<EstadoConta> {
   }
   selecionarPerfilDados(destino)
   abrirBanco()
-  if (bancoVazio()) semear()
+  // Perfis de conta recebem os padrões exclusivamente da empresa na nuvem.
+  // Semear IDs locais antes do primeiro delta duplica os textos em cada login.
+  if (bancoVazio()) semear(false)
   configurarSessaoConta(estado.lembrar, empresa.id, estado.central)
   adotarSessaoConta(config, token)
   gravar('usuarioNuvem', token.user.id)
@@ -294,14 +483,18 @@ async function selecionar(id: string): Promise<EstadoConta> {
     })
   await inicializarNuvem()
   const sincronizada = await sincronizarNuvem()
-  if (sincronizada.erro) {
+  // Falhas de rede ou de uma operação pendente não invalidam o login. A sessão
+  // fica disponível para abrir o perfil e tentar sincronizar novamente. O
+  // observador de acesso altera a fase para desconectado apenas quando o
+  // servidor realmente revoga ou nega o vínculo com a empresa.
+  if (estado.fase === 'desconectado' || !sincronizada.autenticada) {
     await suspenderNuvemConta()
     sairNuvem()
     perfil = null
     tokenEntrada = null
     estado.fase = 'desconectado'
     emitir()
-    throw new Error(sincronizada.erro)
+    throw new Error(sincronizada.erro ?? 'Não foi possível validar o acesso à empresa.')
   }
   perfil = {
     id: destino,
@@ -353,7 +546,43 @@ function senhaValida(senha: string): void {
     throw new Error('Use uma senha com 8 a 128 caracteres.')
 }
 export const contaApi: ContaApi = {
-  status: async () => structuredClone(estado),
+  continuarAposIndisponibilidade: () =>
+    exclusiva(async () => {
+      if (estado.indisponibilidade?.erro && concluirEncerramento) {
+        await concluirEncerramento()
+        return emitir()
+      }
+      if (!estado.indisponibilidade?.concluida)
+        throw new Error('Aguarde o encerramento da empresa.')
+      if (estado.operador && tokenEntrada && configEntrada) {
+        const contas = normalizarContas(
+          await requisitar(configEntrada, '/rest/v1/rpc/gdo_contas', {}, tokenEntrada.access_token)
+        )
+        estado = {
+          ...estado,
+          fase: 'escolherEmpresa',
+          empresas: contas.empresas,
+          indisponibilidade: undefined
+        }
+      } else {
+        tokenEntrada = null
+        estado = {
+          ...estado,
+          fase: 'desconectado',
+          empresas: [],
+          empresa: null,
+          lembrar: false,
+          indisponibilidade: undefined
+        }
+      }
+      return emitir()
+    }),
+  avisosEmail: async () => retirarAvisosEmail(),
+  status: async () => {
+    // A janela já pode mostrar o carregamento sem expor um perfil parcialmente aberto.
+    await inicializacaoContas?.catch(() => undefined)
+    return structuredClone(estado)
+  },
   entrar: (email, senha, lembrar) =>
     exclusiva(async () => {
       if (estado.fase === 'pronto')
@@ -370,10 +599,10 @@ export const contaApi: ContaApi = {
     exclusiva(async () => {
       definirAcesso(false)
       await aguardarOperacoes()
+      await encerrarEdicoesConta()
       await suspenderNuvemConta()
       sairNuvem()
       if (perfil) gravarPerfil({ ...perfil, lembrar: false })
-      encerrarEdicoesConta()
       encerrarIA()
       tokenEntrada = null
       estado = {
@@ -398,6 +627,76 @@ export const contaApi: ContaApi = {
       estado.nome = perfil.nome
       const c = get("SELECT valor FROM configuracoes WHERE chave='contextoNuvem'")
       if (c) gravar('contextoNuvem', { ...JSON.parse(texto(c.valor)), usuarioNome: perfil.nome })
+      return emitir()
+    }),
+  alterarEmail: (senhaAtual, novoEmail) =>
+    exclusiva(async () => {
+      const atual = exigirConta()
+      const email = novoEmail.trim().toLowerCase()
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254)
+        throw new Error('Informe um endereço de e-mail válido.')
+      if (email === atual.email.toLowerCase())
+        throw new Error('O novo e-mail deve ser diferente do endereço atual.')
+
+      const confirmada = (await requisitar(
+        atual.configuracao,
+        '/auth/v1/token?grant_type=password',
+        { email: atual.email, password: senhaAtual }
+      )) as Token
+      try {
+        await requisitar(
+          atual.configuracao,
+          '/auth/v1/user',
+          { email },
+          confirmada.access_token,
+          'PUT'
+        )
+      } finally {
+        await requisitar(
+          atual.configuracao,
+          '/auth/v1/logout?scope=local',
+          {},
+          confirmada.access_token
+        ).catch(() => undefined)
+      }
+
+      perfil = { ...atual, emailPendente: email, emailConfirmacaoRecebida: false }
+      gravarPerfil(perfil)
+      estado.emailPendente = email
+      estado.emailConfirmacaoRecebida = false
+      return emitir()
+    }),
+  confirmarAlteracaoEmail: (codigo) =>
+    exclusiva(async () => {
+      const atual = exigirConta()
+      const email = atual.emailPendente?.trim().toLowerCase()
+      const token = codigo.trim()
+      if (!email) throw new Error('Solicite uma nova troca de e-mail antes de informar o código.')
+      if (!/^\d{6,12}$/.test(token)) throw new Error('Informe o código recebido por e-mail.')
+      const confirmada = (await requisitar(atual.configuracao, '/auth/v1/verify', {
+        email,
+        token,
+        type: 'email_change'
+      })) as Token
+      const usuario = (await requisitar(
+        atual.configuracao,
+        '/auth/v1/user',
+        undefined,
+        confirmada.access_token
+      )) as { id?: string; email?: string }
+      if (usuario.id !== atual.usuario || usuario.email?.toLowerCase() !== email)
+        throw new Error(
+          'O código não confirmou o novo e-mail. Solicite outro código e tente novamente.'
+        )
+      perfil = {
+        ...atual,
+        email,
+        emailPendente: undefined,
+        emailConfirmacaoRecebida: undefined,
+        configuracao: { ...atual.configuracao, email }
+      }
+      gravarPerfil(perfil)
+      estado = { ...estado, email, emailPendente: undefined, emailConfirmacaoRecebida: undefined }
       return emitir()
     }),
   alterarPapel: (usuarioId, papel) =>
@@ -471,24 +770,27 @@ export const contaApi: ContaApi = {
       await requisitar(config, '/auth/v1/user', { password: novaSenha }, token.access_token, 'PUT')
       return listarAposAutenticar(token, config, false)
     }),
-  convites: () =>
-    exclusiva(async () => {
-      const p = exigirConta()
-      const r = (await edge({ acao: 'listar', empresaId: p.operador ? null : p.empresa.id })) as {
-        convites: Array<Record<string, string>>
-      }
-      return r.convites.map((c) => ({
-        ...c,
-        estado: c.canceladoEm
-          ? 'Cancelado'
-          : c.aceitoEm
-            ? 'Aceito'
-            : Date.parse(c.expiraEm) < Date.now()
-              ? 'Expirado'
-              : 'Pendente',
-        criadoEm: c.ultimoEnvio
-      })) as unknown as ConviteConta[]
-    }),
+  convites: async () => {
+    const p = exigirConta()
+    const r = (await edge({ acao: 'listar', empresaId: p.empresa.id })) as {
+      convites: Array<Record<string, string>>
+    }
+    if (!perfil || perfil.id !== p.id)
+      throw new Error(
+        'A empresa ativa mudou enquanto os convites eram carregados. Atualize a lista.'
+      )
+    return r.convites.map((c) => ({
+      ...c,
+      estado: c.canceladoEm
+        ? 'Cancelado'
+        : c.aceitoEm
+          ? 'Aceito'
+          : Date.parse(c.expiraEm) < Date.now()
+            ? 'Expirado'
+            : 'Pendente',
+      criadoEm: c.ultimoEnvio
+    })) as unknown as ConviteConta[]
+  },
   convidar: (email, nome, papel) =>
     exclusiva(async () => {
       await enviarConvite({
@@ -507,7 +809,7 @@ export const contaApi: ContaApi = {
       const p = exigirConta()
       const lista = (await edge({
         acao: 'listar',
-        empresaId: p.operador ? null : p.empresa.id
+        empresaId: p.empresa.id
       })) as { convites: Array<Record<string, string>> }
       const c = lista.convites.find((v) => v.id === id)
       if (!c) throw new Error('Convite não encontrado. Atualize a lista.')
@@ -520,6 +822,21 @@ export const contaApi: ContaApi = {
         papel: c.papel
       })
     }),
+  atualizarEmpresas: () =>
+    exclusiva(async () => {
+      const contas = normalizarContas(
+        estado.fase === 'escolherEmpresa' && tokenEntrada && configEntrada
+          ? await requisitar(
+              configEntrada,
+              '/rest/v1/rpc/gdo_contas',
+              {},
+              tokenEntrada.access_token
+            )
+          : await pedidoNuvem('/rest/v1/rpc/gdo_contas', {})
+      )
+      estado = { ...estado, empresas: contas.empresas, operador: contas.operador }
+      return emitir()
+    }),
   criarEmpresa: (nome, email, nomeAdministrador) =>
     exclusiva(async () => {
       await enviarConvite({
@@ -528,5 +845,61 @@ export const contaApi: ContaApi = {
         nome: nomeAdministrador,
         papel: 'administrador'
       })
+    }),
+  excluirEmpresa: (empresaId, nomeConfirmado) =>
+    exclusiva(async () => {
+      if (!estado.operador)
+        throw new Error('Somente o Administrador do Sistema pode remover empresas.')
+      const empresa = estado.empresas.find((item) => item.id === empresaId)
+      if (!empresa) throw new Error('A empresa não está mais disponível. Atualize a lista.')
+      if (nomeConfirmado.trim() !== empresa.nome)
+        throw new Error('O nome digitado não corresponde ao nome exato da empresa.')
+      const erroExclusao = (etapa: 'capacidades' | 'exclusao', erro: unknown): Error => {
+        const e = erro as { message?: unknown; status?: unknown; codigo?: unknown; code?: unknown }
+        const status = typeof e.status === 'number' ? e.status : null
+        const codigo =
+          typeof e.codigo === 'string' ? e.codigo : typeof e.code === 'string' ? e.code : ''
+        const diagnostico = diagnosticoErro(erro)
+        const pasta = join(app.getPath('userData'), 'logs')
+        try {
+          mkdirSync(pasta, { recursive: true })
+          appendFileSync(
+            join(pasta, 'exclusao-empresa.jsonl'),
+            `${JSON.stringify({ em: new Date().toISOString(), etapa, status, ...diagnostico, codigo: codigo || diagnostico.codigo })}\n`,
+            'utf8'
+          )
+        } catch {
+          // A falha de gravação do diagnóstico não substitui a falha original.
+        }
+        console.error('Falha ao excluir empresa:', { etapa, status, ...diagnostico })
+        return new Error(
+          `Não foi possível excluir a empresa${status ? ` (HTTP ${status})` : ''}${codigo ? `, código ${codigo}` : ''}. O diagnóstico técnico foi registrado neste computador.`,
+          { cause: erro }
+        )
+      }
+      let capacidades: { excluirEmpresa?: boolean }
+      try {
+        capacidades = (await edge({ acao: 'capacidades' })) as { excluirEmpresa?: boolean }
+      } catch (erro) {
+        if (
+          (erro as { status?: number }).status === 400 &&
+          /Ação inválida/.test((erro as Error).message)
+        )
+          throw new Error(
+            'O serviço de exclusão precisa ser atualizado pelo Administrador do Sistema.'
+          )
+        throw erroExclusao('capacidades', erro)
+      }
+      if (!capacidades.excluirEmpresa)
+        throw new Error(
+          'O serviço de exclusão precisa ser atualizado pelo Administrador do Sistema.'
+        )
+      try {
+        await edge({ acao: 'excluirEmpresa', empresaId })
+      } catch (erro) {
+        throw erroExclusao('exclusao', erro)
+      }
+      estado = { ...estado, empresas: estado.empresas.filter((item) => item.id !== empresaId) }
+      return emitir()
     })
 }

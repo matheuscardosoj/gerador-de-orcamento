@@ -21,6 +21,7 @@ import {
   aguardarTempoReal
 } from './tempo-real'
 import { randomUUID } from 'crypto'
+import { dialog } from 'electron'
 import { tabelaNumerosUsados, confirmarNumero } from './numeros'
 import {
   analisarPendenciasAnteriores,
@@ -31,13 +32,20 @@ import {
   suspenderPendenciasAnteriores
 } from './pendencias-anteriores'
 import type { AtualizacaoNumeracaoPendente } from '@shared/evolucao'
-import { mensagemErro } from '@shared/erros'
+import { diagnosticoErro, mensagemErro } from '@shared/erros'
+import { motivoIndisponibilidade, type MotivoIndisponibilidade } from '@shared/acesso-empresa'
 import {
   adaptarExclusaoCadastroLegada,
   criarPayloadCadastroSalvo
 } from '@shared/cadastros-sincronizacao'
 import { registrarCodigoRemoto } from './codigos-cadastros'
-import { filaParaEnvio, marcarGrupo, temOperacaoAtiva, tentarNovamenteOperacao } from './fila-nuvem'
+import {
+  filaParaEnvio,
+  marcarGrupo,
+  preservarOperacoesEntidade,
+  temOperacaoAtiva,
+  tentarNovamenteOperacao
+} from './fila-nuvem'
 
 let ocupado = false
 let sincronizacaoAtual: Promise<StatusNuvem> | null = null
@@ -51,8 +59,11 @@ type ContextoNuvem = {
   usuarioNome: string
   papel?: 'administrador' | 'membro'
 }
-let observarContexto: ((contexto: ContextoNuvem | null) => void) | null = null
-export function observarAcessoNuvem(observador: (contexto: ContextoNuvem | null) => void): void {
+let observarContexto:
+  ((contexto: ContextoNuvem | null, motivo?: MotivoIndisponibilidade) => void) | null = null
+export function observarAcessoNuvem(
+  observador: (contexto: ContextoNuvem | null, motivo?: MotivoIndisponibilidade) => void
+): void {
   observarContexto = observador
 }
 let estadoTempoReal: NonNullable<StatusNuvem['tempoReal']> = 'desconectado'
@@ -102,11 +113,29 @@ let sessaoVolatil: Sessao | null = null
 let lembrarSessao = true
 let empresaSelecionada: string | null = null
 let central = false
+export function identidadeSessaoNuvem(): number {
+  return geracaoSessao
+}
+let geracaoSessao = 0
+let acessoInterrompido = false
+const requisicoesAtivas = new Set<AbortController>()
+function interromperAcesso(motivo: MotivoIndisponibilidade): void {
+  if (acessoInterrompido) return
+  acessoInterrompido = true
+  geracaoSessao++
+  repetirSincronizacao = false
+  repetirCompleta = false
+  pararTempoReal()
+  for (const controller of requisicoesAtivas) controller.abort()
+  observarContexto?.(null, motivo)
+}
 export function configurarSessaoConta(
   lembrar: boolean,
   empresa: string | null,
   usarCentral: boolean
 ): void {
+  geracaoSessao++
+  acessoInterrompido = false
   lembrarSessao = lembrar
   empresaSelecionada = empresa
   central = usarCentral
@@ -127,12 +156,33 @@ function gravarSessao(s: Sessao): void {
   salvar('sessaoNuvem', safeStorage.encryptString(JSON.stringify(s)).toString('base64'))
 }
 let renovacaoSessao: { chave: string; pedido: Promise<Sessao> } | null = null
+function aguardarRenovacao(pedido: Promise<Sessao>, sinal: AbortSignal): Promise<Sessao> {
+  sinal.throwIfAborted()
+  return new Promise((resolve, reject) => {
+    const abortar = (): void => reject(sinal.reason)
+    sinal.addEventListener('abort', abortar, { once: true })
+    void pedido.then(
+      (sessao) => {
+        sinal.removeEventListener('abort', abortar)
+        resolve(sessao)
+      },
+      (erro) => {
+        sinal.removeEventListener('abort', abortar)
+        reject(erro)
+      }
+    )
+  })
+}
 export async function pedidoNuvem(
   path: string,
   body?: unknown,
   login = false,
-  metodo?: 'PUT'
+  metodo?: 'PUT',
+  timeoutMs = 30000
 ): Promise<unknown> {
+  if (acessoInterrompido) throw new Error('O acesso a esta empresa foi encerrado.')
+  const limite = AbortSignal.timeout(timeoutMs)
+  const geracao = geracaoSessao
   const c = configuracaoNuvem()
   let token = c.chavePublica
   if (!login) {
@@ -145,8 +195,12 @@ export async function pedidoNuvem(
         const pedidoRenovacao = pedidoNuvem(
           '/auth/v1/token?grant_type=refresh_token',
           { refresh_token: tokenAnterior },
-          true
+          true,
+          undefined,
+          timeoutMs
         ).then((dados) => {
+          if (geracao !== geracaoSessao || acessoInterrompido)
+            throw new Error('A empresa ativa mudou durante a renovação da sessão.')
           const atualizada = dados as Sessao
           if (sessao()?.refresh_token !== tokenAnterior)
             throw new Error('A conta conectada mudou durante a renovação. Tente novamente.')
@@ -161,33 +215,87 @@ export async function pedidoNuvem(
           })
           .catch(() => undefined)
       }
-      s = await renovacaoSessao.pedido
+      s = await aguardarRenovacao(renovacaoSessao.pedido, limite)
     }
+    if (geracao !== geracaoSessao || acessoInterrompido)
+      throw new Error('A empresa ativa mudou durante a renovação da sessão.')
     token = s.access_token
   }
-  const resposta = await fetch(c.url + path, {
-    method: metodo ?? (body === undefined ? 'GET' : 'POST'),
-    headers: {
-      apikey: c.chavePublica,
-      ...(!login ? { Authorization: `Bearer ${token}` } : {}),
-      ...(central && empresaSelecionada ? { 'x-gdo-empresa': empresaSelecionada } : {}),
-      'Content-Type': 'application/json'
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(30000)
-  })
-  const dados = await resposta.json().catch(() => null)
-  if (!resposta.ok) {
-    const erro = new Error(
-      dados?.msg ?? dados?.message ?? `Falha na nuvem (${resposta.status}).`
-    ) as Error & { codigo?: string; status?: number }
-    erro.codigo = dados?.code
-    erro.status = resposta.status
-    throw erro
+  const controller = new AbortController()
+  limite.throwIfAborted()
+  requisicoesAtivas.add(controller)
+  let resposta: Response
+  try {
+    resposta = await fetch(c.url + path, {
+      method: metodo ?? (body === undefined ? 'GET' : 'POST'),
+      headers: {
+        apikey: c.chavePublica,
+        ...(!login ? { Authorization: `Bearer ${token}` } : {}),
+        ...(central && empresaSelecionada ? { 'x-gdo-empresa': empresaSelecionada } : {}),
+        ...(central ? { 'x-gdo-geracao': String(config<number>('geracaoBase') ?? 0) } : {}),
+        'Content-Type': 'application/json'
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.any([controller.signal, limite])
+    })
+    const dados = await resposta.json().catch(() => null)
+    if (geracao !== geracaoSessao)
+      throw new Error('A empresa ativa mudou. A resposta anterior foi descartada.')
+    if (!resposta.ok) {
+      const erro = new Error(
+        dados?.msg ?? dados?.message ?? dados?.erro ?? `Falha na nuvem (${resposta.status}).`
+      ) as Error & { codigo?: string; status?: number; details?: string; hint?: string }
+      erro.codigo = dados?.code
+      erro.status = resposta.status
+      erro.details = typeof dados?.details === 'string' ? dados.details : undefined
+      erro.hint = typeof dados?.hint === 'string' ? dados.hint : undefined
+      const motivo = motivoIndisponibilidade(erro)
+      if (!login && motivo) interromperAcesso(motivo)
+      throw erro
+    }
+    return dados
+  } finally {
+    requisicoesAtivas.delete(controller)
   }
-  return dados
 }
 const pedido = pedidoNuvem
+async function estadoBaseRemota(): Promise<{ geracao: number; emManutencao: boolean } | null> {
+  if (!central) return null
+  try {
+    const estado = (await pedido('/rest/v1/rpc/gdo_estado_base', {})) as {
+      geracao: number
+      emManutencao: boolean
+    }
+    if (
+      !Number.isSafeInteger(estado.geracao) ||
+      estado.geracao < 0 ||
+      typeof estado.emManutencao !== 'boolean'
+    )
+      throw new Error('Estado de manutenção inválido.')
+    return estado
+  } catch (erro) {
+    if ((erro as { codigo?: string }).codigo === 'PGRST202') return null
+    throw erro
+  }
+}
+async function conferirGeracaoBase(): Promise<void> {
+  const remota = await estadoBaseRemota()
+  if (!remota) return
+  if (remota.emManutencao) {
+    salvar('atualizacaoBasePendente', true)
+    throw new Error(
+      'Esta empresa está em manutenção. Aguarde a conclusão antes de salvar ou sincronizar.'
+    )
+  }
+  const geracao = config<number>('geracaoBase') ?? 0
+  if (remota.geracao !== geracao) {
+    salvar('atualizacaoBasePendente', true)
+    throw new Error(
+      'A base da empresa foi reorganizada. Em Nuvem / Sincronização, escolha Restaurar este computador pela nuvem. Sua cópia local será preservada no destino escolhido.'
+    )
+  }
+  salvar('atualizacaoBasePendente', false)
+}
 async function reconhecerEmpresa(criar = false): Promise<ContextoNuvem> {
   let contexto: ContextoNuvem
   try {
@@ -306,7 +414,38 @@ export async function inicializarNuvem(): Promise<void> {
   } catch (e) {
     salvar('erroNuvem', mensagemErro(e))
     avisarDados({ origem: 'nuvem', entidades: [], status: true })
+    if (/EMPRESA_EXCLUIDA/.test((e as Error)?.message ?? '')) {
+      throw Object.assign(
+        new Error(
+          'Esta empresa foi removida pelo Operador do Sistema. Os dados locais deste perfil serão apagados.'
+        ),
+        { codigo: 'EMPRESA_EXCLUIDA' }
+      )
+    }
   }
+}
+
+function lerFalhaRegistrada(valor: string): {
+  detalhe: string
+  codigo?: string
+  causa?: string
+  detalhes?: string
+  dica?: string
+} {
+  try {
+    const dados = JSON.parse(valor)
+    if (dados?.versao === 1 && typeof dados.detalhe === 'string')
+      return {
+        detalhe: dados.detalhe,
+        codigo: dados.codigo,
+        causa: dados.causa,
+        detalhes: dados.detalhes,
+        dica: dados.dica
+      }
+  } catch {
+    // Operações gravadas por versões anteriores guardam somente a mensagem.
+  }
+  return { detalhe: valor }
 }
 export function statusNuvem(): StatusNuvem {
   const reservas = Object.fromEntries(
@@ -325,7 +464,11 @@ export function statusNuvem(): StatusNuvem {
     ),
     falhas: all(
       "SELECT id,entidade,erro FROM fila_nuvem WHERE estado='falha' GROUP BY grupo ORDER BY rowid"
-    ).map((l) => ({ id: texto(l.id), entidade: texto(l.entidade), detalhe: texto(l.erro) })),
+    ).map((l) => ({
+      id: texto(l.id),
+      entidade: texto(l.entidade),
+      ...lerFalhaRegistrada(texto(l.erro))
+    })),
     conflitos: all('SELECT id,entidade,detalhe FROM conflitos_nuvem').map((l) => ({
       id: texto(l.id),
       entidade: texto(l.entidade),
@@ -342,6 +485,7 @@ export function statusNuvem(): StatusNuvem {
     usuarioId: config<ContextoNuvem>('contextoNuvem')?.usuarioId,
     protocolo: protocoloNuvem(),
     atualizandoNumeracao: config<boolean>('renumeracaoPendente') ?? false,
+    atualizacaoBasePendente: config<boolean>('atualizacaoBasePendente') ?? false,
     atualizacaoPendente: config<AtualizacaoNumeracaoPendente>('atualizacaoNumeracaoPendente'),
     backupAtualizacao: config<string>('backupAtualizacaoNumeracao'),
     tempoReal: estadoTempoReal,
@@ -774,12 +918,78 @@ export function sincronizarNuvem(completa = true): Promise<StatusNuvem> {
       resultado = await executarSincronizacao(completa)
       completa = repetirCompleta
       repetirCompleta = false
-    } while (repetirSincronizacao)
+    } while (repetirSincronizacao && !acessoInterrompido)
     return resultado
   })().finally(() => {
     sincronizacaoAtual = null
   })
   return sincronizacaoAtual
+}
+/** Substitui somente a base SQLite do perfil ativo após backup escolhido e verificado. */
+export async function restaurarBaseDaNuvem(): Promise<{
+  backup: string
+  status: StatusNuvem
+} | null> {
+  if (ocupado || conectando || sincronizacaoAtual)
+    throw new Error('Aguarde a sincronização atual terminar antes de restaurar.')
+  if (!sessao() || protocoloNuvem() < 3)
+    throw new Error('Entre na empresa e atualize a configuração da nuvem antes de restaurar.')
+  ocupado = true
+  try {
+    const contexto = await reconhecerEmpresa()
+    const base = await estadoBaseRemota()
+    if (base?.emManutencao)
+      throw new Error('Aguarde a manutenção da empresa terminar antes de restaurar.')
+    const selecionada = config<string>('empresaNuvem')
+    if (contexto.empresaId !== selecionada)
+      throw new Error('A conta atual não corresponde à empresa deste perfil.')
+    const remotos = await baixarAlteracoes(0)
+    if (!remotos.some((e) => e.entidade === 'configuracoes:empresa' && e.payload.row))
+      throw new Error(
+        'A nuvem não contém a configuração completa da empresa. A base local foi mantida.'
+      )
+    const escolha = await dialog.showSaveDialog({
+      title: 'Escolha onde guardar a base local antes da restauração',
+      defaultPath: `Backup antes de restaurar da nuvem - ${new Date().toISOString().slice(0, 10)}.gdo-backup`,
+      filters: [{ name: 'Backup do Gerador', extensions: ['gdo-backup'] }]
+    })
+    if (escolha.canceled || !escolha.filePath) return null
+    exportarDadosPara(escolha.filePath)
+    const baseAtual = await estadoBaseRemota()
+    if (baseAtual?.emManutencao || baseAtual?.geracao !== base?.geracao)
+      throw new Error(
+        'A empresa mudou durante a preparação. A base local foi mantida. Tente novamente.'
+      )
+    semRastreamento(() =>
+      tx(() => {
+        run('PRAGMA defer_foreign_keys=ON')
+        const tabelasLocais = all(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name<>'configuracoes'"
+        ).map((l) => texto(l.name))
+        for (const tabela of tabelasLocais) {
+          if (!/^[a-z_]+$/.test(tabela))
+            throw new Error('Tabela local inesperada. A base foi mantida.')
+          run(`DELETE FROM ${tabela}`)
+        }
+        run(
+          "DELETE FROM configuracoes WHERE chave IN ('empresa','parametros','camposClientePadrao','cursorNuvem')"
+        )
+        run(
+          "DELETE FROM configuracoes WHERE chave IN ('erroNuvem','codigosCadastrosRevisados','atualizacaoNumeracaoPendente','operacoesAnterioresSuspensas','renumeracaoPendente') OR chave LIKE 'estado:%' OR chave LIKE 'transferencia:%'"
+        )
+        for (const remoto of ordenarDependencias(remotos)) aplicar(remoto)
+        salvar('cursorNuvem', Math.max(0, ...remotos.map((e) => e.sequencia)))
+        salvar('ultimaNuvem', new Date().toISOString())
+        if (baseAtual) salvar('geracaoBase', baseAtual.geracao)
+        salvar('atualizacaoBasePendente', false)
+      })
+    )
+    avisarDados({ origem: 'nuvem', entidades: remotos.map((e) => e.entidade), status: true })
+    return { backup: escolha.filePath, status: statusNuvem() }
+  } finally {
+    ocupado = false
+    avisarDados({ origem: 'nuvem', entidades: [], status: true })
+  }
 }
 export async function finalizarAtualizacaoNumeracao(revisao: string): Promise<StatusNuvem> {
   if (ocupado || conectando || sincronizacaoAtual)
@@ -837,6 +1047,7 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
     // As próprias RPCs e o RLS validam o membro em cada acesso. A sessão/contexto
     // também são renovados a cada 30s; não acrescenta uma viagem HTTP a cada aviso.
     if (completa && protocoloNuvem() >= 2) await reconhecerEmpresa()
+    await conferirGeracaoBase()
     if (protocoloNuvem() < 2 && get('SELECT 1 FROM conflitos_nuvem LIMIT 1'))
       throw new Error('Resolva os conflitos antes de sincronizar novas alterações.')
     const pendencias = filaParaEnvio()
@@ -852,6 +1063,7 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
         ...all("SELECT entidade FROM fila_nuvem WHERE estado IN ('falha','conflito')")
       ].map((l) => texto(l.entidade))
     )
+    const cadastrosConfirmados = new Set<string>()
     for (const fila of grupos) {
       if (
         !fila.length ||
@@ -905,6 +1117,11 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
           return { ok: false, entidade: op.entidade, remoto: null }
         })) as typeof result
       } catch (e) {
+        if (acessoInterrompido) throw e
+        if (['GDM01', 'GDM02'].includes((e as { codigo?: string }).codigo ?? '')) {
+          salvar('atualizacaoBasePendente', true)
+          throw e
+        }
         const erro = e as { status?: number; codigo?: string; name?: string }
         const temporaria =
           erro.status === 401 ||
@@ -920,7 +1137,7 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
           break
         }
         const detalhe = mensagemErro(e, descricaoOperacao(fila[0]))
-        marcarGrupo(fila, 'falha', detalhe)
+        marcarGrupo(fila, 'falha', JSON.stringify({ versao: 1, detalhe, ...diagnosticoErro(e) }))
         for (const l of fila) bloqueadas.add(texto(l.entidade))
         continue
       }
@@ -949,6 +1166,9 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
             'INSERT INTO sincronizacao VALUES (?,?) ON CONFLICT(entidade) DO UPDATE SET revisao=excluded.revisao',
             [r.entidade, r.revisao]
           )
+        if (protocoloNuvem() >= 3)
+          for (const r of result.resultados ?? [])
+            if (/^(clientes|servicos):/.test(r.entidade)) cadastrosConfirmados.add(r.entidade)
         for (const l of fila) run('DELETE FROM fila_nuvem WHERE id=?', [l.id])
         for (const n of result.numeros ?? []) confirmarNumero(n.tipo, n.documentoId, n.numero)
       })
@@ -957,14 +1177,22 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
     const auxiliares =
       protocoloNuvem() >= 2
         ? Promise.all([
-            pedido('/rest/v1/edicoes_documento?select=*'),
-            pedido('/rest/v1/pedidos_edicao?select=*'),
+            pedido(
+              `/rest/v1/edicoes_documento?select=*&empresa_id=eq.${empresaSelecionada ?? config<ContextoNuvem>('contextoNuvem')?.empresaId}`
+            ),
+            pedido(
+              `/rest/v1/pedidos_edicao?select=*&empresa_id=eq.${empresaSelecionada ?? config<ContextoNuvem>('contextoNuvem')?.empresaId}`
+            ),
             pedido(
               `/rest/v1/rpc/${protocoloNuvem() >= 3 ? 'gdo_membros_v3' : 'gdo_membros_v2'}`,
               {}
             ),
             ...(protocoloNuvem() >= 3
-              ? [pedido('/rest/v1/mapa_numeracao?select=tipo,documento_id,anterior,novo')]
+              ? [
+                  pedido(
+                    `/rest/v1/mapa_numeracao?select=tipo,documento_id,anterior,novo&empresa_id=eq.${empresaSelecionada ?? config<ContextoNuvem>('contextoNuvem')?.empresaId}`
+                  )
+                ]
               : [])
           ]).then(
             (dados) => ({ dados, erro: null }),
@@ -974,6 +1202,30 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
     const alteracoes = await baixarAlteracoes(cursor)
     cursor = Math.max(cursor, ...alteracoes.map((e) => e.sequencia))
     ordenarDependencias(alteracoes)
+    const tombstonesComPendencias = alteracoes.filter(
+      (e) =>
+        (e.payload.excluido || (!!e.payload.tabela && !e.payload.row)) &&
+        temOperacaoAtiva(e.entidade) &&
+        e.revisao >
+          Number(
+            get('SELECT revisao FROM sincronizacao WHERE entidade=?', [e.entidade])?.revisao ?? 0
+          )
+    )
+    const entidadesPreservadasPorExclusao = new Set<string>()
+    for (const e of tombstonesComPendencias) {
+      const tipo = e.entidade.split(':')[0]
+      if (tipos.includes(tipo as TipoDocumento)) {
+        const { preservarConflitos } = await import('./rascunhos')
+        preservarConflitos([e.entidade])
+      }
+      for (const entidade of preservarOperacoesEntidade(
+        e.entidade,
+        'O registro foi excluído em outro computador. Esta alteração antiga foi preservada e não será enviada automaticamente.'
+      )) {
+        entidadesPreservadasPorExclusao.add(entidade)
+        bloqueadas.delete(entidade)
+      }
+    }
     semRastreamento(() =>
       tx(() => {
         if (config<boolean>('renumeracaoPendente')) {
@@ -986,8 +1238,21 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
             get('SELECT revisao FROM sincronizacao WHERE entidade=?', [e.entidade])?.revisao ?? 0
           )
           const pendente = temOperacaoAtiva(e.entidade)
-          if (pendente && e.revisao > conhecido) continue
-          if (e.revisao > conhecido) aplicar(e)
+          const removido = e.payload.excluido || (!!e.payload.tabela && !e.payload.row)
+          const confirmadoNesteEnvio = cadastrosConfirmados.has(e.entidade) && !pendente
+          const codigoServicoCorrigido =
+            e.payload.tabela === 'servicos' &&
+            e.payload.row?.codigo != null &&
+            Number(get('SELECT codigo FROM servicos WHERE id=?', [e.payload.id])?.codigo ?? 0) !==
+              Number(e.payload.row.codigo)
+          if (entidadesPreservadasPorExclusao.has(e.entidade) && !removido) continue
+          if (pendente && e.revisao > conhecido && !removido) continue
+          if (
+            e.revisao > conhecido ||
+            confirmadoNesteEnvio ||
+            (codigoServicoCorrigido && !pendente)
+          )
+            aplicar(e)
         }
         salvar('cursorNuvem', cursor)
         if (config<boolean>('renumeracaoPendente')) salvar('renumeracaoPendente', false)
@@ -1112,6 +1377,77 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
         })
     }
     if (completa) salvar('bytesNuvem', await pedido('/rest/v1/rpc/gdo_usage', {}))
+    // A função de delta antiga omitia codigo. Uma única leitura integral após a
+    // migração corrige serviços já conhecidos cujo cursor não avançou.
+    if (protocoloNuvem() >= 3 && !config<boolean>('codigosCadastrosRevisados')) {
+      const servicosRemotos = (await baixarAlteracoes(0)).filter(
+        (e) => ['servicos', 'clientes'].includes(e.payload.tabela ?? '') && !!e.payload.row
+      )
+      const codigoRemoto = (e: Remoto): number =>
+        Number(
+          e.payload.tabela === 'clientes'
+            ? JSON.parse(texto(e.payload.row?.dados_json) || '{}').codigo
+            : e.payload.row?.codigo
+        )
+      if (servicosRemotos.every((e) => codigoRemoto(e) > 0)) {
+        const corrigidos: string[] = []
+        let revisaoCompleta = true
+        semRastreamento(() =>
+          tx(() => {
+            for (const e of servicosRemotos) {
+              if (temOperacaoAtiva(e.entidade)) {
+                revisaoCompleta = false
+                continue
+              }
+              const cliente = e.payload.tabela === 'clientes'
+              const local = get(
+                cliente
+                  ? 'SELECT dados_json FROM clientes WHERE id=?'
+                  : 'SELECT codigo FROM servicos WHERE id=?',
+                [e.payload.id]
+              )
+              if (!local) continue
+              const codigo = codigoRemoto(e)
+              if (!Number.isSafeInteger(codigo) || codigo < 1) {
+                revisaoCompleta = false
+                continue
+              }
+              const dadosCliente = cliente ? JSON.parse(texto(local.dados_json) || '{}') : null
+              if (Number(cliente ? dadosCliente.codigo : local.codigo) !== codigo) {
+                if (cliente)
+                  run('UPDATE clientes SET dados_json=? WHERE id=?', [
+                    JSON.stringify({ ...dadosCliente, codigo }),
+                    e.payload.id
+                  ])
+                else run('UPDATE servicos SET codigo=? WHERE id=?', [codigo, e.payload.id])
+                corrigidos.push(e.entidade)
+              }
+              registrarCodigoRemoto(cliente ? 'cliente' : 'servico', codigo, e.payload.id)
+              const chaveEstado = `estado:${e.payload.tabela}:${e.payload.id}`
+              const anterior = config<string>(chaveEstado)
+              if (anterior) {
+                try {
+                  const estado = JSON.parse(anterior)
+                  if (estado.row) {
+                    if (cliente)
+                      estado.row.dados_json = JSON.stringify({
+                        ...JSON.parse(estado.row.dados_json || '{}'),
+                        codigo
+                      })
+                    else estado.row.codigo = codigo
+                    salvar(chaveEstado, JSON.stringify(estado))
+                  }
+                } catch {
+                  /* Cache inválido será conferido na captura normal. */
+                }
+              }
+            }
+            salvar('codigosCadastrosRevisados', revisaoCompleta)
+          })
+        )
+        if (corrigidos.length) avisarDados({ origem: 'nuvem', entidades: corrigidos, status: true })
+      }
+    }
     salvar('ultimaNuvem', new Date().toISOString())
     salvar(
       'erroNuvem',
@@ -1153,8 +1489,56 @@ function descricaoOperacao(op: Linha): string {
   return `${excluir ? 'Excluir' : 'Salvar'} ${nomes[tipo] ?? 'alteração'}`
 }
 export async function repetirOperacaoNuvem(id: string): Promise<StatusNuvem> {
+  if (sincronizacaoAtual) await sincronizacaoAtual
   if (ocupado || conectando)
     throw new Error('Aguarde a sincronização atual antes de tentar novamente.')
+  const op = get("SELECT * FROM fila_nuvem WHERE id=? AND estado='falha'", [id])
+  if (op && /^relatorio:|^orcamento:|^recibo:/.test(texto(op.entidade))) {
+    const payload = JSON.parse(texto(op.payload)) as {
+      tipo?: TipoDocumento
+      id?: string
+      excluido?: boolean
+      responsavel?: string
+      rows?: Record<string, Array<Record<string, unknown>>>
+    }
+    if (payload.excluido && payload.tipo && payload.id) {
+      const remoto = await consultarDocumentoRemoto(payload.tipo, payload.id)
+      if (!remoto)
+        throw new Error(
+          'Documento não encontrado na nuvem. Confira a operação antes de repetir a exclusão.'
+        )
+      if (remoto?.payload.excluido) {
+        preservarOperacoesEntidade(
+          texto(op.entidade),
+          'A exclusão já foi confirmada em outro computador. A operação antiga foi preservada.'
+        )
+        return sincronizarNuvem(false)
+      }
+      if (remoto.controle && remoto.controle.dispositivo !== computadorId())
+        throw new Error(
+          'A edição está em outro computador. Solicite o controle antes de repetir a exclusão.'
+        )
+      if (remoto.revisao !== Number(op.base)) {
+        const locais = new Set((payload.rows?.versoes ?? []).map((v) => String(v.id)))
+        if ((remoto.payload.rows?.versoes ?? []).some((v) => !locais.has(String(v.id))))
+          throw new Error(
+            'O documento recebeu uma nova versão antes da exclusão. Confira o histórico e o rascunho antes de tentar novamente.'
+          )
+      }
+      const meta = payload.rows?.documento_meta?.[0]
+      if (meta && remoto) {
+        const dados = JSON.parse(String(meta.dados)) as Record<string, unknown>
+        payload.responsavel = computadorId()
+        meta.dados = JSON.stringify({ ...dados, computadorResponsavel: computadorId() })
+        run('UPDATE fila_nuvem SET payload=?,base=?,geracao=? WHERE id=?', [
+          JSON.stringify(payload),
+          remoto.revisao,
+          remoto.controle?.geracao ?? op.geracao,
+          id
+        ])
+      }
+    }
+  }
   tentarNovamenteOperacao(id)
   return sincronizarNuvem(false)
 }
@@ -1193,7 +1577,7 @@ function aplicarIdentificador(e: Remoto): void {
     )
       throw new Error('Controle de edição remoto inválido.')
     run(
-      'INSERT INTO edicoes_documento VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(tipo,documento_id) DO UPDATE SET usuario=excluded.usuario,computador=excluded.computador,geracao=excluded.geracao,expira_em=excluded.expira_em,offline=excluded.offline,base_revisao=excluded.base_revisao',
+      'INSERT INTO edicoes_documento VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(tipo,documento_id) DO UPDATE SET usuario=excluded.usuario,computador=excluded.computador,geracao=excluded.geracao,expira_em=excluded.expira_em,offline=excluded.offline,base_revisao=excluded.base_revisao WHERE excluded.geracao>=edicoes_documento.geracao',
       [
         c.tipo,
         c.documento_id,
@@ -1216,7 +1600,9 @@ function aplicarIdentificador(e: Remoto): void {
   )
 }
 export async function dispositivosNuvem(): Promise<Array<{ id: string; nome: string }>> {
-  return (await pedido('/rest/v1/gdo_devices?select=id,nome')) as Array<{
+  const empresa = statusNuvem().empresaId
+  if (!empresa) throw new Error('Selecione uma empresa antes de consultar os computadores.')
+  return (await pedido(`/rest/v1/gdo_devices?select=id,nome&usuario=eq.${empresa}`)) as Array<{
     id: string
     nome: string
   }>
@@ -1259,6 +1645,8 @@ export function sairNuvem(): void {
 }
 
 export async function suspenderNuvemConta(): Promise<void> {
+  geracaoSessao++
+  for (const controller of requisicoesAtivas) controller.abort()
   pararTempoReal()
   await aguardarTempoReal()
   await sincronizacaoAtual?.catch(() => undefined)

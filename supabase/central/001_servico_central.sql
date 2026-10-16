@@ -40,8 +40,8 @@ $$;
 CREATE FUNCTION public.gdo_contas() RETURNS jsonb
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
  SELECT jsonb_build_object('operador',EXISTS(SELECT 1 FROM central.operadores WHERE usuario_id=auth.uid()),
- 'empresas',coalesce((SELECT jsonb_agg(jsonb_build_object('id',e.id,'nome',e.nome,'papel',m.papel,'usuarioNome',m.nome) ORDER BY e.nome)
- FROM empresas e JOIN membros_empresa m ON m.empresa_id=e.id WHERE m.usuario_id=auth.uid() AND m.ativo),'[]'::jsonb));
+ 'empresas',coalesce((SELECT jsonb_agg(jsonb_build_object('id',e.id,'nome',coalesce(nullif(btrim(CASE WHEN c.valor->>'nomeExibicao'='razaoSocial' THEN c.valor->>'razaoSocial' ELSE c.valor->>'nome' END),''),e.nome),'papel',m.papel,'usuarioNome',m.nome) ORDER BY coalesce(nullif(btrim(CASE WHEN c.valor->>'nomeExibicao'='razaoSocial' THEN c.valor->>'razaoSocial' ELSE c.valor->>'nome' END),''),e.nome))
+ FROM empresas e JOIN membros_empresa m ON m.empresa_id=e.id LEFT JOIN configuracoes_empresa c ON c.empresa_id=e.id AND c.chave='empresa' WHERE m.usuario_id=auth.uid() AND m.ativo),'[]'::jsonb));
 $$;
 CREATE FUNCTION public.gdo_contexto_v4(p_empresa uuid) RETURNS jsonb
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
@@ -141,7 +141,7 @@ BEGIN
  IF NOT operador AND (p_empresa IS NULL OR NOT central.administrador(p_empresa,auth.uid())) THEN RAISE EXCEPTION 'Você não pode gerenciar estes convites'; END IF;
  IF p_cancelar IS NOT NULL THEN
   SELECT empresa_id INTO e FROM central.convites WHERE id=p_cancelar;
-  IF NOT operador AND e IS DISTINCT FROM p_empresa THEN RAISE EXCEPTION 'Convite indisponível'; END IF;
+  IF e IS DISTINCT FROM p_empresa THEN RAISE EXCEPTION 'Convite indisponível'; END IF;
   UPDATE central.convites SET cancelado_em=now() WHERE id=p_cancelar AND aceito_em IS NULL;
  END IF;
  RETURN (SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'empresaId',empresa_id,'email',email,'nome',nome,'papel',papel,'expiraEm',expira_em,'aceitoEm',aceito_em,'canceladoEm',cancelado_em,'ultimoEnvio',ultimo_envio) ORDER BY expira_em DESC),'[]') FROM central.convites WHERE (p_empresa IS NULL OR empresa_id=p_empresa));

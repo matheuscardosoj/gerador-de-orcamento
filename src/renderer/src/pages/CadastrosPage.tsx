@@ -1,7 +1,6 @@
 import { mensagemErro } from '@shared/erros'
-import { ListaOrdenavel } from '../ui/ordenavel'
 import { validarCliente } from '@shared/clientes'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Trash2, Plus, Pencil, Save, FilterX } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAsync } from '../lib/hooks'
@@ -25,6 +24,8 @@ import { formatMoeda } from '@shared/format'
 import { correspondeBusca } from '@shared/historico-preferencias'
 import { DataTableFrame, TableActions, SortableHeader } from '../ui/dataTable'
 import type { Cliente, ServicoCatalogo } from '@shared/types'
+import type { RascunhoCadastro } from '@shared/evolucao'
+import { useNav } from '../lib/nav'
 
 type Aba = 'clientes' | 'servicos'
 
@@ -72,6 +73,13 @@ const clienteVazio = (): Omit<Cliente, 'id' | 'criadoEm'> => ({
   observacao: '',
   ativo: true
 })
+function novoClienteDe(form: Omit<Cliente, 'id' | 'criadoEm'>): Omit<Cliente, 'id' | 'criadoEm'> {
+  const dados = { ...form } as Partial<Cliente>
+  delete dados.id
+  delete dados.criadoEm
+  delete dados.codigo
+  return dados as Omit<Cliente, 'id' | 'criadoEm'>
+}
 
 function SecaoClientes({
   edit,
@@ -86,6 +94,11 @@ function SecaoClientes({
     error: erroCarga,
     reload
   } = useAsync(() => api.clientes.list(), [], ['clientes'])
+  const { data: rascunhos, reload: recarregarRascunhos } = useAsync(() =>
+    api.rascunhosCadastros.listar('cliente')
+  )
+  const { avisar } = useNav()
+  const [restaurar, setRestaurar] = useState<RascunhoCadastro | null>(null)
   const [busca, setBusca] = useState('')
   const [estado, setEstado] = useState('')
   const [tipo, setTipo] = useState('')
@@ -97,6 +110,7 @@ function SecaoClientes({
     if (!excluir) return
     try {
       await api.clientes.remove(excluir.id)
+      avisar(`Cliente “${excluir.nome}” excluído.`, 'sucesso')
       setExcluir(null)
       reload()
     } catch (e) {
@@ -129,6 +143,20 @@ function SecaoClientes({
     )
   return (
     <div className="space-y-4">
+      {rascunhos?.map((r) => (
+        <Mensagem key={r.idOrigem} tom="aviso">
+          Alterações de um cliente excluído em outro computador foram guardadas neste computador.{' '}
+          <button
+            className="font-semibold underline"
+            onClick={() => {
+              setRestaurar(r)
+              setEdit('novo')
+            }}
+          >
+            Abrir como novo cliente
+          </button>
+        </Mensagem>
+      ))}
       <div className="flex flex-wrap items-center gap-3">
         <Input
           className="max-w-md"
@@ -303,10 +331,23 @@ function SecaoClientes({
       )}
       {edit && (
         <ClienteModal
+          key={edit === 'novo' ? (restaurar?.idOrigem ?? 'novo') : edit.id}
           cliente={edit === 'novo' ? null : edit}
-          onClose={() => setEdit(null)}
+          restaurar={edit === 'novo' ? restaurar : null}
+          onClose={() => {
+            setEdit(null)
+            setRestaurar(null)
+          }}
+          onDeleted={() => {
+            setEdit(null)
+            setRestaurar(null)
+            recarregarRascunhos()
+            reload()
+          }}
           onSaved={() => {
             setEdit(null)
+            setRestaurar(null)
+            recarregarRascunhos()
             reload()
           }}
         />
@@ -324,26 +365,54 @@ function SecaoClientes({
 
 function ClienteModal({
   cliente,
+  restaurar,
   onClose,
+  onDeleted,
   onSaved
 }: {
   cliente: Cliente | null
+  restaurar: RascunhoCadastro | null
   onClose: () => void
+  onDeleted: () => void
   onSaved: () => void
 }): JSX.Element {
-  const [form, setForm] = useState<Omit<Cliente, 'id' | 'criadoEm'>>(cliente ?? clienteVazio())
+  const [form, setForm] = useState<Omit<Cliente, 'id' | 'criadoEm'>>(
+    (restaurar?.dados as Omit<Cliente, 'id' | 'criadoEm'> | undefined) ?? cliente ?? clienteVazio()
+  )
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
-  const [excluidoRemotamente, setExcluidoRemotamente] = useState(false)
+  const { avisar } = useNav()
+  const formAtual = useRef(form)
+  formAtual.current = form
+  const exclusaoTratada = useRef(false)
   useEffect(() => {
     if (!cliente) return
     return api.eventos.observarDados((evento) => {
       if (evento.origem !== 'nuvem' || !evento.entidades.includes(`clientes:${cliente.id}`)) return
       void api.clientes.list().then((atual) => {
-        if (!atual.some((c) => c.id === cliente.id)) setExcluidoRemotamente(true)
+        if (atual.some((c) => c.id === cliente.id) || exclusaoTratada.current) return
+        exclusaoTratada.current = true
+        void (async () => {
+          const alterado = JSON.stringify(formAtual.current) !== JSON.stringify(cliente)
+          try {
+            if (alterado)
+              await api.rascunhosCadastros.guardar(
+                'cliente',
+                cliente.id,
+                novoClienteDe(formAtual.current)
+              )
+            avisar(
+              `O cliente “${cliente.nome}” foi excluído em outro computador. A tela foi fechada.${alterado ? ' Suas alterações foram guardadas para criar um novo cliente.' : ''}`
+            )
+            onDeleted()
+          } catch {
+            exclusaoTratada.current = false
+            setErro('Não foi possível guardar as alterações locais. Elas continuam nesta tela.')
+          }
+        })()
       })
     })
-  }, [cliente])
+  }, [cliente, avisar, onDeleted])
   const set = (patch: Partial<typeof form>): void => setForm({ ...form, ...patch })
 
   const salvar = async (): Promise<void> => {
@@ -352,13 +421,22 @@ function ClienteModal({
     setErro('')
     try {
       validarCliente({ ...form, id: cliente?.id ?? '', criadoEm: cliente?.criadoEm ?? '' })
-      if (cliente && !excluidoRemotamente) {
+      if (cliente) {
         const atualizado = await api.clientes.update(cliente.id, form)
         if (!atualizado)
           throw new Error(
             'Este cliente foi excluído em outro computador. Escolha criar como novo cadastro.'
           )
-      } else await api.clientes.create(form)
+      } else {
+        await api.clientes.create(novoClienteDe(form))
+        if (restaurar)
+          await api.rascunhosCadastros.descartar('cliente', restaurar.idOrigem).catch(() => {
+            avisar(
+              'Cliente criado. O rascunho antigo não pôde ser removido; confira a lista de rascunhos.'
+            )
+          })
+      }
+      avisar(cliente ? 'Cliente atualizado.' : 'Cliente cadastrado.', 'sucesso')
       onSaved()
     } catch (e) {
       setErro(mensagemErro(e))
@@ -379,19 +457,13 @@ function ClienteModal({
             Cancelar
           </Button>
           <Button icon={Save} onClick={() => void salvar()} disabled={salvando}>
-            {salvando ? 'Salvando…' : excluidoRemotamente ? 'Criar como novo cliente' : 'Salvar'}
+            {salvando ? 'Salvando…' : 'Salvar'}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
         {erro && <Mensagem>{erro}</Mensagem>}
-        {excluidoRemotamente && (
-          <Mensagem tom="aviso">
-            Este cliente foi excluído em outro computador. Salvar criará um novo cadastro com outro
-            código.
-          </Mensagem>
-        )}
         <Field label="Nome / razão social (obrigatório)">
           <Input value={form.nome} onChange={(e) => set({ nome: e.target.value })} autoFocus />
         </Field>
@@ -525,6 +597,12 @@ const servicoVazio = (): Omit<ServicoCatalogo, 'id'> => ({
   unidade: 'metro linear',
   precoReferencia: null
 })
+function novoServicoDe(form: Omit<ServicoCatalogo, 'id'>): Omit<ServicoCatalogo, 'id'> {
+  const dados = { ...form } as Partial<ServicoCatalogo>
+  delete dados.id
+  delete dados.codigo
+  return dados as Omit<ServicoCatalogo, 'id'>
+}
 
 function SecaoServicos({
   edit,
@@ -539,25 +617,15 @@ function SecaoServicos({
     error: erroCarga,
     reload
   } = useAsync(() => api.servicos.list(), [], ['servicos'])
+  const { data: rascunhos, reload: recarregarRascunhos } = useAsync(() =>
+    api.rascunhosCadastros.listar('servico')
+  )
+  const { avisar } = useNav()
+  const [restaurar, setRestaurar] = useState<RascunhoCadastro | null>(null)
   const [busca, setBusca] = useState('')
   const [ordenarPorCodigo, setOrdenarPorCodigo] = useState(false)
   const [direcaoCodigo, setDirecaoCodigo] = useState<'asc' | 'desc'>('asc')
   const [excluir, setExcluir] = useState<ServicoCatalogo | null>(null)
-  const [reordenando, setReordenando] = useState(false)
-  const [erroOrdem, setErroOrdem] = useState('')
-  const reordenar = async (ids: string[]): Promise<void> => {
-    setReordenando(true)
-    setErroOrdem('')
-    try {
-      await api.reordenarCadastro('servicos', ids)
-      reload()
-    } catch (e) {
-      setErroOrdem(mensagemErro(e))
-    } finally {
-      setReordenando(false)
-    }
-  }
-
   const filtrados = (data ?? [])
     .filter((s) =>
       correspondeBusca(busca, [String(s.codigo ?? ''), s.nome, s.descricaoPadrao, s.unidade])
@@ -565,11 +633,24 @@ function SecaoServicos({
     .sort((a, b) =>
       ordenarPorCodigo
         ? ((a.codigo ?? 0) - (b.codigo ?? 0)) * (direcaoCodigo === 'asc' ? 1 : -1)
-        : 0
+        : a.nome.localeCompare(b.nome, 'pt-BR')
     )
   return (
     <div className="space-y-4">
-      {erroOrdem && <Mensagem className="mb-4">{erroOrdem}</Mensagem>}
+      {rascunhos?.map((r) => (
+        <Mensagem key={r.idOrigem} tom="aviso">
+          Alterações de um serviço excluído em outro computador foram guardadas neste computador.{' '}
+          <button
+            className="font-semibold underline"
+            onClick={() => {
+              setRestaurar(r)
+              setEdit('novo')
+            }}
+          >
+            Abrir como novo serviço
+          </button>
+        </Mensagem>
+      ))}
       <div className="flex flex-wrap items-center gap-3">
         <Input
           className="max-w-md"
@@ -582,9 +663,6 @@ function SecaoServicos({
           Limpar filtros
         </Button>
       </div>
-      {busca.trim() && (
-        <p className="text-xs text-slate-500">Limpe a busca para reordenar o catálogo completo.</p>
-      )}
       {erroCarga && (
         <Mensagem className="mb-4">Não foi possível carregar os serviços. {erroCarga}</Mensagem>
       )}
@@ -644,64 +722,70 @@ function SecaoServicos({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            <ListaOrdenavel
-              itens={filtrados}
-              disabled={reordenando || !!busca.trim() || ordenarPorCodigo}
-              onChange={(itens) => void reordenar(itens.map((i) => i.id))}
-            >
-              {filtrados.map((s) => (
-                <tr key={s.id} className="group/linha-historico h-[62px] hover:bg-slate-50">
-                  <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-800">
-                    {s.codigo ? String(s.codigo).padStart(6, '0') : '—'}
-                  </td>
-                  <td className="px-4 py-3 font-medium text-slate-800">
-                    <span className="line-clamp-2 break-words" title={s.nome}>
-                      {s.nome}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">
-                    <span className="line-clamp-2 break-words" title={s.descricaoPadrao}>
-                      {s.descricaoPadrao || '—'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">
-                    <span className="line-clamp-2 break-words">{s.unidade}</span>
-                  </td>
-                  <td className="px-4 py-3 text-right font-medium text-slate-600">
-                    {s.precoReferencia != null ? formatMoeda(s.precoReferencia) : '—'}
-                  </td>
-                  <td className="sticky right-0 z-[1] bg-white px-4 py-3 shadow-[-1px_0_0_0_#e2e8f0] group-hover/linha-historico:bg-slate-50">
-                    <TableActions>
-                      <IconButton
-                        icon={Pencil}
-                        label={`Editar serviço ${s.nome}`}
-                        onClick={() => setEdit(s)}
-                      />
-                      <IconButton
-                        icon={Trash2}
-                        label={`Excluir serviço ${s.nome}`}
-                        onClick={() => setExcluir(s)}
-                      />
-                    </TableActions>
-                  </td>
-                </tr>
-              ))}
-            </ListaOrdenavel>
+            {filtrados.map((s) => (
+              <tr key={s.id} className="group/linha-historico h-[62px] hover:bg-slate-50">
+                <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-800">
+                  {s.codigo ? String(s.codigo).padStart(6, '0') : '—'}
+                </td>
+                <td className="px-4 py-3 font-medium text-slate-800">
+                  <span className="line-clamp-2 break-words" title={s.nome}>
+                    {s.nome}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-slate-600">
+                  <span className="line-clamp-2 break-words" title={s.descricaoPadrao}>
+                    {s.descricaoPadrao || '—'}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-slate-600">
+                  <span className="line-clamp-2 break-words">{s.unidade}</span>
+                </td>
+                <td className="px-4 py-3 text-right font-medium text-slate-600">
+                  {s.precoReferencia != null ? formatMoeda(s.precoReferencia) : '—'}
+                </td>
+                <td className="sticky right-0 z-[1] bg-white px-4 py-3 shadow-[-1px_0_0_0_#e2e8f0] group-hover/linha-historico:bg-slate-50">
+                  <TableActions>
+                    <IconButton
+                      icon={Pencil}
+                      label={`Editar serviço ${s.nome}`}
+                      onClick={() => setEdit(s)}
+                    />
+                    <IconButton
+                      icon={Trash2}
+                      label={`Excluir serviço ${s.nome}`}
+                      onClick={() => setExcluir(s)}
+                    />
+                  </TableActions>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </DataTableFrame>
       )}
       {!loading && !!filtrados.length && (
         <p className="text-xs text-slate-500">
-          {filtrados.length} de {data?.length ?? 0} serviços · Arraste pela alça para alterar a
-          ordem.
+          {filtrados.length} de {data?.length ?? 0} serviços
         </p>
       )}
       {edit && (
         <ServicoModal
+          key={edit === 'novo' ? (restaurar?.idOrigem ?? 'novo') : edit.id}
           servico={edit === 'novo' ? null : edit}
-          onClose={() => setEdit(null)}
+          restaurar={edit === 'novo' ? restaurar : null}
+          onClose={() => {
+            setEdit(null)
+            setRestaurar(null)
+          }}
+          onDeleted={() => {
+            setEdit(null)
+            setRestaurar(null)
+            recarregarRascunhos()
+            reload()
+          }}
           onSaved={() => {
             setEdit(null)
+            setRestaurar(null)
+            recarregarRascunhos()
             reload()
           }}
         />
@@ -714,6 +798,7 @@ function SecaoServicos({
         onConfirm={async () => {
           if (excluir) {
             await api.servicos.remove(excluir.id)
+            avisar(`Serviço “${excluir.nome}” excluído.`, 'sucesso')
             setExcluir(null)
             reload()
           }
@@ -725,37 +810,74 @@ function SecaoServicos({
 
 function ServicoModal({
   servico,
+  restaurar,
   onClose,
+  onDeleted,
   onSaved
 }: {
   servico: ServicoCatalogo | null
+  restaurar: RascunhoCadastro | null
   onClose: () => void
+  onDeleted: () => void
   onSaved: () => void
 }): JSX.Element {
-  const [form, setForm] = useState<Omit<ServicoCatalogo, 'id'>>(servico ?? servicoVazio())
-  const [excluidoRemotamente, setExcluidoRemotamente] = useState(false)
+  const [form, setForm] = useState<Omit<ServicoCatalogo, 'id'>>(
+    (restaurar?.dados as Omit<ServicoCatalogo, 'id'> | undefined) ?? servico ?? servicoVazio()
+  )
+  const { avisar } = useNav()
+  const formAtual = useRef(form)
+  formAtual.current = form
+  const exclusaoTratada = useRef(false)
   const [erro, setErro] = useState('')
   useEffect(() => {
     if (!servico) return
     return api.eventos.observarDados((evento) => {
       if (evento.origem !== 'nuvem' || !evento.entidades.includes(`servicos:${servico.id}`)) return
       void api.servicos.list().then((atual) => {
-        if (!atual.some((s) => s.id === servico.id)) setExcluidoRemotamente(true)
+        if (atual.some((s) => s.id === servico.id) || exclusaoTratada.current) return
+        exclusaoTratada.current = true
+        void (async () => {
+          const alterado = JSON.stringify(formAtual.current) !== JSON.stringify(servico)
+          try {
+            if (alterado)
+              await api.rascunhosCadastros.guardar(
+                'servico',
+                servico.id,
+                novoServicoDe(formAtual.current)
+              )
+            avisar(
+              `O serviço “${servico.nome}” foi excluído em outro computador. A tela foi fechada.${alterado ? ' Suas alterações foram guardadas para criar outro serviço.' : ''}`
+            )
+            onDeleted()
+          } catch {
+            exclusaoTratada.current = false
+            setErro('Não foi possível guardar as alterações locais. Elas continuam nesta tela.')
+          }
+        })()
       })
     })
-  }, [servico])
+  }, [servico, avisar, onDeleted])
   const set = (patch: Partial<typeof form>): void => setForm({ ...form, ...patch })
 
   const salvar = async (): Promise<void> => {
     if (!form.nome.trim()) return
     try {
-      if (servico && !excluidoRemotamente) {
+      if (servico) {
         const atualizado = await api.servicos.update(servico.id, form)
         if (!atualizado)
           throw new Error(
             'Este serviço foi excluído em outro computador. Escolha criar como novo cadastro.'
           )
-      } else await api.servicos.create(form)
+      } else {
+        await api.servicos.create(novoServicoDe(form))
+        if (restaurar)
+          await api.rascunhosCadastros.descartar('servico', restaurar.idOrigem).catch(() => {
+            avisar(
+              'Serviço criado. O rascunho antigo não pôde ser removido; confira a lista de rascunhos.'
+            )
+          })
+      }
+      avisar(servico ? 'Serviço atualizado.' : 'Serviço cadastrado.', 'sucesso')
       onSaved()
     } catch (e) {
       setErro(mensagemErro(e))
@@ -774,19 +896,13 @@ function ServicoModal({
             Cancelar
           </Button>
           <Button icon={Save} onClick={salvar}>
-            {excluidoRemotamente ? 'Criar como novo serviço' : 'Salvar'}
+            Salvar
           </Button>
         </>
       }
     >
       <div className="space-y-4">
         {erro && <Mensagem>{erro}</Mensagem>}
-        {excluidoRemotamente && (
-          <Mensagem tom="aviso">
-            Este serviço foi excluído em outro computador. Salvar criará um novo cadastro com outro
-            código.
-          </Mensagem>
-        )}
         <Field label="Nome do serviço">
           <Input value={form.nome} onChange={(e) => set({ nome: e.target.value })} autoFocus />
         </Field>

@@ -1,3 +1,4 @@
+import { calcularCustoServico } from './calculo/engine'
 import type {
   EntradaCalculo,
   ItemMaterial,
@@ -219,13 +220,17 @@ export function validarParametrosFinanceiros(parametros: ParametrosFinanceiros):
     ['percentualFgts', 'FGTS'],
     ['percentualInss', 'INSS patronal'],
     ['percentualMultaRescisao', 'Provisão rescisória'],
-    ['margemLucroPadrao', 'Acréscimo sobre o custo'],
     ['aliquotaNotaPadrao', 'Alíquota NFS']
   ]
   for (const [campo, rotulo] of percentuais) {
     if (!percentual(parametros[campo] as number))
       erros.push({ campo, mensagem: `${rotulo} deve estar entre 0% e 100%.` })
   }
+  if (!naoNegativo(parametros.margemLucroPadrao))
+    erros.push({
+      campo: 'margemLucroPadrao',
+      mensagem: 'O percentual de lucro sobre o custo deve ser não negativo.'
+    })
   if (parametros.modoImpostoPadrao === 'gross_up' && parametros.aliquotaNotaPadrao >= 100)
     erros.push({
       campo: 'aliquotaNotaPadrao',
@@ -252,12 +257,50 @@ export function validarParametrosFinanceiros(parametros: ParametrosFinanceiros):
 
 export function validarEntradaCalculo(entrada: EntradaCalculo): ErroValidacao[] {
   const erros: ErroValidacao[] = []
+  if (entrada.ajustePreco != null && !naoNegativo(entrada.ajustePreco))
+    erros.push({
+      campo: 'ajustePreco',
+      mensagem: 'O ajuste de preço deve ser um valor não negativo.'
+    })
+  if (entrada.precoFinalDesejado != null) {
+    const resultado = calcularCustoServico(entrada)
+    const metaNoPiso = (() => {
+      if (
+        !positivo(entrada.precoFinalDesejado!) ||
+        entrada.margemLucroPercent !== 0 ||
+        (entrada.ajustePreco ?? 0) !== 0
+      )
+        return false
+      const { precoFinalDesejado: _meta, ajustePreco: _ajuste, ...semMeta } = entrada
+      const minimo = calcularCustoServico({ ...semMeta, margemLucroPercent: 0 })
+      return (
+        entrada.precoFinalDesejado! < minimo.precoFinal &&
+        resultado.precoFinal === minimo.precoFinal
+      )
+    })()
+    if (!positivo(entrada.precoFinalDesejado) || (!resultado.metaAplicada && !metaNoPiso))
+      erros.push({
+        campo: 'precoFinalDesejado',
+        mensagem: 'A meta de preço não corresponde ao cálculo. Aplique o preço desejado novamente.'
+      })
+  }
+  entrada.avulsos.forEach((item, indice) => {
+    if (
+      item.aplicarAcrescimo !== false &&
+      item.acrescimoPersonalizadoPercent != null &&
+      !naoNegativo(item.acrescimoPersonalizadoPercent)
+    )
+      erros.push({
+        campo: `avulsos.${indice}.acrescimoPersonalizadoPercent`,
+        mensagem: `O percentual próprio de lucro do custo ${indice + 1} deve ser não negativo.`
+      })
+  })
   if (!positivo(entrada.dias))
     erros.push({ campo: 'dias', mensagem: 'Os dias de serviço devem ser maiores que zero.' })
-  if (!percentual(entrada.margemLucroPercent))
+  if (!naoNegativo(entrada.margemLucroPercent))
     erros.push({
       campo: 'margemLucroPercent',
-      mensagem: 'O acréscimo sobre o custo deve estar entre 0% e 100%.'
+      mensagem: 'O percentual de lucro sobre o custo deve ser não negativo.'
     })
   if (!percentual(entrada.aliquotaNotaPercent))
     erros.push({

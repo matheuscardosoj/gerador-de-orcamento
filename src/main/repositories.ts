@@ -89,7 +89,7 @@ function gravarConfig(chave: string, valor: unknown): void {
 }
 
 /** Cria as linhas iniciais quando o banco nasce vazio. */
-export function semear(): void {
+export function semear(incluirPadroes = true): void {
   const inicial = bancoInicial()
   tx(() => {
     gravarConfig('empresa', inicial.empresa)
@@ -97,8 +97,10 @@ export function semear(): void {
     gravarConfig('configIA', inicial.configIA)
     gravarConfig('seqOrcamento', 0)
     inicial.servicos.forEach((s) => servicosRepo.create(s))
-    inicial.observacoesPadrao.forEach((o) => observacoesRepo.create(o))
-    inicial.pagamentosPadrao.forEach((p) => pagamentosRepo.create(p))
+    if (incluirPadroes) {
+      inicial.observacoesPadrao.forEach((o) => observacoesRepo.create(o))
+      inicial.pagamentosPadrao.forEach((p) => pagamentosRepo.create(p))
+    }
   })
 }
 

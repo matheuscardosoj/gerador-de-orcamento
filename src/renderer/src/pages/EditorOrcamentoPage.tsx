@@ -62,6 +62,7 @@ import {
   type ErroValidacao
 } from '@shared/validacao'
 import { DataTableViewport } from '../ui/dataTable'
+import { notificar } from '../lib/notificacoes'
 
 export interface Dados {
   empresa: EmpresaConfig
@@ -88,7 +89,6 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
   const [ocupado, setOcupado] = useState<'salvar' | 'pdf' | 'docx' | 'relatorio' | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [errosValidacao, setErrosValidacao] = useState<ErroValidacao[]>([])
-  const [mensagem, setMensagem] = useState<string | null>(null)
   const [snapshotSalvo, setSnapshotSalvo] = useState<string | null>(null)
   const [previaAberta, setPreviaAberta] = useState(false)
   const [rascunhoId, setRascunhoId] = useState<string>()
@@ -222,7 +222,7 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
         const d = r.documento as Orcamento
         setOrc(d)
         setSnapshotSalvo(JSON.stringify(d))
-        setMensagem('Rascunho guardado neste computador.')
+        notificar('Rascunho do orçamento guardado neste computador.', 'sucesso')
         return d
       }
       if (exigirFinal || payload.status !== 'rascunho') {
@@ -258,8 +258,9 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
         setOrc(salvo)
         setSnapshotSalvo(JSON.stringify(salvo))
         setNumeroOriginal(salvo.numero)
-        setMensagem(
-          `Alterações salvas às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`
+        notificar(
+          `Orçamento ${salvo.numero > 0 ? `nº ${String(salvo.numero).padStart(6, '0')}` : ''} salvo.`,
+          'sucesso'
         )
         // Orçamento novo com número já ocupado: o main usa o próximo livre em
         // vez de perder o que foi digitado — mas o usuário precisa saber disso.
@@ -282,7 +283,6 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
   ): Promise<void> => {
     if (ocupado) return
     setOcupado(operacao)
-    setMensagem(null)
     try {
       await tarefa()
     } finally {
@@ -305,7 +305,7 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
           tipo === 'pdf'
             ? await api.documentos.gerarPdf(salvo.id)
             : await api.documentos.gerarDocx(salvo.id)
-        if (r.caminho) setMensagem(`Documento gerado com sucesso: ${r.caminho}`)
+        if (r.caminho) notificar('Arquivo do orçamento gerado.', 'sucesso')
       } catch (e) {
         setErro(`Não foi possível gerar o documento. ${mensagemErro(e)}`)
       }
@@ -366,7 +366,7 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
             onClick={() => exportar('docx')}
             disabled={ocupado !== null}
           >
-            DOCX
+            Word
           </Button>
           <Button
             icon={FileDown}
@@ -389,18 +389,11 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
           <p className="mt-1">{mensagemValidacao(errosValidacao)}</p>
         </Mensagem>
       )}
-      {mensagem && (
-        <div
-          role="status"
-          className="mb-4 rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800"
-        >
-          {mensagem}
-        </div>
-      )}
       <div className="space-y-5">
         <AvisoAtualizacao {...atualizacao} sujo={sujo} />
         <ColaboracaoDocumento
           tipo="orcamento"
+          onSalvar={() => persistir(false)}
           documento={orc}
           sujo={sujo}
           rascunhoId={rascunhoId}
@@ -582,7 +575,7 @@ function DadosGeraisCard({
         </Field>
         <Field
           label="Destinatário (sem vírgula)"
-          hint="A vírgula será acrescentada apenas no PDF e DOCX"
+          hint="A vírgula será acrescentada apenas no PDF e Word"
           className="md:col-span-2"
           error={erroDoCampo('destinatario')}
         >
@@ -685,6 +678,7 @@ export function ServicosCard({
   total,
   titulo = 'Serviços a executar',
   rotuloTotal = 'Total do orçamento',
+  rotuloDocumento = 'orçamento',
   errosValidacao = [],
   onRemover
 }: {
@@ -694,6 +688,7 @@ export function ServicosCard({
   total: number
   titulo?: string
   rotuloTotal?: string
+  rotuloDocumento?: 'orçamento' | 'relatório'
   errosValidacao?: ErroValidacao[]
   onRemover?: (id: string) => void
 }): JSX.Element {
@@ -860,6 +855,7 @@ export function ServicosCard({
       {calcAberto && (
         <ServicoCalculoModal
           parametros={dados.parametros}
+          rotuloDocumento={rotuloDocumento}
           descricaoInicial={
             calcAberto === 'novo' ? catalogoAtual?.descricaoPadrao : calcAberto.descricao
           }
@@ -875,6 +871,7 @@ export function ServicosCard({
                   itemDeResultado(r, null, catalogoAtual?.id ?? null)
                 ]
               })
+              notificar(`Serviço incluído no ${rotuloDocumento}.`, 'sucesso')
             } else {
               atualizar(itemDeResultado(r, calcAberto))
             }
@@ -893,8 +890,10 @@ export function ServicosCard({
           }
           onClose={() => setManualAberto(null)}
           onSave={(item) => {
-            if (manualAberto === 'novo') set({ itensServico: [...orc.itensServico, item] })
-            else atualizar(item)
+            if (manualAberto === 'novo') {
+              set({ itensServico: [...orc.itensServico, item] })
+              notificar(`Serviço incluído no ${rotuloDocumento}.`, 'sucesso')
+            } else atualizar(item)
             setManualAberto(null)
           }}
         />

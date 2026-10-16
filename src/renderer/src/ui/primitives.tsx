@@ -17,6 +17,7 @@ import {
 import { createPortal } from 'react-dom'
 import { Eye, EyeOff, X, type LucideIcon } from 'lucide-react'
 import { mensagemErro } from '@shared/erros'
+import { notificar } from '../lib/notificacoes'
 import {
   formatarEntradaNumerica,
   lerEntradaNumerica,
@@ -248,7 +249,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HT
         />
         <button
           type="button"
-          className="absolute inset-y-0 right-0 inline-flex w-10 items-center justify-center rounded-r-lg text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-teal/40"
+          className="absolute bottom-[2px] right-[2px] top-[2px] inline-flex w-9 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-teal/40"
           aria-label={visivel ? 'Ocultar senha' : 'Mostrar senha'}
           aria-pressed={visivel}
           aria-controls={id ?? inputId}
@@ -633,12 +634,26 @@ export function Badge({
 export function Mensagem({
   children,
   tom = 'erro',
-  className
+  className,
+  temporaria = false
 }: {
   children: ReactNode
   tom?: 'erro' | 'aviso' | 'info' | 'sucesso'
   className?: string
-}): JSX.Element {
+  temporaria?: boolean
+}): JSX.Element | null {
+  const [visivel, setVisivel] = useState(true)
+  const conteudo = Children.toArray(children)
+    .map((item) => (typeof item === 'string' || typeof item === 'number' ? String(item) : ''))
+    .join('')
+  useEffect(() => {
+    setVisivel(true)
+    if (!temporaria) return
+    notificar(tom === 'erro' ? mensagemErro(conteudo) : conteudo, tom)
+    setVisivel(false)
+  }, [conteudo, temporaria, tom])
+  if (temporaria) return null
+  if (!visivel) return null
   const cores = {
     erro: 'bg-red-50 text-red-700',
     aviso: 'bg-amber-50 text-amber-800',

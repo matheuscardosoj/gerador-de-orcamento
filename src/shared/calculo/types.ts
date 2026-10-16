@@ -109,6 +109,8 @@ export interface CustoEstadia {
 /** Custo avulso/personalizado (dá a maleabilidade). */
 export interface CustoAvulso {
   aplicarAcrescimo?: boolean
+  /** Substitui o percentual geral quando o lucro está habilitado. */
+  acrescimoPersonalizadoPercent?: number
   id: string
   descricao: string
   valor: number
@@ -133,6 +135,10 @@ export interface ParametrosEncargos {
 
 /** Entrada completa do cálculo de um serviço. */
 export interface EntradaCalculo {
+  /** Meta aplicada explicitamente, em reais; ausente nos cálculos anteriores. */
+  precoFinalDesejado?: number
+  /** Complemento antes do imposto para fechar a meta sem alterar percentuais próprios. */
+  ajustePreco?: number
   dias: number
   maoDeObra: GrupoMaoDeObra[]
   alimentacoes: CustoAlimentacao[]
@@ -155,6 +161,9 @@ export interface EntradaCalculo {
 
 /** Uma linha do detalhamento (breakdown) do custo. */
 export interface LinhaBreakdown {
+  /** Valor no resumo; nos itens adicionais inclui o lucro alocado. */
+  valorApresentado?: number
+  acrescimoAplicado?: number
   chave: string
   descricao: string
   valor: number
@@ -163,8 +172,22 @@ export interface LinhaBreakdown {
 
 /** Resultado do cálculo. */
 export interface ResultadoCalculo {
+  acrescimoGeralExibido?: number
+  ajustePreco?: number
+  lucroItensAdicionais?: number
+  metaAplicada?: boolean
+  valorMargemGeral?: number
+  valorMargemPersonalizada?: number
   custoComAcrescimo?: number
   custoRepassado?: number
+  /** Custos das categorias do serviço, sem os itens avulsos. */
+  custoServico?: number
+  /** Soma dos itens avulsos com seus percentuais já incorporados. */
+  outrosCustosRepasses?: number
+  /** Acréscimo geral calculado somente sobre os custos do serviço. */
+  lucroServico?: number
+  /** Valor apresentado ao cliente: inclui repasses e lucro incorporado aos itens adicionais. */
+  custoServicoExibido?: number
   breakdown: LinhaBreakdown[]
   custoTotal: number
   margemLucroPercent: number

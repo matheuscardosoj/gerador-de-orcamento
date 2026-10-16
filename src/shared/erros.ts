@@ -4,8 +4,15 @@ const GENERICA =
 function detalhe(
   erro: unknown,
   profundidade = 0
-): { texto: string; codigo: string; nome: string; status?: number } {
-  if (typeof erro === 'string') return { texto: erro, codigo: '', nome: '' }
+): {
+  texto: string
+  codigo: string
+  nome: string
+  status?: number
+  detalhes: string
+  dica: string
+} {
+  if (typeof erro === 'string') return { texto: erro, codigo: '', nome: '', detalhes: '', dica: '' }
   if (erro && typeof erro === 'object') {
     const e = erro as {
       message?: unknown
@@ -14,6 +21,8 @@ function detalhe(
       name?: unknown
       cause?: unknown
       status?: unknown
+      details?: unknown
+      hint?: unknown
     }
     const causa =
       profundidade < 4 && e.cause && typeof e.cause === 'object'
@@ -28,10 +37,12 @@ function detalhe(
             ? e.codigo
             : causa?.codigo || '',
       nome: typeof e.name === 'string' ? e.name : '',
-      status: typeof e.status === 'number' ? e.status : causa?.status
+      status: typeof e.status === 'number' ? e.status : causa?.status,
+      detalhes: typeof e.details === 'string' ? e.details : causa?.detalhes || '',
+      dica: typeof e.hint === 'string' ? e.hint : causa?.dica || ''
     }
   }
-  return { texto: '', codigo: '', nome: '' }
+  return { texto: '', codigo: '', nome: '', detalhes: '', dica: '' }
 }
 
 /** Retira somente invólucros de transporte; a validação original continua sendo a causa. */
@@ -48,12 +59,36 @@ function semInvólucros(texto: string): string {
   return atual
 }
 
+/** Diagnóstico local da falha, sem valores de linhas, credenciais ou URLs de sessão. */
+export function diagnosticoErro(erro: unknown): {
+  codigo: string
+  causa: string
+  detalhes: string
+  dica: string
+} {
+  const d = detalhe(erro)
+  const seguro = (valor: string): string =>
+    valor
+      .replace(/(Key \([^)]*\)=)\([^)]*\)/gi, '$1(<oculto>)')
+      .replace(/\b[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\b/g, '<token>')
+      .replace(/\b[^\s@]+@[^\s@]+\.[^\s@]+\b/g, '<email>')
+      .replace(/((?:access|refresh)[_-]?token|password|senha)\s*[=:]\s*[^\s,;]+/gi, '$1=<oculto>')
+      .replace(/https?:\/\/[^\s?#]+[?#][^\s]+/gi, '<url com parâmetros>')
+      .slice(0, 500)
+  return {
+    codigo: /^[A-Za-z0-9_]{1,32}$/.test(d.codigo) ? d.codigo : '',
+    causa: seguro(semInvólucros(d.texto)),
+    detalhes: seguro(d.detalhes),
+    dica: seguro(d.dica)
+  }
+}
+
 /**
  * Mensagem para a interface. Nunca inclui stack, SQL, caminhos ou respostas JSON.
  * Não altera o erro original, que permanece disponível para diagnóstico no processo principal.
  */
 export function mensagemErro(erro: unknown, contexto?: string): string {
-  const { texto, codigo, nome, status } = detalhe(erro)
+  const { texto, codigo, nome, status, detalhes } = detalhe(erro)
   const limpa = semInvólucros(texto)
   let mensagem: string
   if (/^(?:Invalid login credentials|Invalid credentials)$/i.test(limpa))
@@ -85,6 +120,9 @@ export function mensagemErro(erro: unknown, contexto?: string): string {
   else if (/^Campos incompatíveis com o esquema da nuvem/.test(limpa))
     mensagem =
       'O formato desta alteração não foi aceito pela nuvem. A operação foi preservada neste computador. Atualize o aplicativo e tente novamente; se persistir, envie esta mensagem ao suporte.'
+  else if (codigo === '23503' && /codigos_cadastros_empresa_id_fkey/.test(`${limpa} ${detalhes}`))
+    mensagem =
+      'A configuração de códigos de clientes e serviços da nuvem está incorreta. As alterações continuam guardadas neste computador. Solicite a correção da migração antes de tentar novamente.'
   else if (codigo === '23503')
     mensagem =
       'Este registro possui vínculos com outros dados. Confira os documentos relacionados antes de excluir. Para cadastros, prefira inativar e preservar o histórico.'
@@ -179,6 +217,12 @@ export function mensagemErro(erro: unknown, contexto?: string): string {
       'Sua conta não tem autorização para esta ação. Confira o vínculo do usuário com a empresa.'
   else if (codigo === 'SQLITE_BUSY' || /^database is locked\b/i.test(limpa))
     mensagem = 'O banco local está ocupado. Aguarde a operação atual e tente novamente.'
+  else if (/^Responsabilidade inválida\.?$/i.test(limpa))
+    mensagem =
+      'A autorização do documento mudou. Atualize a tela e solicite a edição novamente antes de tentar excluir ou salvar.'
+  else if (/^Aguarde a operação de acesso em andamento\.?$/i.test(limpa))
+    mensagem =
+      'Outra alteração de usuários está sendo concluída. Aguarde alguns segundos e tente novamente.'
   else if (
     /[\r\n]\s*at\s|\b(?:SELECT|INSERT INTO|UPDATE\s+\w+\s+SET|DELETE FROM|SQLITE_[A-Z_]+|PGRST\d+|access_token|refresh_token|authorization|Bearer\s+|sb_secret_[\w-]+)\b|(?:[A-Z]:\\|file:\/\/)|^\s*[[{]|\b(?:Cannot read properties|is not a function|Unexpected token)\b/i.test(
       limpa

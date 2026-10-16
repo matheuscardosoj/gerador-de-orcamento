@@ -14,6 +14,17 @@ exports.default = async function afterPack(context) {
     console.warn('[afterPack] build/icon.ico não encontrado; ícone não aplicado.')
     return
   }
-  await rcedit(exePath, { icon })
+  await rcedit(exePath, {
+    icon,
+    'version-string': {
+      FileDescription: context.packager.appInfo.productName,
+      ProductName: context.packager.appInfo.productName,
+      OriginalFilename: exeName,
+      InternalName: context.packager.appInfo.productFilename,
+      ProductVersion: context.packager.appInfo.version
+    },
+    'file-version': context.packager.appInfo.version.split('-')[0],
+    'product-version': context.packager.appInfo.version.split('-')[0]
+  })
   console.log(`[afterPack] ícone aplicado a ${exeName}`)
 }

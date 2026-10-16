@@ -1,4 +1,11 @@
 import { numeroHistoricoReconhecido } from './numeros'
+import {
+  guardarRascunhoCadastro,
+  listarRascunhosCadastro,
+  descartarRascunhoCadastro,
+  type TipoRascunhoCadastro
+} from './rascunhos-cadastros'
+import { exigeNumeracaoAtualizada } from './bloqueio-numeracao'
 import { contaApi } from './contas/servico'
 import { exigirAcesso, iniciarOperacao } from './contas/acesso'
 import { mensagemErro } from '../shared/erros'
@@ -20,6 +27,8 @@ import {
   vincularMembro,
   ativarMembro,
   controlarEdicao,
+  estadoControleEdicao,
+  documentosAcompanhados,
   autorizarGravacao,
   acompanharEdicao,
   autorizarEmissao,
@@ -44,6 +53,7 @@ import {
   statusNuvem,
   conectarNuvem,
   sincronizarNuvem,
+  restaurarBaseDaNuvem,
   repetirOperacaoNuvem,
   dispositivosNuvem,
   transferirDocumento,
@@ -105,6 +115,15 @@ async function selecionarLogo(): Promise<string | null> {
 }
 
 const handlers: Record<string, (...args: unknown[]) => unknown> = {
+  'rascunhosCadastros.guardar': (tipo, id, dados) =>
+    guardarRascunhoCadastro(
+      tipo as TipoRascunhoCadastro,
+      String(id),
+      dados as Record<string, unknown>
+    ),
+  'rascunhosCadastros.listar': (tipo) => listarRascunhosCadastro(tipo as TipoRascunhoCadastro),
+  'rascunhosCadastros.descartar': (tipo, id) =>
+    descartarRascunhoCadastro(tipo as TipoRascunhoCadastro, String(id)),
   'rascunhos.list': (tipo, id) => listarRascunhos(tipo as never, id as string | undefined),
   'rascunhos.get': (id) => obterRascunho(String(id)),
   'rascunhos.create': (tipo, id, documento) =>
@@ -121,8 +140,16 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
     conciliarRecebimentos(revisao as never, acao as never),
   'colaboracao.acompanhar': (tipo, id, ativo) =>
     acompanharEdicao(tipo as never, String(id), ativo === true),
+  'colaboracao.acompanhados': () => documentosAcompanhados(true),
   'colaboracao.vincularMembro': (email, nome) => vincularMembro(String(email), String(nome)),
   'colaboracao.ativarMembro': (usuario, ativo) => ativarMembro(String(usuario), ativo === true),
+  'colaboracao.estadoEdicao': (tipo, id, acao, destino) =>
+    estadoControleEdicao(
+      tipo as never,
+      String(id),
+      acao ? String(acao) : 'obter',
+      destino ? String(destino) : undefined
+    ),
   'colaboracao.edicao': (tipo, id, acao, destino) =>
     controlarEdicao(
       tipo as never,
@@ -158,6 +185,7 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
   'nuvem.status': () => statusNuvem(),
   'nuvem.conectar': (c, s, m) => conectarNuvem(c as never, s as string, m as never),
   'nuvem.sincronizar': () => sincronizarNuvem(),
+  'nuvem.restaurarBase': () => restaurarBaseDaNuvem(),
   'nuvem.tentarNovamente': (id) => repetirOperacaoNuvem(String(id)),
   'nuvem.finalizarAtualizacao': (revisao) => finalizarAtualizacaoNumeracao(String(revisao)),
   'nuvem.copiarInstalacao': () => copiarInstalacaoNuvem(),
@@ -243,6 +271,11 @@ export function registrarIpc(): void {
   for (const [acao, fn] of Object.entries(contaApi)) {
     ipcMain.handle(`conta.${acao}`, async (_evento, ...args) => {
       try {
+        if (
+          !['status', 'avisosEmail', 'continuarAposIndisponibilidade'].includes(acao) &&
+          (await contaApi.status()).fase === 'empresaIndisponivel'
+        )
+          throw new Error('Aguarde o encerramento do acesso a esta empresa.')
         return await (fn as (...valores: unknown[]) => Promise<unknown>)(...args)
       } catch (erro) {
         throw new Error(mensagemErro(erro))
@@ -258,8 +291,21 @@ export function registrarIpc(): void {
         finalizar = iniciarOperacao()
         const dominio = canal.split('.')[0]
         if (
+          statusNuvem().atualizacaoBasePendente &&
+          (exigeNumeracaoAtualizada(canal) ||
+            /^(clientes|servicos|empresa|parametros|observacoes|pagamentos)\.(create|update|save|remove)$/.test(
+              canal
+            ) ||
+            canal.startsWith('documentos.gerar') ||
+            canal === 'rascunhos.aplicar' ||
+            canal === 'cadastros.reordenar')
+        )
+          throw new Error(
+            'A base da empresa foi reorganizada ou está em manutenção. Confira Nuvem / Sincronização antes de gravar. Suas alterações locais foram preservadas.'
+          )
+        if (
           (statusNuvem().atualizandoNumeracao || statusNuvem().atualizacaoPendente) &&
-          /\.(create|update|save|remove|alterarNumero|confirmar|cancelar)$/.test(canal)
+          exigeNumeracaoAtualizada(canal)
         )
           throw new Error(
             'Aguarde a atualização da numeração da base antes de salvar. Suas alterações no formulário continuam preservadas.'
@@ -310,6 +356,7 @@ export function registrarIpc(): void {
               await autorizarGravacao('relatorio', r.origemId)
           }
         }
+        exigirAcesso(canal, args)
         if (/\.(create|update|save|remove)$/.test(canal))
           return await tx(() => {
             const resultado = fn(...args)

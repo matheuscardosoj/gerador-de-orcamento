@@ -31,7 +31,7 @@ it('mostra alterações de cadastro congelado, apresentação, cálculo e imagen
   expect(diferencas).toHaveLength(4)
   expect(
     diferencas.some(
-      (d) => d.campo.includes('Aplicar acréscimo') && d.anterior === 'Sim' && d.atual === 'Não'
+      (d) => d.campo.includes('Aplicar lucro') && d.anterior === 'Sim' && d.atual === 'Não'
     )
   ).toBe(true)
   expect(diferencas.some((d) => d.campo.includes('Telefone') && d.atual === '222')).toBe(true)

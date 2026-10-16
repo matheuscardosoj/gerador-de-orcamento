@@ -200,7 +200,12 @@ function especial(nome, map, base, baseKeys, jsonCol) {
   ]
   casosEntrada += `WHEN ${sqlTexto(nome)} THEN d:=(p_row->>${sqlTexto(jsonCol)})::jsonb; IF jsonb_typeof(d)<>'object' THEN RAISE EXCEPTION 'Conteúdo inválido em ${nome}'; END IF; ${insert(nome, cols, baseKeys).replace(/v(\d+)/g, (_, i) => vals[Number(i)])};\n`
   const wireBase = base.map((f) => `${sqlTexto(f.nome)},r.${f.nome}`).join(',')
-  const jsonOut = `sincronizacao.recompor_json(to_jsonb(r), ${sqlTexto(jsonMapping(map))}::jsonb,r.campos_presentes,r.dados_adicionais)::text`
+  const recomposto = `sincronizacao.recompor_json(to_jsonb(r), ${sqlTexto(jsonMapping(map))}::jsonb,r.campos_presentes,r.dados_adicionais)`
+  // O código é atribuído pelo servidor, mesmo em registros anteriores ao campo.
+  const jsonOut =
+    nome === 'clientes'
+      ? `(${recomposto} || jsonb_build_object('codigo',r.codigo))::text`
+      : `${recomposto}::text`
   casosSaida += `WHEN ${sqlTexto(nome)} THEN SELECT coalesce(jsonb_agg(jsonb_build_object(${wireBase},${sqlTexto(jsonCol)},${jsonOut})),'[]'::jsonb) INTO resultado FROM public.${nome} r WHERE r.empresa_id=p_empresa AND r.id=p_id;\n`
 }
 especial(

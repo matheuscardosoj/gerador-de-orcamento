@@ -6,7 +6,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { Database } from 'node-sqlite3-wasm'
 import type { Orcamento } from '@shared/types'
-import { aplicarMigracoes } from './schema'
+import { aplicarMigracoes, VERSAO_BANCO } from './schema'
 import { run } from './sqlite'
 
 const raiz = mkdtempSync(join(tmpdir(), 'orc-teste-'))
@@ -130,7 +130,7 @@ it('migra datas ISO de um banco SQLite v5 para a data civil', () => {
 
     expect(banco.get('SELECT data FROM orcamentos')?.data).toBe('2026-05-04')
     expect(banco.get('SELECT data FROM relatorios')?.data).toBe('2026-05-05')
-    expect(banco.get('PRAGMA user_version')?.user_version).toBe(12)
+    expect(banco.get('PRAGMA user_version')?.user_version).toBe(VERSAO_BANCO)
   } finally {
     banco.close()
   }

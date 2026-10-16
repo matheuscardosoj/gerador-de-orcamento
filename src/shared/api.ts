@@ -78,6 +78,20 @@ export interface ResultadoImportacaoDados {
 
 export interface AppApi {
   conta: import('./conta').ContaApi
+  rascunhosCadastros: {
+    guardar(
+      tipo: 'cliente' | 'servico' | 'observacoes' | 'pagamentos',
+      idOrigem: string,
+      dados: Record<string, unknown>
+    ): Promise<void>
+    listar(
+      tipo: 'cliente' | 'servico' | 'observacoes' | 'pagamentos'
+    ): Promise<import('./evolucao').RascunhoCadastro[]>
+    descartar(
+      tipo: 'cliente' | 'servico' | 'observacoes' | 'pagamentos',
+      idOrigem: string
+    ): Promise<void>
+  }
   rascunhos: {
     list(
       tipo?: import('./evolucao').TipoDocumento,
@@ -106,6 +120,7 @@ export interface AppApi {
     remove(id: string): Promise<void>
   }
   colaboracao: {
+    acompanhados(): Promise<Array<{ tipo: import('./evolucao').TipoDocumento; id: string }>>
     revisarRecebimentos(
       tipo: import('./evolucao').TipoDocumento,
       id: string
@@ -118,11 +133,24 @@ export interface AppApi {
     membros(): Promise<import('./evolucao').MembroEmpresa[]>
     vincularMembro(email: string, nome: string): Promise<import('./evolucao').MembroEmpresa[]>
     ativarMembro(usuarioId: string, ativo: boolean): Promise<import('./evolucao').MembroEmpresa[]>
+    estadoEdicao(
+      tipo: import('./evolucao').TipoDocumento,
+      id: string,
+      acao?: Parameters<AppApi['colaboracao']['edicao']>[2],
+      destino?: string
+    ): Promise<import('./evolucao').EstadoControleEdicao>
     edicao(
       tipo: import('./evolucao').TipoDocumento,
       id: string,
       acao?:
-        'obter' | 'adquirir' | 'offline' | 'liberar' | 'transferir' | 'recuperar' | 'solicitar',
+        | 'obter'
+        | 'adquirir'
+        | 'offline'
+        | 'liberar'
+        | 'transferir'
+        | 'recuperar'
+        | 'solicitar'
+        | 'cancelarPedido',
       destino?: string
     ): Promise<import('./evolucao').ControleEdicao | null>
   }
@@ -179,6 +207,7 @@ export interface AppApi {
       modo: 'publicar' | 'baixar'
     ): Promise<import('./types').StatusNuvem>
     sincronizar(): Promise<import('./types').StatusNuvem>
+    restaurarBase(): Promise<{ backup: string; status: import('./types').StatusNuvem } | null>
     tentarNovamente(id: string): Promise<import('./types').StatusNuvem>
     finalizarAtualizacao(revisao: string): Promise<import('./types').StatusNuvem>
     dispositivos(): Promise<Array<{ id: string; nome: string }>>

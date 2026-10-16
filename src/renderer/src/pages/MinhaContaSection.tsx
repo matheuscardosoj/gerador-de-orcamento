@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LogOut, Save, KeyRound } from 'lucide-react'
+import { LogOut, Save, KeyRound, Mail, ShieldCheck } from 'lucide-react'
 import { mensagemErro } from '@shared/erros'
 import { api } from '../lib/api'
 import { useBloqueioEdicao, useNav } from '../lib/nav'
@@ -13,10 +13,21 @@ export function MinhaContaSection(): JSX.Element {
   const [atual, setAtual] = useState('')
   const [nova, setNova] = useState('')
   const [confirmacao, setConfirmacao] = useState('')
+  const [novoEmail, setNovoEmail] = useState('')
+  const [senhaEmail, setSenhaEmail] = useState('')
+  const [codigoEmail, setCodigoEmail] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState('')
-  useBloqueioEdicao(nome !== conta.nome || !!atual || !!nova || !!confirmacao)
+  useBloqueioEdicao(
+    nome !== conta.nome ||
+      !!atual ||
+      !!nova ||
+      !!confirmacao ||
+      !!novoEmail ||
+      !!senhaEmail ||
+      !!codigoEmail
+  )
   const executar = async (acao: () => Promise<void>): Promise<void> => {
     setOcupado(true)
     setErro('')
@@ -30,12 +41,26 @@ export function MinhaContaSection(): JSX.Element {
     }
   }
   return (
-    <div className="space-y-4">
+    <div className="w-full space-y-4">
       {erro && <Mensagem>{erro}</Mensagem>}
-      {sucesso && <Mensagem tom="info">{sucesso}</Mensagem>}
-      <div className="grid items-start gap-4 xl:grid-cols-2">
+      {sucesso && (
+        <Mensagem tom="sucesso" temporaria>
+          {sucesso}
+        </Mensagem>
+      )}
+      <div className="grid gap-4">
         <Card className="space-y-5 p-6">
-          <SectionTitle title="Minha conta" description={conta.email} />
+          <SectionTitle
+            title="Minha conta"
+            description={conta.email}
+            action={
+              conta.operador ? (
+                <span className="rounded-full bg-brand-teal/10 px-2 py-1 text-xs font-medium text-brand-tealDark">
+                  Administrador do Sistema
+                </span>
+              ) : undefined
+            }
+          />
           <form
             className="space-y-4"
             onSubmit={(e) => {
@@ -67,6 +92,100 @@ export function MinhaContaSection(): JSX.Element {
                 Salvar nome
               </Button>
             </div>
+          </form>
+        </Card>
+        <Card className="space-y-5 p-6">
+          <SectionTitle
+            title="Alterar e-mail"
+            description={
+              conta.emailPendente
+                ? `Aguardando confirmação do novo endereço: ${conta.emailPendente}`
+                : `E-mail atual: ${conta.email}`
+            }
+          />
+          {conta.emailPendente && (
+            <div className="rounded-lg border border-brand-teal/20 bg-brand-teal/5 p-4 text-sm text-slate-700">
+              <p className="font-semibold text-slate-800">Confirme o novo e-mail</p>
+              <p className="mt-2">
+                Digite o código enviado para {conta.emailPendente}. O endereço atual recebe apenas o
+                aviso de segurança depois da conclusão.
+              </p>
+              <form
+                className="mt-3 flex flex-wrap items-end gap-3"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  void executar(async () => {
+                    const resultado = await api.conta.confirmarAlteracaoEmail(codigoEmail)
+                    atualizar(resultado)
+                    setCodigoEmail('')
+                    setSucesso('Seu e-mail foi alterado com segurança.')
+                  })
+                }}
+              >
+                <Field label="Código recebido" className="min-w-[13rem] flex-1">
+                  <Input
+                    autoComplete="one-time-code"
+                    inputMode="numeric"
+                    required
+                    disabled={ocupado}
+                    value={codigoEmail}
+                    onChange={(e) => setCodigoEmail(e.target.value.replace(/\D/g, ''))}
+                  />
+                </Field>
+                <Button type="submit" icon={ShieldCheck} disabled={ocupado || !codigoEmail}>
+                  Confirmar código
+                </Button>
+              </form>
+            </div>
+          )}
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void executar(async () => {
+                const resultado = await api.conta.alterarEmail(senhaEmail, novoEmail)
+                atualizar(resultado)
+                setSenhaEmail('')
+                setNovoEmail('')
+                setSucesso(
+                  `Enviamos um código de confirmação para ${resultado.emailPendente}. Digite-o nesta tela para concluir a troca.`
+                )
+              })
+            }}
+          >
+            <Field label="Novo e-mail">
+              <Input
+                required
+                type="email"
+                maxLength={254}
+                autoComplete="email"
+                disabled={ocupado}
+                value={novoEmail}
+                onChange={(e) => setNovoEmail(e.target.value)}
+              />
+            </Field>
+            <Field label="Senha atual" hint="Confirme sua identidade para alterar o e-mail.">
+              <PasswordInput
+                required
+                autoComplete="current-password"
+                disabled={ocupado}
+                value={senhaEmail}
+                onChange={(e) => setSenhaEmail(e.target.value)}
+              />
+            </Field>
+            <div className="flex justify-end">
+              <Button
+                type="submit"
+                icon={Mail}
+                disabled={ocupado || !novoEmail.trim() || !senhaEmail}
+              >
+                Enviar confirmação
+              </Button>
+            </div>
+            <p className="text-sm text-slate-500">
+              Sua senha atual é exigida para iniciar a troca. O código é enviado somente ao novo
+              e-mail.
+            </p>
           </form>
         </Card>
         <Card className="space-y-5 p-6">

@@ -117,6 +117,7 @@ function estadoInicial(): BancoDados {
 }
 
 export function criarMockApi(): AppApi {
+  let sequenciaControle = 0
   const db = estadoInicial()
   let conta: import('@shared/conta').EstadoConta = {
     central: true,
@@ -186,9 +187,10 @@ export function criarMockApi(): AppApi {
     }
   }
 
-  return {
+  const api: AppApi = {
     eventos: { observarDados: () => () => {} },
     conta: {
+      avisosEmail: async () => [],
       status: async () => clone(conta),
       entrar: async (email, _senha, lembrar) => {
         conta = { ...conta, email, lembrar, fase: 'pronto', empresa: conta.empresas[0] }
@@ -206,6 +208,15 @@ export function criarMockApi(): AppApi {
         conta.nome = nome
         return clone(conta)
       },
+      alterarEmail: async (_atual, novo) => {
+        conta.emailPendente = novo
+        return clone(conta)
+      },
+      confirmarAlteracaoEmail: async () => {
+        conta.email = conta.emailPendente ?? conta.email
+        conta.emailPendente = undefined
+        return clone(conta)
+      },
       alterarSenha: async () => {},
       alterarPapel: async () => clone(conta),
       enviarCodigo: async () => {},
@@ -214,10 +225,21 @@ export function criarMockApi(): AppApi {
         return clone(conta)
       },
       convites: async () => [],
+      continuarAposIndisponibilidade: async () => clone(conta),
       convidar: async () => {},
       cancelarConvite: async () => {},
       reenviarConvite: async () => {},
-      criarEmpresa: async () => {}
+      atualizarEmpresas: async () => clone(conta),
+      criarEmpresa: async () => {},
+      excluirEmpresa: async (id) => {
+        conta = {
+          ...conta,
+          fase: 'escolherEmpresa',
+          empresa: null,
+          empresas: conta.empresas.filter((empresa) => empresa.id !== id)
+        }
+        return clone(conta)
+      }
     },
     rascunhos: {
       list: async () => [],
@@ -241,7 +263,13 @@ export function criarMockApi(): AppApi {
       },
       remove: async () => {}
     },
+    rascunhosCadastros: {
+      guardar: async () => {},
+      listar: async () => [],
+      descartar: async () => {}
+    },
     colaboracao: {
+      acompanhados: async () => [],
       revisarRecebimentos: async () => {
         throw new Error('Disponível no aplicativo desktop.')
       },
@@ -264,6 +292,14 @@ export function criarMockApi(): AppApi {
       ativarMembro: async () => {
         throw new Error('Disponível no aplicativo conectado à nuvem.')
       },
+      estadoEdicao: async (tipo, id, acao, destino) => ({
+        empresaId: conta.empresa?.id ?? '',
+        sessao: 1,
+        sequencia: ++sequenciaControle,
+        tipo,
+        documentoId: id,
+        controle: await api.colaboracao.edicao(tipo, id, acao, destino)
+      }),
       edicao: async () => null
     },
     preferencias: {
@@ -329,6 +365,7 @@ export function criarMockApi(): AppApi {
       exportar: async () => ({ caminho: null })
     },
     nuvem: {
+      restaurarBase: async () => null,
       copiarInstalacao: async () => {
         throw new Error('Disponível no aplicativo desktop.')
       },
@@ -600,4 +637,5 @@ export function criarMockApi(): AppApi {
       importar: async () => null
     }
   }
+  return api
 }

@@ -89,7 +89,7 @@ o app tenta o Ollama automaticamente.
 
 ## Status
 
-**Candidato para validação: 1.5.0-rc.8**, SQLite esquema 11 e protocolo central de nuvem 4.
+**Candidato 1.5.0-rc.16 em validação**, SQLite esquema 13 e protocolo central de nuvem 4.
 O aplicativo usa somente Nº do documento e mantém chaves técnicas ocultas. Inclui
 usuários vinculados, Broadcast privado, controle de edição, rascunhos offline e
 preservação de operações pendentes em backups. Código e testes isolados não
@@ -98,6 +98,10 @@ comprovam, por si, a adoção correta de uma atualização em todos os computado
 **Em validação:** acesso central para múltiplas empresas. A migração central e a
 função de convites já foram publicadas no projeto existente; os fluxos de convite,
 isolamento e recuperação ainda precisam de validação no executável e nos dois PCs.
+A chave de `codigos_cadastros` no projeto remoto observado foi corrigida pela
+[migração 006](supabase/migrations/006_corrigir_fk_codigos_cadastros.sql) após o
+[ensaio de recuperação](docs/VALIDACAO-MIGRACAO-006.md). A validação da versão
+instalada em dois computadores e do reenvio da fila antiga continua pendente.
 Confira [Primeiros passos](docs/PRIMEIROS-PASSOS.md) para o fluxo de usuário.
 
 Os recursos das versões anteriores abaixo são um histórico, não instruções para
@@ -204,7 +208,8 @@ Cancelamento preserva o original e estorna somente o lançamento criado pelo rec
 adiantamentos existentes não são descontados duas vezes.
 
 Custos avulsos podem ser repassados sem acréscimo de lucro, com imposto aplicado ao
-subtotal segundo o modo escolhido. Aplicar acréscimo continua marcado por padrão.
+subtotal segundo o modo escolhido. Cada custo pode usar o lucro geral ou um percentual
+próprio que o substitui apenas naquele item. Custos antigos continuam usando a regra salva.
 
 PDF/DOCX usam o mesmo nome-base: `Tipo - Número - Cliente - AAAA-MM-DD - vVersão.ext`.
 Número com seis dígitos, versão com três, data do documento e acentos preservados.

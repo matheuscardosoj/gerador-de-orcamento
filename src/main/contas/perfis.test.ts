@@ -1,5 +1,5 @@
 import { afterAll, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync } from 'fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
@@ -12,6 +12,7 @@ import {
   perfilAtual,
   idSolicitacao,
   concluirSolicitacao,
+  removerPerfil,
   type PerfilConta
 } from './perfis'
 import { abrirBanco, fecharBanco, selecionarPerfilDados, run, get } from '../db/sqlite'
@@ -76,4 +77,13 @@ it('preserva os perfis ao sair e registra a escolha de lembrar sem guardar senha
   expect(readFileSync(join(ambiente.raiz, 'contas.json'), 'utf8')).not.toMatch(
     /access_token|refresh_token|password|senha/
   )
+})
+it('apaga somente o perfil local que o servidor marcou como empresa removida', () => {
+  const id = idPerfil('https://a.supabase.co', 'empresa-removida', 'usuario')
+  const diretorio = join(ambiente.raiz, 'perfis', id)
+  mkdirSync(diretorio, { recursive: true })
+  writeFileSync(join(diretorio, 'banco.db'), 'perfil da empresa')
+  removerPerfil(id)
+  expect(lerPerfis().perfis.some((perfil) => perfil.id === id)).toBe(false)
+  expect(() => readFileSync(join(diretorio, 'banco.db'))).toThrow()
 })

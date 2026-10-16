@@ -1,5 +1,7 @@
+import { useConta } from './ContaGate'
+import { consultarEdicao, aceitarEstadoEdicao, estadoEdicaoAtual } from '../lib/controle-edicao'
 import { mensagemErro } from '@shared/erros'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ArrowRightLeft,
   CloudDownload,
@@ -9,7 +11,9 @@ import {
   Save,
   UnlockKeyhole,
   UsersRound,
-  Pencil
+  Pencil,
+  Trash2,
+  ArrowLeft
 } from 'lucide-react'
 import type {
   Documento,
@@ -24,8 +28,19 @@ import { compararDocumentos } from '@shared/comparacao-documentos'
 import { formatMoeda } from '@shared/format'
 import { api } from '../lib/api'
 import { useNav } from '../lib/nav'
-import { Button, Card, SectionTitle, Modal, Field, Select, Mensagem, Badge } from '../ui/primitives'
+import {
+  Button,
+  Card,
+  SectionTitle,
+  Modal,
+  Field,
+  Select,
+  Mensagem,
+  Badge,
+  ConfirmDialog
+} from '../ui/primitives'
 import { DataTableViewport } from '../ui/dataTable'
+import { notificar } from '../lib/notificacoes'
 
 const rotuloCampo = (campo: string): string =>
   campo
@@ -60,6 +75,15 @@ function texto(v: unknown): string {
   if (typeof v === 'string') return v || 'Vazio'
   return JSON.stringify(v, null, 2)
 }
+function trechoComputador(id: string, ids: string[]): string {
+  let tamanho = 8
+  while (
+    tamanho < id.length &&
+    ids.some((outro) => outro !== id && outro.startsWith(id.slice(0, tamanho)))
+  )
+    tamanho += 1
+  return id.slice(0, tamanho)
+}
 
 /** O controle de edição e os rascunhos nunca executam recebimentos implicitamente. */
 export function ColaboracaoDocumento({
@@ -67,22 +91,38 @@ export function ColaboracaoDocumento({
   documento,
   sujo,
   rascunhoId,
+  onSalvar,
   onAbrir
 }: {
   tipo: TipoDocumento
   documento: Documento
   sujo: boolean
   rascunhoId?: string
+  onSalvar?: () => Promise<Documento | null>
   onAbrir: (documento: Documento, rascunhoId?: string) => void
 }): JSX.Element | null {
-  const { navegar, executarComConfirmacao } = useNav()
+  const { navegar, navegarAposSalvar, executarComConfirmacao } = useNav()
+  const { conta } = useConta()
+  const empresaId = conta.empresa?.id ?? ''
+  const contexto = JSON.stringify([empresaId, tipo, documento.id, rascunhoId])
+  const contextoAtual = useRef(contexto)
+  contextoAtual.current = contexto
   const [status, setStatus] = useState<StatusNuvem | null>(null)
   const [controle, setControle] = useState<ControleEdicao | null>(null)
-  const [erro, setErro] = useState(''),
-    [aviso, setAviso] = useState('')
+  const definirControle = useCallback(
+    (valor: ControleEdicao | null): void => {
+      if (contextoAtual.current !== contexto) return
+      const atual = estadoEdicaoAtual(empresaId, tipo, documento.id)
+      setControle(atual ? atual.controle : valor)
+    },
+    [contexto, empresaId, tipo, documento.id]
+  )
+  const [erro, setErro] = useState('')
   const [aberto, setAberto] = useState(false),
     [ocupado, setOcupado] = useState(false)
   const [rascunhos, setRascunhos] = useState<RascunhoCompartilhado[]>([])
+  const [excluir, setExcluir] = useState<RascunhoCompartilhado | null>(null)
+  const [voltar, setVoltar] = useState(false)
   const [comparacao, setComparacao] = useState<ComparacaoRascunho | null>(null)
   const [recebimentos, setRecebimentos] = useState<RevisaoRecebimentos | null>(null)
   const [confirmarFinanceiro, setConfirmarFinanceiro] = useState<'reaplicar' | 'arquivar' | null>(
@@ -94,11 +134,11 @@ export function ColaboracaoDocumento({
   const [computadores, setComputadores] = useState<Array<{ id: string; nome: string }>>([])
   const vivo = useRef(true)
   const renovarRef = useRef<() => Promise<void>>(async () => {})
+  const abrirPainelRef = useRef<() => void>(() => {})
   const executar = async (tarefa: () => Promise<void>): Promise<void> => {
     if (ocupado) return
     setOcupado(true)
     setErro('')
-    setAviso('')
     try {
       await tarefa()
     } catch (e) {
@@ -112,8 +152,8 @@ export function ColaboracaoDocumento({
     if (!vivo.current) return
     setStatus(s)
     if ((s.protocolo ?? 1) >= 2 && s.autenticada && documento.id) {
-      const c = await api.colaboracao.edicao(tipo, documento.id)
-      if (vivo.current) setControle(c)
+      const c = await consultarEdicao(tipo, documento.id)
+      if (vivo.current) definirControle(c)
     }
   }
   useEffect(() => {
@@ -125,17 +165,23 @@ export function ColaboracaoDocumento({
       if (!ativo) return
       setStatus(s)
       if (!documento.id || (s.protocolo ?? 1) < 2 || !s.autenticada) return
-      const c = await api.colaboracao.edicao(tipo, documento.id)
+      const c = await consultarEdicao(tipo, documento.id)
       if (!ativo) return
-      setControle(c)
+      definirControle(c)
       const livre = !c || (!c.offline && (!c.expiraEm || Date.parse(c.expiraEm) <= Date.now()))
       if (!rascunhoId && (livre || c?.podeEditar)) {
-        const adquirido = await api.colaboracao.edicao(tipo, documento.id, 'adquirir')
-        if (ativo) setControle(adquirido)
+        const adquirido = await consultarEdicao(tipo, documento.id, 'adquirir')
+        if (ativo) definirControle(adquirido)
       }
     }
     void iniciar().catch(() => undefined)
     const cancelar = api.eventos.observarDados((e) => {
+      if (e.controleEdicao) {
+        const estado = aceitarEstadoEdicao(e.controleEdicao)
+        if (estado && ativo && estado.tipo === tipo && estado.documentoId === documento.id)
+          definirControle(estado.controle)
+        return
+      }
       if (e.status || e.entidades.includes(`controle:${tipo}:${documento.id}`))
         void renovarRef.current().catch(() => undefined)
     })
@@ -146,21 +192,42 @@ export function ColaboracaoDocumento({
       if (documento.id && !rascunhoId)
         void api.colaboracao.acompanhar(tipo, documento.id, false).catch(() => undefined)
     }
-  }, [tipo, documento.id, rascunhoId])
+  }, [tipo, documento.id, rascunhoId, definirControle])
   // A liberação no encerramento é feita pelo main, após salvar/enviar pendências.
-  if (!documento.id || (!rascunhoId && (status?.protocolo ?? 1) < 2)) return null
   const controlar = (acao: Parameters<typeof api.colaboracao.edicao>[2], pc?: string): void => {
     executarComConfirmacao(
       () =>
         void executar(async () => {
-          const c = await api.colaboracao.edicao(tipo, documento.id, acao, pc)
-          setControle(c)
+          if (acao === 'solicitar') {
+            const antes = await consultarEdicao(tipo, documento.id)
+            if (antes?.pedidoPendente) {
+              definirControle(antes)
+              notificar('Seu pedido de edição já está aguardando o responsável.', 'info')
+              return
+            }
+          }
+          const c = await consultarEdicao(tipo, documento.id, acao, pc)
+          definirControle(c)
+          if (acao === 'solicitar' && c?.podeEditar) {
+            await api.nuvem.sincronizar()
+            const atual =
+              tipo === 'orcamento'
+                ? await api.orcamentos.get(documento.id)
+                : tipo === 'relatorio'
+                  ? await api.relatorios.get(documento.id)
+                  : await api.recibos.get(documento.id)
+            if (atual && vivo.current) onAbrir(atual)
+          }
           setRecuperar(false)
-          setAviso(
-            acao === 'solicitar'
-              ? 'Pedido de edição registrado para o responsável.'
-              : 'Controle atualizado.'
-          )
+          if (acao === 'solicitar' && !c?.podeEditar)
+            notificar('Solicitação de edição enviada ao responsável.', 'info')
+          else
+            notificar(
+              acao === 'solicitar'
+                ? 'Edição liberada neste computador.'
+                : 'Controle de edição atualizado.',
+              'sucesso'
+            )
         })
     )
   }
@@ -171,17 +238,64 @@ export function ColaboracaoDocumento({
       setRecebimentos(null)
       setConfirmarFinanceiro(null)
       setAberto(true)
-      if ((status?.protocolo ?? 1) >= 2) setComputadores(await api.nuvem.dispositivos())
+      // O aviso global pode abrir o painel antes de terminar a primeira consulta da tela.
+      const atual = await api.nuvem.status()
+      if (!vivo.current) return
+      setStatus(atual)
+      if ((atual.protocolo ?? 1) >= 2) setComputadores(await api.nuvem.dispositivos())
     })
   }
+  abrirPainelRef.current = abrirRascunhos
+  useEffect(() => {
+    const evento = (e: Event): void => {
+      const detalhe = (e as CustomEvent<{ tipo: TipoDocumento; id: string; chave?: string }>).detail
+      if (detalhe?.tipo === tipo && detalhe.id === documento.id) {
+        abrirPainelRef.current()
+      }
+    }
+    window.addEventListener('gdo:abrir-colaboracao', evento)
+    const valorPendente = window.sessionStorage.getItem('gdo:abrir-colaboracao-pendente')
+    if (valorPendente) {
+      try {
+        const pendente = JSON.parse(valorPendente) as {
+          tipo?: TipoDocumento
+          id?: string
+          chave?: string
+        }
+        if (pendente.tipo === tipo && pendente.id === documento.id)
+          evento(new CustomEvent('gdo:abrir-colaboracao', { detail: pendente }))
+      } catch {
+        window.sessionStorage.removeItem('gdo:abrir-colaboracao-pendente')
+      }
+    }
+    return () => window.removeEventListener('gdo:abrir-colaboracao', evento)
+  }, [tipo, documento.id])
+  useEffect(() => {
+    if (!aberto) return
+    const valor = window.sessionStorage.getItem('gdo:abrir-colaboracao-pendente')
+    if (!valor) return
+    try {
+      const pendente = JSON.parse(valor) as { tipo?: TipoDocumento; id?: string; chave?: string }
+      if (pendente.tipo !== tipo || pendente.id !== documento.id) return
+      window.sessionStorage.removeItem('gdo:abrir-colaboracao-pendente')
+      if (pendente.chave)
+        window.dispatchEvent(
+          new CustomEvent('gdo:painel-colaboracao-aberto', { detail: { chave: pendente.chave } })
+        )
+    } catch {
+      window.sessionStorage.removeItem('gdo:abrir-colaboracao-pendente')
+    }
+  }, [aberto, tipo, documento.id])
+  if (!documento.id || (!rascunhoId && (status?.protocolo ?? 1) < 2)) return null
   const guardar = (): void => {
     void executar(async () => {
       const r = rascunhoId
         ? await api.rascunhos.save(rascunhoId, documento)
         : await api.rascunhos.create(tipo, documento.id, documento)
       onAbrir(r.documento, r.id)
-      setAviso(
-        'Rascunho guardado neste computador. O documento da empresa e seus pagamentos não foram alterados.'
+      notificar(
+        'Rascunho guardado neste computador. O documento da empresa e seus pagamentos não foram alterados.',
+        'sucesso'
       )
     })
   }
@@ -189,6 +303,37 @@ export function ColaboracaoDocumento({
     onAbrir(d)
     setAberto(false)
   }
+  const voltarAoPrincipal = async (guardarAntes: boolean): Promise<void> => {
+    if (guardarAntes && rascunhoId) await api.rascunhos.save(rascunhoId, documento)
+    const principal =
+      tipo === 'orcamento'
+        ? await api.orcamentos.get(documento.id)
+        : tipo === 'relatorio'
+          ? await api.relatorios.get(documento.id)
+          : await api.recibos.get(documento.id)
+    if (!principal) {
+      setVoltar(false)
+      setAberto(false)
+      notificar(
+        'O documento principal foi excluído. Os rascunhos mantidos podem ser recuperados no histórico.',
+        'aviso'
+      )
+      navegarAposSalvar(
+        tipo === 'orcamento'
+          ? { nome: 'historico' }
+          : tipo === 'relatorio'
+            ? { nome: 'historicoRelatorios' }
+            : { nome: 'recibos' }
+      )
+      return
+    }
+    onAbrir(principal)
+    setVoltar(false)
+  }
+  const reciboProtegido =
+    comparacao?.remoto &&
+    tipo === 'recibo' &&
+    ['recebido', 'cancelado'].includes(comparacao.remoto.status)
   const comparar = async (r: RascunhoCompartilhado): Promise<void> => {
     setComparacao(await api.rascunhos.comparar(r.id))
     setEscolhas({})
@@ -231,15 +376,51 @@ export function ColaboracaoDocumento({
               .join(', ')}{' '}
             solicitou edição. Salve e libere o documento ou transfira o controle para esse
             computador.
+            <div className="mt-3 flex flex-wrap gap-2">
+              {controle.solicitacoes.map((p) => (
+                <Button
+                  key={p.computador}
+                  size="sm"
+                  variant="outline"
+                  disabled={ocupado || (sujo && !onSalvar)}
+                  onClick={() =>
+                    void executar(async () => {
+                      if (sujo && onSalvar && !(await onSalvar()))
+                        throw new Error('Salve as alterações antes de transferir a edição.')
+                      const atualizado = await consultarEdicao(
+                        tipo,
+                        documento.id,
+                        'transferir',
+                        p.computador
+                      )
+                      definirControle(atualizado)
+                      notificar(
+                        'Edição transferida. O documento está disponível no computador solicitante.',
+                        'sucesso'
+                      )
+                    })
+                  }
+                >
+                  {sujo ? 'Salvar e transferir' : 'Transferir edição'} para {p.usuarioNome}
+                </Button>
+              ))}
+            </div>
           </Mensagem>
         )}
         {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
-        {aviso && (
-          <Mensagem tom="info" className="mb-4">
-            {aviso}
-          </Mensagem>
-        )}
         <div className="flex flex-wrap gap-2">
+          {rascunhoId && (
+            <Button
+              icon={ArrowLeft}
+              variant="outline"
+              disabled={ocupado}
+              onClick={() =>
+                sujo ? setVoltar(true) : void executar(() => voltarAoPrincipal(false))
+              }
+            >
+              Voltar ao documento principal
+            </Button>
+          )}
           <Button icon={Save} variant="outline" disabled={ocupado} onClick={guardar}>
             {rascunhoId
               ? 'Guardar rascunho'
@@ -282,13 +463,57 @@ export function ColaboracaoDocumento({
               icon={UsersRound}
               variant="outline"
               disabled={ocupado}
-              onClick={() => controlar('solicitar')}
+              onClick={() => controlar(controle?.pedidoPendente ? 'cancelarPedido' : 'solicitar')}
             >
-              Solicitar edição
+              {controle?.pedidoPendente ? 'Cancelar pedido de edição' : 'Solicitar edição'}
             </Button>
           )}
         </div>
       </Card>
+      <ConfirmDialog
+        open={!!excluir}
+        title="Excluir rascunho local?"
+        description="Somente este rascunho será removido deste computador. O documento principal e seus pagamentos serão preservados."
+        confirmLabel="Excluir rascunho"
+        busy={ocupado}
+        onCancel={() => !ocupado && setExcluir(null)}
+        onConfirm={() =>
+          executar(async () => {
+            if (!excluir) return
+            await api.rascunhos.remove(excluir.id)
+            setRascunhos(await api.rascunhos.list(tipo, documento.id))
+            setComparacao(null)
+            setExcluir(null)
+            if (rascunhoId === excluir.id) await voltarAoPrincipal(false)
+          })
+        }
+      />
+      <Modal
+        open={voltar}
+        onClose={() => !ocupado && setVoltar(false)}
+        title="Voltar ao documento principal"
+        footer={
+          <>
+            <Button variant="secondary" disabled={ocupado} onClick={() => setVoltar(false)}>
+              Continuar no rascunho
+            </Button>
+            <Button
+              variant="outline"
+              disabled={ocupado}
+              onClick={() => void executar(() => voltarAoPrincipal(false))}
+            >
+              Descartar alterações não salvas
+            </Button>
+            <Button disabled={ocupado} onClick={() => void executar(() => voltarAoPrincipal(true))}>
+              Guardar e voltar
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-600">
+          Escolha como tratar as alterações feitas desde o último salvamento do rascunho.
+        </p>
+      </Modal>
       <Modal
         open={aberto}
         onClose={() => !ocupado && setAberto(false)}
@@ -330,6 +555,15 @@ export function ColaboracaoDocumento({
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap justify-end gap-2">
+                        <Button
+                          icon={Trash2}
+                          size="sm"
+                          variant="outline"
+                          disabled={ocupado}
+                          onClick={() => setExcluir(r)}
+                        >
+                          Excluir rascunho
+                        </Button>
                         <Button
                           icon={Pencil}
                           size="sm"
@@ -440,11 +674,18 @@ export function ColaboracaoDocumento({
                 Recebimentos, estornos e quitação não são desfeitos por esta comparação. Uma nova
                 revisão preserva todas as anteriores.
               </Mensagem>
+              {reciboProtegido && (
+                <Mensagem tom="info">
+                  Este recibo já foi confirmado ou cancelado. Para corrigir, use cancelamento e crie
+                  uma cobrança substituta. O rascunho pode ser comparado, copiado ou excluído.
+                </Mensagem>
+              )}
               <div className="flex flex-wrap gap-2">
                 <Button
                   icon={Save}
                   disabled={
                     ocupado ||
+                    !!reciboProtegido ||
                     !comparacao.remoto ||
                     comparacao.conflitos.some((c) => !escolhas[c.caminho])
                   }
@@ -589,8 +830,9 @@ export function ColaboracaoDocumento({
                                   )
                                   setRecebimentos(null)
                                   setConfirmarFinanceiro(null)
-                                  setAviso(
-                                    'Operações conferidas; os registros originais foram preservados.'
+                                  notificar(
+                                    'Operações conferidas; os registros originais foram preservados.',
+                                    'sucesso'
                                   )
                                   const d = await (tipo === 'recibo'
                                     ? api.recibos.get(documento.id)
@@ -622,13 +864,19 @@ export function ColaboracaoDocumento({
                     <Field label="Transferir para">
                       <Select value={destino} onChange={(e) => setDestino(e.target.value)}>
                         <option value="">Escolha o computador</option>
-                        {computadores
-                          .filter((c) => c.id !== status?.computador)
-                          .map((c) => (
-                            <option value={c.id} key={c.id}>
-                              {c.nome}
+                        {computadores.map((c) => {
+                          const atual = c.id === status?.computador
+                          return (
+                            <option value={c.id} key={c.id} title={c.id} disabled={atual}>
+                              {c.nome} ·{' '}
+                              {trechoComputador(
+                                c.id,
+                                computadores.map((item) => item.id)
+                              )}
+                              {atual ? ' (este computador)' : ''}
                             </option>
-                          ))}
+                          )
+                        })}
                       </Select>
                     </Field>
                     <Button

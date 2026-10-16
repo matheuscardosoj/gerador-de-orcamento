@@ -1,3 +1,5 @@
+import { atingirPrecoDesejado, criarEntradaCalculo, calcularCustoServico } from '../calculo/engine'
+import { gerarHtmlOrcamento, gerarHtmlRelatorio } from './template'
 import { it, expect } from 'vitest'
 import { Packer } from 'docx'
 import { gunzipSync, inflateRawSync } from 'zlib'
@@ -275,4 +277,54 @@ it('usa a cidade preservada do relatório mesmo após alterar o endereço da emp
   )
   expect(xml).toContain('Curitiba, 4 de maio de 2026')
   expect(xml).not.toContain('Recife')
+})
+
+it('mantém o preço por meta nas prévias e DOCX de orçamento e relatório', async () => {
+  const base = criarEntradaCalculo({
+    percentualFerias: 0,
+    percentualDecimoTerceiro: 0,
+    percentualFgts: 0,
+    percentualInss: 0,
+    percentualMultaRescisao: 0,
+    custoContratacao: 0,
+    diasBaseMes: 30,
+    margemLucroPadrao: 0,
+    aliquotaNotaPadrao: 6,
+    consumoVeiculoPadrao: 10,
+    precoCombustivelPadrao: 6,
+    valorRefeicaoPadrao: 20,
+    modoImpostoPadrao: 'gross_up'
+  })
+  base.maoDeObra = [{ id: 'mao', qtdFuncionarios: 1, base: 'diaria', valor: 1500 }]
+  base.emitirNota = true
+  const entrada = atingirPrecoDesejado(base, 4000.17).entrada
+  const resultado = calcularCustoServico(entrada)
+  const servico = {
+    ...orc.itensServico[0],
+    quantidade: 3,
+    valorTotal: resultado.precoFinal,
+    valorUnitario: resultado.precoFinal / 3,
+    calculo: { entrada, resultado }
+  }
+  const proposta = { ...orc, itensServico: [servico], valorTotal: resultado.precoFinal }
+  const relatorio: Relatorio = {
+    ...proposta,
+    titulo: 'Relatório de serviço',
+    status: 'rascunho',
+    anexos: [],
+    adiantamentos: [],
+    reembolsos: [],
+    totais: calcularTotaisRelatorio([servico], [], [])
+  }
+  expect(gerarHtmlOrcamento(proposta, empresa)).toContain('4.000,17')
+  expect(gerarHtmlRelatorio(relatorio, empresa)).toContain('4.000,17')
+  for (const documento of [
+    montarDocumentoDocx(proposta, empresa),
+    montarDocumentoRelatorioDocx(relatorio, empresa)
+  ]) {
+    const xml = lerDocumentXml(await Packer.toBuffer(documento))
+    expect(xml).toContain('4.000,17')
+    expect(xml).not.toContain('Subtotal antes do imposto')
+  }
+  expect(servico.calculo.entrada.avulsos).toEqual(base.avulsos)
 })

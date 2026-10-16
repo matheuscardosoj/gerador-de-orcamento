@@ -29,7 +29,7 @@ beforeAll(async () => {
   )
   // A segunda empresa tem responsável diferente do UUID histórico.
   await pg.exec(
-    `UPDATE empresas SET id=id WHERE id='${empresaB}'; DELETE FROM membros_empresa WHERE empresa_id='${empresaB}'; DELETE FROM empresas WHERE id='${empresaB}';`
+    `UPDATE empresas SET id=id WHERE id='${empresaB}'; DELETE FROM membros_empresa WHERE empresa_id='${empresaB}'; DELETE FROM sincronizacao.entidades WHERE empresa_id='${empresaB}'; DELETE FROM observacoes_padrao WHERE empresa_id='${empresaB}'; DELETE FROM formas_pagamento_padrao WHERE empresa_id='${empresaB}'; DELETE FROM empresas WHERE id='${empresaB}';`
   )
   await pg.exec(readFileSync('supabase/central/001_servico_central.sql', 'utf8'))
   await pg.exec(

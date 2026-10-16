@@ -13,6 +13,29 @@ let versoes: typeof import('../versoes')
 let sql: typeof import('./sqlite')
 const PNG =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+
+it('guardar conteúdo idêntico reutiliza o rascunho e excluir preserva o documento principal', async () => {
+  const rascunhos = await import('../rascunhos')
+  const p = proposta()
+  const a = rascunhos.criarRascunho('orcamento', p.id, p)
+  expect(rascunhos.criarRascunho('orcamento', p.id, p).id).toBe(a.id)
+  rascunhos.salvarRascunho(a.id, { ...p, titulo: 'Alternativa local' })
+  expect(rascunhos.listarRascunhos('orcamento', p.id)).toHaveLength(1)
+  rascunhos.descartarRascunho(a.id)
+  expect(rascunhos.listarRascunhos('orcamento', p.id)).toHaveLength(0)
+  expect(repos.orcamentosRepo.get(p.id)?.titulo).toBe(p.titulo)
+})
+
+it('restaurar orçamento cria nova versão sem alterar snapshots anteriores', async () => {
+  const p = proposta()
+  const original = versoes.listarVersoes('orcamento', p.id)[0]
+  repos.orcamentosRepo.update(p.id, { titulo: 'Conteúdo novo', versao: p.versao })
+  const { restaurarVersao } = await import('../historico-documentos')
+  const restaurado = restaurarVersao(original.id, false)
+  expect(restaurado).toMatchObject({ id: p.id, numero: p.numero, titulo: p.titulo, versao: 3 })
+  expect(versoes.obterVersao(original.id).documento).toEqual(original.documento)
+  expect(versoes.listarVersoes('orcamento', p.id)).toHaveLength(3)
+})
 function proposta(): Orcamento {
   return repos.orcamentosRepo.create({
     data: '2026-10-11',

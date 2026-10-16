@@ -30,3 +30,96 @@ body,
 body {
   @apply bg-slate-100 text-slate-900 antialiased;
 }
+
+/*
+ * O popup dos <select> nativos é desenhado pelo navegador, então max-height
+ * aplicado ao próprio campo não limita a lista de opções. O seletor
+ * personalizável mantém o HTML <select>/<option>, mas permite que a lista
+ * aberta tenha altura máxima e role quando houver muitas opções.
+ */
+@supports (appearance: base-select) {
+  select,
+  select::picker(select) {
+    appearance: base-select;
+  }
+
+  select {
+    color: #0f172a;
+    background-color: #fff;
+    border-color: #cbd5e1;
+    border-radius: 0.5rem;
+    transition:
+      border-color 150ms ease,
+      box-shadow 150ms ease;
+  }
+
+  select:hover:not(:disabled) {
+    border-color: #94a3b8;
+  }
+
+  select:focus-visible {
+    border-color: #0f6d6b;
+    outline: none;
+    box-shadow: 0 0 0 3px rgb(15 109 107 / 18%);
+  }
+
+  select:disabled {
+    background-color: #f1f5f9;
+    color: #64748b;
+  }
+
+  select::picker-icon {
+    color: #64748b;
+    transition: rotate 150ms ease;
+  }
+
+  select:open::picker-icon {
+    rotate: 180deg;
+  }
+
+  select::picker(select) {
+    box-sizing: border-box;
+    width: anchor-size(width);
+    max-inline-size: calc(100vw - 2rem);
+    max-block-size: min(20rem, 60vh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0.25rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    background: #fff;
+    color: #0f172a;
+    box-shadow: 0 12px 28px rgb(15 23 42 / 16%);
+    scrollbar-color: #cbd5e1 transparent;
+    scrollbar-width: thin;
+  }
+
+  select option {
+    min-block-size: 2.25rem;
+    padding: 0.625rem 0.75rem;
+    border-radius: 0.5rem;
+    color: #334155;
+    font: inherit;
+  }
+
+  select option:checked {
+    background: #e6f4f3;
+    color: #0a4f4d;
+    font-weight: 600;
+  }
+
+  select option:hover,
+  select option:focus-visible {
+    background: #f1f5f9;
+    color: #0f172a;
+  }
+
+  select option:disabled {
+    color: #94a3b8;
+  }
+
+  select option::checkmark {
+    color: #0f6d6b;
+    margin-inline-end: 0.5rem;
+  }
+}

@@ -20,6 +20,8 @@ const api: AppApi = {
     selecionarEmpresa: (id) => invoke('conta.selecionarEmpresa', id) as never,
     sair: () => invoke('conta.sair') as never,
     atualizarNome: (nome) => invoke('conta.atualizarNome', nome) as never,
+    alterarEmail: (atual, novo) => invoke('conta.alterarEmail', atual, novo) as never,
+    confirmarAlteracaoEmail: (codigo) => invoke('conta.confirmarAlteracaoEmail', codigo) as never,
     alterarSenha: (atual, nova) => invoke('conta.alterarSenha', atual, nova) as never,
     alterarPapel: (usuario, papel) => invoke('conta.alterarPapel', usuario, papel) as never,
     enviarCodigo: (email, tipo) => invoke('conta.enviarCodigo', email, tipo) as never,
@@ -29,7 +31,11 @@ const api: AppApi = {
     convidar: (email, nome, papel) => invoke('conta.convidar', email, nome, papel) as never,
     cancelarConvite: (id) => invoke('conta.cancelarConvite', id) as never,
     reenviarConvite: (id) => invoke('conta.reenviarConvite', id) as never,
-    criarEmpresa: (nome, email, admin) => invoke('conta.criarEmpresa', nome, email, admin) as never
+    atualizarEmpresas: () => invoke('conta.atualizarEmpresas') as never,
+    criarEmpresa: (nome, email, admin) => invoke('conta.criarEmpresa', nome, email, admin) as never,
+    excluirEmpresa: (id, nome) => invoke('conta.excluirEmpresa', id, nome) as never,
+    continuarAposIndisponibilidade: () => invoke('conta.continuarAposIndisponibilidade') as never,
+    avisosEmail: () => invoke('conta.avisosEmail') as never
   },
   rascunhos: {
     list: (tipo, id) => invoke('rascunhos.list', tipo, id) as never,
@@ -41,7 +47,14 @@ const api: AppApi = {
     copiar: (id) => invoke('rascunhos.copiar', id) as never,
     remove: (id) => invoke('rascunhos.remove', id) as never
   },
+  rascunhosCadastros: {
+    guardar: (tipo, idOrigem, dados) =>
+      invoke('rascunhosCadastros.guardar', tipo, idOrigem, dados) as never,
+    listar: (tipo) => invoke('rascunhosCadastros.listar', tipo) as never,
+    descartar: (tipo, idOrigem) => invoke('rascunhosCadastros.descartar', tipo, idOrigem) as never
+  },
   colaboracao: {
+    acompanhados: () => invoke('colaboracao.acompanhados') as never,
     revisarRecebimentos: (tipo, id) => invoke('colaboracao.revisarRecebimentos', tipo, id) as never,
     conciliarRecebimentos: (revisao, acao) =>
       invoke('colaboracao.conciliarRecebimentos', revisao, acao) as never,
@@ -49,6 +62,8 @@ const api: AppApi = {
     membros: () => invoke('colaboracao.membros') as never,
     vincularMembro: (email, nome) => invoke('colaboracao.vincularMembro', email, nome) as never,
     ativarMembro: (usuario, ativo) => invoke('colaboracao.ativarMembro', usuario, ativo) as never,
+    estadoEdicao: (tipo, id, acao, destino) =>
+      invoke('colaboracao.estadoEdicao', tipo, id, acao, destino) as never,
     edicao: (tipo, id, acao, destino) =>
       invoke('colaboracao.edicao', tipo, id, acao, destino) as never
   },
@@ -92,6 +107,7 @@ const api: AppApi = {
     status: () => invoke('nuvem.status') as never,
     conectar: (c, s, m) => invoke('nuvem.conectar', c, s, m) as never,
     sincronizar: () => invoke('nuvem.sincronizar') as never,
+    restaurarBase: () => invoke('nuvem.restaurarBase') as never,
     tentarNovamente: (id) => invoke('nuvem.tentarNovamente', id) as never,
     finalizarAtualizacao: (revisao) => invoke('nuvem.finalizarAtualizacao', revisao) as never,
     dispositivos: () => invoke('nuvem.dispositivos') as never,

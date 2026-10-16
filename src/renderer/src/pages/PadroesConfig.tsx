@@ -1,10 +1,11 @@
 import { mensagemErro } from '@shared/erros'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Pencil, Trash2, Save, FilterX } from 'lucide-react'
 import { correspondeBusca } from '@shared/historico-preferencias'
 import type { ObservacaoPadrao, FormaPagamentoPadrao } from '@shared/types'
 import { api } from '../lib/api'
 import { useAsync } from '../lib/hooks'
+import { useNav } from '../lib/nav'
 import { DataTableFrame, TableActions } from '../ui/dataTable'
 import { ListaOrdenavel } from '../ui/ordenavel'
 import {
@@ -37,6 +38,11 @@ export function PadroesConfig({
     [tipo],
     [tipo === 'observacoes' ? 'observacoes_padrao' : 'pagamentos_padrao']
   )
+  const { data: rascunhos, reload: recarregarRascunhos } = useAsync(
+    () => api.rascunhosCadastros.listar(tipo),
+    [tipo]
+  )
+  const { avisar } = useNav()
   const [busca, setBusca] = useState(''),
     [aplicacao, setAplicacao] = useState('')
   const [edit, setEdit] = useState<TextoPadrao | null>(null),
@@ -46,7 +52,45 @@ export function PadroesConfig({
     [onde, setOnde] = useState<TextoPadrao['aplicacao']>('ambos')
   const [erro, setErro] = useState(''),
     [ocupado, setOcupado] = useState(false)
+  const [origemRascunho, setOrigemRascunho] = useState<string | null>(null)
+  const atual = useRef({ texto, auto, onde })
+  atual.current = { texto, auto, onde }
+  const exclusaoTratada = useRef<string | null>(null)
   const nome = tipo === 'observacoes' ? 'observação' : 'forma de pagamento'
+  useEffect(() => {
+    if (!edit) return
+    const entidade = `${tipo === 'observacoes' ? 'observacoes_padrao' : 'pagamentos_padrao'}:${edit.id}`
+    return api.eventos.observarDados((evento) => {
+      if (evento.origem !== 'nuvem' || !evento.entidades.includes(entidade)) return
+      void api[tipo].list().then((lista) => {
+        if (lista.some((item) => item.id === edit.id) || exclusaoTratada.current === edit.id) return
+        exclusaoTratada.current = edit.id
+        void (async () => {
+          const mudou =
+            atual.current.texto !== edit.texto ||
+            atual.current.auto !== edit.padrao ||
+            atual.current.onde !== edit.aplicacao
+          try {
+            if (mudou)
+              await api.rascunhosCadastros.guardar(tipo, edit.id, {
+                texto: atual.current.texto,
+                padrao: atual.current.auto,
+                aplicacao: atual.current.onde
+              })
+            setEdit(null)
+            setTexto('')
+            recarregarRascunhos()
+            avisar(
+              `A ${nome} foi excluída em outro computador. A tela foi fechada.${mudou ? ' Suas alterações foram guardadas para criar outro registro.' : ''}`
+            )
+          } catch {
+            exclusaoTratada.current = null
+            setErro('Não foi possível guardar as alterações locais. Elas continuam nesta tela.')
+          }
+        })()
+      })
+    })
+  }, [edit, tipo, avisar, nome, recarregarRascunhos])
   const executar = async (tarefa: () => Promise<void>): Promise<void> => {
     if (ocupado) return
     setOcupado(true)
@@ -61,6 +105,7 @@ export function PadroesConfig({
     }
   }
   const abrir = (item: TextoPadrao): void => {
+    setOrigemRascunho(null)
     setEdit(item)
     setTexto(item.texto)
     setAuto(item.padrao)
@@ -75,6 +120,7 @@ export function PadroesConfig({
     setTexto('')
     setAuto(true)
     setOnde('ambos')
+    setOrigemRascunho(null)
   }
   return (
     <div className="space-y-4">
@@ -83,6 +129,27 @@ export function PadroesConfig({
         documentos já salvos preservam seus textos.
       </p>
       {(erro || error) && !novo && !edit && <Mensagem>{erro || error}</Mensagem>}
+      {rascunhos?.map((r) => (
+        <div
+          key={r.idOrigem}
+          className="flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm"
+        >
+          <span>Alterações de uma {nome} excluída foram guardadas neste computador.</span>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setOrigemRascunho(r.idOrigem)
+              setEdit(null)
+              setTexto(String(r.dados.texto ?? ''))
+              setAuto(Boolean(r.dados.padrao))
+              setOnde(r.dados.aplicacao as TextoPadrao['aplicacao'])
+              setNovo(true)
+            }}
+          >
+            Criar outro registro
+          </Button>
+        </div>
+      ))}
       <div className="flex flex-wrap items-center gap-3">
         <Input
           className="max-w-md"
@@ -221,8 +288,20 @@ export function PadroesConfig({
               onClick={() =>
                 void executar(async () => {
                   const dto = { texto: texto.trim(), padrao: auto, aplicacao: onde }
-                  if (edit) await api[tipo].update(edit.id, dto)
-                  else await api[tipo].create(dto)
+                  if (edit) {
+                    const salvo = await api[tipo].update(edit.id, dto)
+                    if (!salvo)
+                      throw new Error(
+                        'Este registro foi excluído em outro computador. Crie outro registro a partir do rascunho.'
+                      )
+                  } else {
+                    await api[tipo].create(dto)
+                    if (origemRascunho)
+                      await api.rascunhosCadastros.descartar(tipo, origemRascunho).catch(() => {
+                        avisar('Registro criado. O rascunho antigo não pôde ser removido.')
+                      })
+                    recarregarRascunhos()
+                  }
                   fechar()
                 })
               }

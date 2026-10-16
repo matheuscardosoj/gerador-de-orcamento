@@ -3,6 +3,8 @@ import { ListaOrdenavel } from '../ui/ordenavel'
 import { useMemo, useState } from 'react'
 import { X, Plus, Check } from 'lucide-react'
 import {
+  atingirPrecoDesejado,
+  retirarMetaPreco,
   calcularCustoServico,
   criarEntradaCalculo,
   normalizarEntrada
@@ -18,6 +20,7 @@ import {
   Input,
   Modal,
   NumberField,
+  NumericInput,
   Select,
   cn,
   Mensagem
@@ -33,6 +36,8 @@ interface Props {
   entradaInicial?: EntradaCalculo
   onCancel: () => void
   onConfirm: (r: ResultadoServico) => void
+  rotuloDocumento?: 'orçamento' | 'relatório'
+  modoServico?: 'calculado' | 'manual'
 }
 
 function ModoSelect({
@@ -44,7 +49,7 @@ function ModoSelect({
 }): JSX.Element {
   return (
     <Select value={value} onChange={(e) => onChange(e.target.value as ModoAplicacao)}>
-      <option value="cheio">Valor cheio</option>
+      <option value="cheio">Valor total</option>
       <option value="diario">Por dia</option>
     </Select>
   )
@@ -78,7 +83,9 @@ export function ServicoCalculoModal({
   quantidadeInicial,
   entradaInicial,
   onCancel,
-  onConfirm
+  onConfirm,
+  rotuloDocumento = 'orçamento',
+  modoServico = 'calculado'
 }: Props): JSX.Element {
   const [descricao, setDescricao] = useState(descricaoInicial ?? '')
   const [unidade, setUnidade] = useState(unidadeInicial ?? 'serviço')
@@ -88,11 +95,53 @@ export function ServicoCalculoModal({
   )
   const [erro, setErro] = useState<string | null>(null)
 
-  const set = (patch: Partial<EntradaCalculo>): void => setE((prev) => ({ ...prev, ...patch }))
-  const resultado = useMemo(() => calcularCustoServico(e), [e])
-  const semLucro = new Set(
-    e.avulsos.filter((a) => a.aplicarAcrescimo === false).map((a) => `avulso:${a.id}`)
+  const [precoDesejado, setPrecoDesejado] = useState<number | ''>(
+    () =>
+      entradaInicial?.precoFinalDesejado ??
+      calcularCustoServico(normalizarEntrada(entradaInicial ?? criarEntradaCalculo(parametros)))
+        .precoFinal
   )
+  const [avisoMeta, setAvisoMeta] = useState('')
+  const [erroMeta, setErroMeta] = useState('')
+  const set = (patch: Partial<EntradaCalculo>): void => {
+    const tinhaMetaAplicada = e.precoFinalDesejado != null
+    if (tinhaMetaAplicada)
+      setAvisoMeta(
+        'O cálculo foi alterado. Aplique o preço desejado novamente se quiser manter a meta.'
+      )
+    setErroMeta('')
+    setE((prev) => ({ ...retirarMetaPreco(prev), ...patch }))
+    if (!tinhaMetaAplicada) setPrecoDesejado(calcularCustoServico({ ...e, ...patch }).precoFinal)
+  }
+  const sincronizarPrecoDesejado = (valor: number | ''): void => {
+    setPrecoDesejado(valor)
+    setErroMeta('')
+    setAvisoMeta('')
+    const semMeta = retirarMetaPreco(e)
+    if (valor === '') {
+      setE(semMeta)
+      return
+    }
+    try {
+      const erros = validarEntradaCalculo(semMeta)
+      if (erros.length) throw new Error(mensagemValidacao(erros))
+      const meta = atingirPrecoDesejado(semMeta, valor)
+      if (meta.alterado) setE(meta.entrada)
+      setAvisoMeta(meta.mensagem)
+    } catch (erro) {
+      setE(semMeta)
+      setErroMeta(erro instanceof Error ? erro.message : 'Revise o preço desejado.')
+    }
+  }
+  const sincronizarPercentual = (percentual: number): void => {
+    const entradaAtualizada = { ...retirarMetaPreco(e), margemLucroPercent: percentual }
+    const precoAtual = calcularCustoServico(entradaAtualizada).precoFinal
+    setE({ ...entradaAtualizada, precoFinalDesejado: precoAtual, ajustePreco: 0 })
+    setPrecoDesejado(precoAtual)
+    setErroMeta('')
+    setAvisoMeta('O preço desejado acompanha automaticamente o percentual e os custos atuais.')
+  }
+  const resultado = useMemo(() => calcularCustoServico(e), [e])
 
   const valorUnitario = quantidade > 0 ? resultado.precoFinal / quantidade : resultado.precoFinal
 
@@ -114,12 +163,17 @@ export function ServicoCalculoModal({
       quantidade,
       valorUnitario,
       valorTotal: resultado.precoFinal,
-      calculo: { entrada: e, resultado }
+      calculo: modoServico === 'manual' ? null : { entrada: e, resultado }
     })
   }
 
   return (
-    <Modal open onClose={onCancel} title="Calcular custo do serviço" size="3xl">
+    <Modal
+      open
+      onClose={onCancel}
+      title={modoServico === 'manual' ? 'Adicionar serviço' : 'Calcular preço do serviço'}
+      size="3xl"
+    >
       {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         {/* Coluna de entradas */}
@@ -151,56 +205,74 @@ export function ServicoCalculoModal({
             </div>
           </Bloco>
 
-          <MaoDeObraBloco e={e} set={set} />
-          <AlimentacaoBloco e={e} set={set} parametros={parametros} />
-          <FerramentasBloco e={e} set={set} />
-          <CombustivelBloco e={e} set={set} parametros={parametros} />
-          <EstadiaBloco e={e} set={set} />
-          <AvulsosBloco e={e} set={set} />
+          {modoServico === 'calculado' && (
+            <>
+              <MaoDeObraBloco e={e} set={set} />
+              <AlimentacaoBloco e={e} set={set} parametros={parametros} />
+              <FerramentasBloco e={e} set={set} />
+              <CombustivelBloco e={e} set={set} parametros={parametros} />
+              <EstadiaBloco e={e} set={set} />
+              <AvulsosBloco e={e} set={set} />
 
-          <Bloco titulo="Nota fiscal e acréscimo">
-            <div className="space-y-3">
-              <Checkbox
-                label="Emitir Nota Fiscal de Serviço (adiciona imposto ao preço)"
-                checked={e.emitirNota}
-                onChange={(v) => set({ emitirNota: v })}
-              />
-              {e.emitirNota && (
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Alíquota da nota (%)">
+              <Bloco titulo="Formação do preço">
+                <div className="space-y-3">
+                  <Checkbox
+                    label="Incluir imposto da nota fiscal no preço"
+                    checked={e.emitirNota}
+                    onChange={(v) => set({ emitirNota: v })}
+                  />
+                  {e.emitirNota && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Alíquota do imposto (%)">
+                        <NumberField
+                          value={e.aliquotaNotaPercent}
+                          onChange={(v) => set({ aliquotaNotaPercent: v })}
+                          min={0}
+                          max={e.modoImposto === 'gross_up' ? 99.99 : 100}
+                        />
+                      </Field>
+                      <Field label="Cálculo do imposto">
+                        <Select
+                          value={e.modoImposto}
+                          onChange={(ev) =>
+                            set({ modoImposto: ev.target.value as EntradaCalculo['modoImposto'] })
+                          }
+                        >
+                          <option value="gross_up">Preservar valor líquido (gross-up)</option>
+                          <option value="simples">Somar imposto ao preço</option>
+                        </Select>
+                      </Field>
+                    </div>
+                  )}
+                  <Field
+                    label="Percentual geral de lucro sobre o custo (%)"
+                    hint="Aplicado aos custos sem percentual próprio. O preço desejado acompanha esse percentual automaticamente."
+                  >
                     <NumberField
-                      value={e.aliquotaNotaPercent}
-                      onChange={(v) => set({ aliquotaNotaPercent: v })}
+                      value={e.margemLucroPercent}
+                      onChange={sincronizarPercentual}
                       min={0}
-                      max={e.modoImposto === 'gross_up' ? 99.99 : 100}
                     />
                   </Field>
-                  <Field label="Modo do imposto">
-                    <Select
-                      value={e.modoImposto}
-                      onChange={(ev) =>
-                        set({ modoImposto: ev.target.value as EntradaCalculo['modoImposto'] })
-                      }
+                  <div className="space-y-3 border-t border-slate-200 pt-3">
+                    <Field
+                      label="Preço final desejado deste serviço (R$)"
+                      hint="Considera todas as unidades deste serviço e o imposto habilitado. Ao alterar o valor, o percentual geral se ajusta automaticamente; custos, lucros próprios e repasses são preservados."
                     >
-                      <option value="gross_up">Gross-up (preserva o valor líquido)</option>
-                      <option value="simples">Simples (soma alíquota)</option>
-                    </Select>
-                  </Field>
+                      <NumericInput
+                        format="money"
+                        value={precoDesejado}
+                        onValueChange={(v) => sincronizarPrecoDesejado(v === '' ? '' : Number(v))}
+                        min={0}
+                      />
+                    </Field>
+                    {erroMeta && <Mensagem>{erroMeta}</Mensagem>}
+                    {avisoMeta && <Mensagem tom="info">{avisoMeta}</Mensagem>}
+                  </div>
                 </div>
-              )}
-              <Field
-                label="Acréscimo sobre o custo (%)"
-                hint="Percentual de lucro aplicado somente aos custos com essa opção marcada"
-              >
-                <NumberField
-                  value={e.margemLucroPercent}
-                  onChange={(v) => set({ margemLucroPercent: v })}
-                  min={0}
-                  max={100}
-                />
-              </Field>
-            </div>
-          </Bloco>
+              </Bloco>
+            </>
+          )}
         </div>
 
         {/* Coluna de resumo */}
@@ -215,42 +287,45 @@ export function ServicoCalculoModal({
                   Adicione custos para ver o detalhamento
                 </p>
               )}
-              {resultado.breakdown.map((l) => (
-                <div key={l.chave} className="flex items-start justify-between gap-3 text-xs">
-                  <span className="min-w-0 break-words text-slate-500" title={l.detalhe}>
-                    {l.descricao}
-                    {semLucro.has(l.chave) && (
-                      <span className="mt-0.5 block text-[11px] font-medium text-slate-600">
-                        Cobrado pelo custo, sem lucro
-                      </span>
-                    )}
-                  </span>
-                  <span className="shrink-0 font-medium text-slate-700">
-                    {formatMoeda(l.valor)}
-                  </span>
-                </div>
-              ))}
+              {(['servico', 'avulsos'] as const).map((grupo) => {
+                const itens = resultado.breakdown.filter((l) =>
+                  grupo === 'avulsos'
+                    ? l.chave.startsWith('avulso:')
+                    : !l.chave.startsWith('avulso:')
+                )
+                if (itens.length === 0) return null
+                return (
+                  <div key={grupo} className="space-y-1.5">
+                    <p className="text-xs font-semibold text-slate-600">
+                      {grupo === 'servico' ? 'Custos do serviço' : 'Outros custos e repasses'}
+                    </p>
+                    {itens.map((l) => (
+                      <div key={l.chave} className="flex items-start justify-between gap-3 text-sm">
+                        <span className="min-w-0 break-words text-slate-500" title={l.detalhe}>
+                          {l.descricao}
+                        </span>
+                        <span className="shrink-0 font-medium text-slate-700">
+                          {formatMoeda(l.valorApresentado ?? l.valor)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })}
             </div>
             <div className="space-y-1.5 border-t border-slate-200 bg-white px-4 py-3 text-sm">
               <Linha
-                label={
-                  (resultado.custoRepassado ?? 0) > 0 ? 'Custos com lucro' : 'Custo do serviço'
-                }
-                valor={resultado.custoComAcrescimo ?? resultado.custoTotal}
+                label="Custo do serviço"
+                valor={resultado.custoServico ?? resultado.custoTotal}
               />
-              <Linha
-                label={`Acréscimo de lucro (${resultado.margemLucroPercent}%)`}
-                valor={resultado.valorMargem}
-              />
-              {(resultado.custoRepassado ?? 0) > 0 && (
-                <Linha label="Custos sem lucro" valor={resultado.custoRepassado ?? 0} />
+              <Linha label="Outros custos e repasses" valor={resultado.outrosCustosRepasses ?? 0} />
+              <Linha label="Lucro" valor={resultado.lucroServico ?? 0} />
+              {(resultado.ajustePreco ?? 0) > 0 && (
+                <Linha label="Complemento até o preço desejado" valor={resultado.ajustePreco!} />
               )}
-              <div className="border-t border-slate-100 pt-2">
-                <Linha label="Subtotal antes do imposto" valor={resultado.precoComMargem} />
-              </div>
               {resultado.emitirNota && (
                 <Linha
-                  label={`Imposto da nota (${resultado.aliquotaNotaPercent}%)`}
+                  label={`Imposto (${new Intl.NumberFormat('pt-BR').format(resultado.aliquotaNotaPercent)}%)`}
                   valor={resultado.impostoNota}
                 />
               )}
@@ -265,12 +340,6 @@ export function ServicoCalculoModal({
                   {formatMoeda(valorUnitario)} / {unidade}
                 </p>
               )}
-              {(resultado.custoRepassado ?? 0) > 0 && (
-                <p className="pt-2 text-xs leading-relaxed text-slate-500">
-                  Custos sem lucro são cobrados pelo valor do custo. O imposto da nota também incide
-                  sobre eles, quando houver emissão.
-                </p>
-              )}
             </div>
           </Card>
           <div className="mt-3 flex gap-2">
@@ -278,7 +347,7 @@ export function ServicoCalculoModal({
               Cancelar
             </Button>
             <Button icon={Check} className="flex-1" onClick={confirmar}>
-              Usar no orçamento
+              Usar no {rotuloDocumento}
             </Button>
           </div>
         </div>
@@ -806,8 +875,8 @@ function AvulsosBloco({ e, set }: BlocoProps): JSX.Element {
       <div className="space-y-2">
         {e.avulsos.length === 0 && (
           <p className="text-xs text-slate-400">
-            Inclua despesas adicionais do serviço. Escolha em cada item se haverá acréscimo de
-            lucro.
+            Inclua despesas adicionais do serviço. Escolha o percentual de lucro ou o repasse pelo
+            custo em cada item.
           </p>
         )}
         <ListaOrdenavel itens={e.avulsos} onChange={(avulsos) => set({ avulsos })}>
@@ -833,15 +902,48 @@ function AvulsosBloco({ e, set }: BlocoProps): JSX.Element {
                 </Field>
               </div>
               <div className="mt-3 space-y-1.5">
-                <Checkbox
-                  checked={a.aplicarAcrescimo !== false}
-                  onChange={(aplicarAcrescimo) => upd(a.id, { aplicarAcrescimo })}
-                  label="Aplicar acréscimo de lucro"
-                />
+                <Field label="Cálculo do lucro deste item">
+                  <Select
+                    value={
+                      a.aplicarAcrescimo === false
+                        ? 'sem'
+                        : a.acrescimoPersonalizadoPercent != null
+                          ? 'proprio'
+                          : 'geral'
+                    }
+                    onChange={(ev) =>
+                      upd(a.id, {
+                        aplicarAcrescimo: ev.target.value !== 'sem',
+                        acrescimoPersonalizadoPercent:
+                          ev.target.value === 'proprio'
+                            ? (a.acrescimoPersonalizadoPercent ?? e.margemLucroPercent)
+                            : undefined
+                      })
+                    }
+                  >
+                    <option value="geral">
+                      Usar percentual geral de lucro ({e.margemLucroPercent}%)
+                    </option>
+                    <option value="proprio">Usar percentual próprio de lucro</option>
+                    <option value="sem">Sem lucro — repassar pelo custo</option>
+                  </Select>
+                </Field>
+                {a.aplicarAcrescimo !== false && a.acrescimoPersonalizadoPercent != null && (
+                  <Field
+                    label="Percentual próprio de lucro deste item (%)"
+                    hint="Substitui o percentual geral somente neste item."
+                  >
+                    <NumberField
+                      value={a.acrescimoPersonalizadoPercent}
+                      min={0}
+                      onChange={(v) => upd(a.id, { acrescimoPersonalizadoPercent: v })}
+                    />
+                  </Field>
+                )}
                 <p className="text-xs leading-relaxed text-slate-500">
                   {a.aplicarAcrescimo === false
                     ? 'Cobrado pelo valor do custo. O imposto da nota será incluído se aplicável.'
-                    : 'O percentual de lucro será aplicado sobre este custo.'}
+                    : `O lucro será calculado uma vez, à taxa de ${a.acrescimoPersonalizadoPercent ?? e.margemLucroPercent}% sobre este custo.`}
                 </p>
               </div>
             </div>
