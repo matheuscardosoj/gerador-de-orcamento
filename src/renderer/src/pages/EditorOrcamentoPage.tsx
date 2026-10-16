@@ -1,3 +1,4 @@
+import { MensagemFlutuante } from '../components/MensagemFlutuante'
 import { mensagemErro } from '@shared/erros'
 import { RevisaoIA } from '../components/RevisaoIA'
 import { ColaboracaoDocumento } from '../components/ColaboracaoDocumento'
@@ -184,9 +185,11 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
   if (!orc || !dados) {
     return (
       <PageShell titulo={erro ? 'Falha ao abrir o orçamento' : 'Carregando…'}>
-        <p className={erro ? 'text-sm text-red-700' : 'text-sm text-slate-500'}>
-          {erro ?? 'Carregando dados…'}
-        </p>
+        {erro ? (
+          <MensagemFlutuante>{erro}</MensagemFlutuante>
+        ) : (
+          <p className="text-sm text-slate-500">Carregando dados…</p>
+        )}
       </PageShell>
     )
   }
@@ -382,7 +385,7 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
         </>
       }
     >
-      {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
+      {erro && <MensagemFlutuante className="mb-4">{erro}</MensagemFlutuante>}
       {errosValidacao.length > 0 && (
         <Mensagem tom="aviso" className="mb-4">
           <p className="font-medium">Revise os campos destacados antes de concluir o documento.</p>

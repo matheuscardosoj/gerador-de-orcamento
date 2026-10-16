@@ -1,3 +1,4 @@
+import { MensagemFlutuante } from '../components/MensagemFlutuante'
 import { useState } from 'react'
 import { Mail, RefreshCw, UserRoundX, UserRoundCheck, X } from 'lucide-react'
 import type { PapelConta } from '@shared/conta'
@@ -113,7 +114,9 @@ export function ConvitesSection({
         title="Usuários da empresa"
         description="Convide por e-mail. Cada pessoa define sua senha e usa seu próprio acesso. Administradores também gerenciam pessoas e configurações."
       />
-      {(error || (erro && !novo && !novaEmpresa)) && <Mensagem>{error || erro}</Mensagem>}
+      {(error || (erro && !novo && !novaEmpresa)) && (
+        <MensagemFlutuante>{error || erro}</MensagemFlutuante>
+      )}
       {listaPendente && (
         <Mensagem tom="aviso">
           Empresa criada. Não foi possível atualizar a lista.{' '}
@@ -123,9 +126,9 @@ export function ConvitesSection({
         </Mensagem>
       )}
       {aviso && (
-        <Mensagem tom="info" temporaria>
+        <MensagemFlutuante tom="info" temporaria>
           {aviso}
-        </Mensagem>
+        </MensagemFlutuante>
       )}
       {loading && !data ? (
         <p role="status" className="text-sm text-slate-500">
@@ -311,7 +314,7 @@ export function ConvitesSection({
             })
           }}
         >
-          {erro && <Mensagem>{erro}</Mensagem>}
+          {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
           {novaEmpresa && (
             <Field label="Nome da empresa">
               <Input
@@ -355,16 +358,11 @@ export function ConvitesSection({
           )}
         </form>
       </Modal>
+      {confirmar?.erro && <MensagemFlutuante>{confirmar.erro}</MensagemFlutuante>}
       <ConfirmDialog
         open={!!confirmar}
         title={confirmar?.titulo ?? 'Confirmar alteração'}
-        description={
-          confirmar?.erro ? (
-            <span className="text-red-700">{confirmar.erro}</span>
-          ) : (
-            (confirmar?.texto ?? '')
-          )
-        }
+        description={confirmar?.texto ?? ''}
         confirmLabel={confirmar?.rotulo ?? 'Confirmar'}
         danger={confirmar?.destrutivo ?? false}
         busy={ocupado}

@@ -1,3 +1,4 @@
+import { MensagemFlutuante } from '../components/MensagemFlutuante'
 import { mensagemErro } from '@shared/erros'
 import { RevisaoIA } from '../components/RevisaoIA'
 import { ColaboracaoDocumento } from '../components/ColaboracaoDocumento'
@@ -284,9 +285,11 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
   if (!dados || !rel || !totais)
     return (
       <PageShell titulo={erro ? 'Falha ao abrir o relatório' : 'Carregando…'}>
-        <p className={erro ? 'text-sm text-red-700' : 'text-sm text-slate-500'}>
-          {erro ?? 'Carregando dados…'}
-        </p>
+        {erro ? (
+          <MensagemFlutuante>{erro}</MensagemFlutuante>
+        ) : (
+          <p className="text-sm text-slate-500">Carregando dados…</p>
+        )}
       </PageShell>
     )
   const orcAdaptado: Orcamento = {
@@ -343,7 +346,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
       descricao="Serviços prestados, adiantamentos e reembolsos"
       acoes={acoes}
     >
-      {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
+      {erro && <MensagemFlutuante className="mb-4">{erro}</MensagemFlutuante>}
       {errosValidacao.length > 0 && (
         <Mensagem tom="aviso" className="mb-4">
           <p className="font-medium">Revise os campos destacados antes de concluir o relatório.</p>

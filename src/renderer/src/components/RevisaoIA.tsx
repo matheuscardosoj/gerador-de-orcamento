@@ -1,8 +1,9 @@
+import { MensagemFlutuante } from './MensagemFlutuante'
 import { mensagemErro } from '@shared/erros'
 import { useEffect, useRef, useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import { api } from '../lib/api'
-import { Button, ConfirmDialog, Field, Mensagem, Modal, Textarea } from '../ui/primitives'
+import { Button, ConfirmDialog, Field, Modal, Textarea } from '../ui/primitives'
 import type { RevisaoTextoEntrada } from '@shared/revisao-ia'
 import type { SugestaoObservacaoEntrada } from '@shared/api'
 
@@ -110,7 +111,7 @@ export function RevisaoIA({
             Preparando a IA local e revisando o texto… Você pode cancelar a qualquer momento.
           </p>
         )}
-        {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
+        {erro && <MensagemFlutuante className="mb-4">{erro}</MensagemFlutuante>}
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Texto original">
             <Textarea value={original} readOnly className="min-h-[220px]" />

@@ -1,3 +1,4 @@
+import { MensagemFlutuante } from './MensagemFlutuante'
 import { mensagemErro } from '@shared/erros'
 import { ListaOrdenavel } from '../ui/ordenavel'
 import { useEffect, useRef, useState } from 'react'
@@ -12,8 +13,7 @@ import {
   SectionTitle,
   Select,
   Textarea,
-  cn,
-  Mensagem
+  cn
 } from '../ui/primitives'
 import type { AnexoOrcamento } from '@shared/types'
 
@@ -102,7 +102,7 @@ export function AnexosCard<T extends AnexoEditavel>({
           e.target.value = ''
         }}
       />
-      {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
+      {erro && <MensagemFlutuante className="mb-4">{erro}</MensagemFlutuante>}
       <div
         onDragOver={(e) => {
           e.preventDefault()

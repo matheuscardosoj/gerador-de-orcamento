@@ -1,3 +1,4 @@
+import { MonitorConexao } from './components/MonitorConexao'
 import { consultarEdicao, aceitarEstadoEdicao } from './lib/controle-edicao'
 import { RecibosPage } from './pages/RecibosPage'
 import { ContaGate, useConta } from './components/ContaGate'
@@ -382,6 +383,7 @@ function App(): JSX.Element {
     <ContaGate>
       <NavProvider>
         <div className="flex h-full">
+          <MonitorConexao />
           <RecepcaoPedidosEdicao />
           <Sidebar />
           <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-slate-100">

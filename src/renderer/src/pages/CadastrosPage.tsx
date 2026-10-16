@@ -1,3 +1,4 @@
+import { MensagemFlutuante } from '../components/MensagemFlutuante'
 import { mensagemErro } from '@shared/erros'
 import { validarCliente } from '@shared/clientes'
 import { useEffect, useRef, useState } from 'react'
@@ -215,7 +216,9 @@ function SecaoClientes({
         </Button>
       </div>
       {erroCarga && (
-        <Mensagem className="mb-4">Não foi possível carregar os clientes. {erroCarga}</Mensagem>
+        <MensagemFlutuante className="mb-4">
+          Não foi possível carregar os clientes. {erroCarga}
+        </MensagemFlutuante>
       )}
       {loading ? (
         <p className="text-sm text-slate-500">Carregando…</p>
@@ -374,10 +377,11 @@ function SecaoClientes({
           }}
         />
       )}
+      {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
       <ConfirmDialog
         open={Boolean(excluir)}
         title="Excluir cliente"
-        description={`Excluir o cliente “${excluir?.nome ?? ''}”? Documentos já gravados continuarão preservados.${erro ? ` Não foi possível excluir: ${erro}` : ''}`}
+        description={`Excluir o cliente “${excluir?.nome ?? ''}”? Documentos já gravados continuarão preservados.`}
         onCancel={() => {
           setExcluir(null)
           setErro(null)
@@ -489,7 +493,7 @@ function ClienteModal({
       }
     >
       <div className="space-y-4">
-        {erro && <Mensagem>{erro}</Mensagem>}
+        {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
         <Field label="Nome / razão social (obrigatório)">
           <Input value={form.nome} onChange={(e) => set({ nome: e.target.value })} autoFocus />
         </Field>
@@ -713,7 +717,9 @@ function SecaoServicos({
         </Button>
       </div>
       {erroCarga && (
-        <Mensagem className="mb-4">Não foi possível carregar os serviços. {erroCarga}</Mensagem>
+        <MensagemFlutuante className="mb-4">
+          Não foi possível carregar os serviços. {erroCarga}
+        </MensagemFlutuante>
       )}
       {loading ? (
         <p className="text-sm text-slate-500">Carregando…</p>
@@ -848,10 +854,11 @@ function SecaoServicos({
           }}
         />
       )}
+      {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
       <ConfirmDialog
         open={Boolean(excluir)}
         title="Excluir serviço"
-        description={`Excluir o serviço “${excluir?.nome ?? ''}” do catálogo? Itens já gravados não serão alterados.${erro ? ` Não foi possível excluir: ${erro}` : ''}`}
+        description={`Excluir o serviço “${excluir?.nome ?? ''}” do catálogo? Itens já gravados não serão alterados.`}
         onCancel={() => {
           setExcluir(null)
           setErro(null)
@@ -957,7 +964,7 @@ function ServicoModal({
       }
     >
       <div className="space-y-4">
-        {erro && <Mensagem>{erro}</Mensagem>}
+        {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
         <Field label="Nome do serviço">
           <Input value={form.nome} onChange={(e) => set({ nome: e.target.value })} autoFocus />
         </Field>

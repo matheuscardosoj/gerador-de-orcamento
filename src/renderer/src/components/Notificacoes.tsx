@@ -1,7 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertCircle, CheckCircle2, Info, TriangleAlert, X } from 'lucide-react'
 import type { Notificacao, NivelNotificacao } from '../lib/notificacoes'
-import { dispensarNotificacao, eventoNotificacao, notificar } from '../lib/notificacoes'
+import {
+  dispensarNotificacao,
+  eventoNotificacao,
+  notificacoesAtivas,
+  notificar
+} from '../lib/notificacoes'
 import { AppIcon } from '../ui/primitives'
 
 const aparencia: Record<
@@ -35,65 +41,44 @@ const aparencia: Record<
 }
 
 export function Notificacoes(): JSX.Element | null {
-  const [fila, setFila] = useState<Notificacao[]>([])
+  const [fila, setFila] = useState<Notificacao[]>(notificacoesAtivas)
   const [expandida, setExpandida] = useState(false)
+  const [host, setHost] = useState<HTMLElement>(document.body)
   useEffect(() => {
-    const receber = (evento: Event): void => {
-      const notificacao = (evento as CustomEvent<Notificacao>).detail
-      if (notificacao?.mensagem)
-        setFila((atual) =>
-          atual.some((item) => item.id === notificacao.id) ? atual : [...atual, notificacao]
-        )
-    }
-    const remover = (evento: Event): void => {
-      const chave = (evento as CustomEvent<string>).detail
-      setFila((atual) => atual.filter((item) => item.chave !== chave))
-    }
-    const atualizarAcao = (evento: Event): void => {
-      const { chave, desabilitada } = (
-        evento as CustomEvent<{ chave: string; desabilitada: boolean }>
-      ).detail
-      setFila((atual) =>
-        atual.map((item) =>
-          item.chave === chave && item.acao
-            ? { ...item, acao: { ...item.acao, desabilitada } }
-            : item
-        )
-      )
-    }
-    window.addEventListener('gdo:notificacao-acao', atualizarAcao)
-    window.addEventListener('gdo:notificacao-remover', remover)
-    window.addEventListener(eventoNotificacao(), receber)
-    return () => {
-      window.removeEventListener(eventoNotificacao(), receber)
-      window.removeEventListener('gdo:notificacao-acao', atualizarAcao)
-      window.removeEventListener('gdo:notificacao-remover', remover)
-    }
+    const atualizar = (): void => setFila(notificacoesAtivas())
+    atualizar()
+    window.addEventListener(eventoNotificacao(), atualizar)
+    return () => window.removeEventListener(eventoNotificacao(), atualizar)
   }, [])
-
-  const dispensar = useCallback((id: string): void => {
-    setFila((atual) => {
-      const item = atual.find((notificacao) => notificacao.id === id)
-      if (item?.chave) dispensarNotificacao(item.chave)
-      return atual.filter((notificacao) => notificacao.id !== id)
-    })
+  useEffect(() => {
+    const atualizarHost = (): void => {
+      const hosts = document.querySelectorAll<HTMLElement>('[data-gdo-notificacoes]')
+      const destino = hosts.item(hosts.length - 1) ?? document.body
+      setHost((atual) => (atual === destino ? atual : destino))
+    }
+    const observador = new MutationObserver(atualizarHost)
+    observador.observe(document.body, { childList: true, subtree: true })
+    atualizarHost()
+    return () => observador.disconnect()
   }, [])
+  const dispensar = useCallback((id: string): void => dispensarNotificacao(id), [])
   if (!fila.length) return null
   const prioritarias = [...fila].sort((a, b) => Number(!!b.persistente) - Number(!!a.persistente))
   const visiveis = expandida ? prioritarias : prioritarias.slice(0, 3)
-  return (
+  return createPortal(
     <section
       aria-label="Avisos"
-      aria-live="polite"
       className="pointer-events-none fixed bottom-4 right-4 z-[120] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2"
     >
-      {visiveis.map((item) => (
-        <AvisoFlutuante key={item.id} notificacao={item} aoFechar={dispensar} />
-      ))}
+      <div className="flex max-h-[min(70vh,36rem)] flex-col gap-2 overflow-y-auto overscroll-contain p-1">
+        {visiveis.map((item) => (
+          <AvisoFlutuante key={item.id} notificacao={item} aoFechar={dispensar} />
+        ))}
+      </div>
       {fila.length > 3 && (
         <button
           type="button"
-          className="self-end rounded-full bg-slate-800 px-2.5 py-1 text-xs font-medium text-white shadow"
+          className="pointer-events-auto self-end rounded-full bg-slate-800 px-2.5 py-1 text-xs font-medium text-white shadow"
           aria-expanded={expandida}
           onClick={() => setExpandida((aberta) => !aberta)}
         >
@@ -102,7 +87,8 @@ export function Notificacoes(): JSX.Element | null {
             : `Ver ${fila.length - 3} aviso${fila.length - 3 === 1 ? '' : 's'} oculto${fila.length - 3 === 1 ? '' : 's'}`}
         </button>
       )}
-    </section>
+    </section>,
+    host
   )
 }
 
@@ -116,15 +102,22 @@ function AvisoFlutuante({
   const [pausado, setPausado] = useState(false)
   const [ocupado, setOcupado] = useState(false)
   const estilo = aparencia[notificacao.nivel]
+  const restante = useRef(estilo.tempo)
   useEffect(() => {
     if (pausado) return
     if (notificacao.persistente) return
-    const timer = window.setTimeout(() => aoFechar(notificacao.id), estilo.tempo)
-    return () => window.clearTimeout(timer)
+    const inicio = Date.now()
+    const timer = window.setTimeout(() => aoFechar(notificacao.id), restante.current)
+    return () => {
+      restante.current = Math.max(0, restante.current - (Date.now() - inicio))
+      window.clearTimeout(timer)
+    }
   }, [notificacao.id, notificacao.persistente, pausado, estilo.tempo, aoFechar])
   const Icone = estilo.icone
   return (
     <div
+      role={notificacao.nivel === 'erro' ? 'alert' : 'status'}
+      aria-atomic="true"
       className={`pointer-events-auto flex items-start gap-3 rounded-xl border bg-white p-3 shadow-lg ${estilo.cor}`}
       onMouseEnter={() => setPausado(true)}
       onMouseLeave={() => setPausado(false)}

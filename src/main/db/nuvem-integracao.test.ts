@@ -428,3 +428,21 @@ it('publica também o histórico de documentos excluídos antes da primeira cone
     await trocar('pc2')
   }
 })
+
+it('inicia offline e recupera a nuvem sem reiniciar nem clicar em sincronizar', async () => {
+  const tempoReal = await import('../tempo-real')
+  try {
+    offline = true
+    await nuvem.inicializarNuvem()
+    expect(nuvem.statusNuvem().conexao).toBe('inacessivel')
+    await new Promise((r) => setTimeout(r, 10))
+    offline = false
+    tempoReal.solicitarRecuperacaoNuvem()
+    await expect.poll(() => nuvem.statusNuvem().erro, { timeout: 5000 }).toBeNull()
+    expect(nuvem.statusNuvem().conexao).toBe('acessivel')
+  } finally {
+    tempoReal.pararTempoReal()
+    await tempoReal.aguardarTempoReal()
+    offline = false
+  }
+})

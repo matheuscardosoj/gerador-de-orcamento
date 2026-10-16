@@ -1,3 +1,4 @@
+import { MensagemFlutuante } from './MensagemFlutuante'
 import { mensagemErro } from '@shared/erros'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -22,7 +23,6 @@ import {
   Field,
   IconButton,
   Input,
-  Mensagem,
   Modal,
   NumericInput,
   Select
@@ -307,7 +307,7 @@ export function HistoricoDocumentos({
         : ['rascunho', 'pendente', 'recebido', 'cancelado']
   return (
     <div className="space-y-4">
-      {(erro || erroCarga) && <Mensagem>{erro || erroCarga}</Mensagem>}
+      {(erro || erroCarga) && <MensagemFlutuante>{erro || erroCarga}</MensagemFlutuante>}
       <div className="flex flex-wrap items-center gap-3">
         <Input
           disabled={!carregadas}

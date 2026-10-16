@@ -44,6 +44,7 @@ let leiturasRetidas = 0
 let reterControles: Promise<void> | null = null
 let renovacoes = 0
 let lotesPublicados = 0
+let perderRespostaLote = false
 let recusarEntidade: string | null = null
 let rascunhos: typeof import('../rascunhos')
 async function perfil(nome: string) {
@@ -172,8 +173,14 @@ beforeAll(async () => {
           ? rows.map((r) => r.r)
           : rows[0]?.r
       }
+      if (u.pathname.endsWith('/gdo_batch_v3') && perderRespostaLote) {
+        perderRespostaLote = false
+        offline = true
+        throw new TypeError('fetch failed')
+      }
       return new Response(JSON.stringify(result), { status: 200 })
     } catch (e) {
+      if (offline) throw e
       return new Response(
         JSON.stringify({
           message: (e as Error).message,
@@ -1052,3 +1059,88 @@ it('sincronização atrasada não reduz a geração já confirmada pela RPC', as
     await sincronizacao
   }
 })
+
+it.each(['recibo', 'orcamento', 'relatorio'] as const)(
+  'mantém aplicação de %s pendente após resposta perdida e confirma os mesmos IDs depois do reinício',
+  async (tipo) => {
+    await perfil('a')
+    const proposta =
+      tipo === 'recibo'
+        ? null
+        : repos.orcamentosRepo.create({
+            data: '2026-10-16',
+            destinatario: 'Teste confirmação',
+            formato: 'carta',
+            titulo: 'Aplicação única',
+            itensServico: [],
+            materiais: [],
+            observacoes: [],
+            pagamentos: [],
+            anexos: [],
+            valorTotal: 0,
+            status: 'rascunho'
+          })
+    const documento =
+      tipo === 'recibo'
+        ? recibos.recibosRepo.create({
+            clienteId: null,
+            destinatario: 'Teste confirmação',
+            descricao: 'Original',
+            valor: 123,
+            formaPagamento: 'Pix',
+            data: '2026-10-16',
+            local: 'Teste',
+            status: 'rascunho',
+            quitacao: 'parcial',
+            observacao: ''
+          })
+        : tipo === 'orcamento'
+          ? proposta!
+          : repos.relatoriosRepo.criarDeOrcamento(proposta!.id)!
+    await nuvem.sincronizarNuvem()
+    await colaboracao.controlarEdicao(tipo, documento.id, 'adquirir')
+    const edicao = structuredClone(documento)
+    if ('itensServico' in edicao) edicao.observacaoInterna = 'Aplicação única'
+    else edicao.descricao = 'Aplicação única'
+    const draft = rascunhos.criarRascunho(tipo, documento.id, edicao)
+    const comparacao = await rascunhos.compararRascunho(draft.id)
+    const versoesAntes = Number(
+      sql.get('SELECT count(*) AS n FROM versoes WHERE tipo=? AND documento_id=?', [
+        tipo,
+        documento.id
+      ])?.n
+    )
+    perderRespostaLote = true
+    await expect(rascunhos.aplicarRascunho(draft.id, comparacao.revisaoRemota, {})).rejects.toThrow(
+      'aguarda confirmação'
+    )
+    expect(rascunhos.obterRascunho(draft.id).estado).toBe('aguardando_confirmacao')
+    const ids = sql.all('SELECT operacao_id FROM rascunhos_envios WHERE rascunho_id=?', [draft.id])
+    expect(ids.length).toBeGreaterThan(0)
+    await expect(rascunhos.aplicarRascunho(draft.id, comparacao.revisaoRemota, {})).rejects.toThrow(
+      'já foi aplicado'
+    )
+    await perfil('a')
+    expect(
+      sql.all('SELECT operacao_id FROM rascunhos_envios WHERE rascunho_id=?', [draft.id])
+    ).toEqual(ids)
+    offline = false
+    await nuvem.sincronizarNuvem()
+    expect(rascunhos.obterRascunho(draft.id).estado).toBe('aplicado')
+    expect(
+      Number(
+        sql.get('SELECT count(*) AS n FROM versoes WHERE tipo=? AND documento_id=?', [
+          tipo,
+          documento.id
+        ])?.n
+      )
+    ).toBe(versoesAntes + 1)
+    const outraEdicao = structuredClone(edicao)
+    if ('itensServico' in outraEdicao) outraEdicao.observacaoInterna = 'Trabalho após confirmação'
+    else outraEdicao.descricao = 'Trabalho após confirmação'
+    const proximo = rascunhos.salvarRascunho(draft.id, outraEdicao)
+    expect(proximo.id).not.toBe(draft.id)
+    expect(proximo.estado).toBe('local')
+    expect(rascunhos.obterRascunho(draft.id).estado).toBe('aplicado')
+  }
+)

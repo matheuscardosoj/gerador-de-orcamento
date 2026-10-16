@@ -76,6 +76,14 @@ export interface RascunhoCadastro {
 }
 
 export interface StatusNuvem {
+  conexao?: 'verificando' | 'acessivel' | 'inacessivel'
+  sincronizando?: boolean
+  ultimoContatoEm?: string | null
+  falhaSincronizacao?: {
+    motivo: import('./falha-nuvem').MotivoFalhaNuvem
+    temporaria: boolean
+    repetirAposMs?: number
+  } | null
   configurada: boolean
   autenticada: boolean
   computador: string
@@ -150,7 +158,7 @@ export interface RascunhoCompartilhado {
   documento: Documento
   criadoEm: string
   atualizadoEm: string
-  estado: 'local' | 'conflito' | 'aplicado'
+  estado: 'local' | 'conflito' | 'aplicado' | 'aguardando_confirmacao' | 'envio_interrompido'
 }
 export interface ComparacaoRascunho {
   rascunho: RascunhoCompartilhado

@@ -217,6 +217,8 @@ export function mensagemErro(erro: unknown, contexto?: string): string {
       'Sua conta não tem autorização para esta ação. Confira o vínculo do usuário com a empresa.'
   else if (codigo === 'SQLITE_BUSY' || /^database is locked\b/i.test(limpa))
     mensagem = 'O banco local está ocupado. Aguarde a operação atual e tente novamente.'
+  else if (/^A aplicação está salva neste computador e aguarda confirmação da nuvem\./.test(limpa))
+    mensagem = limpa
   else if (/^Responsabilidade inválida\.?$/i.test(limpa))
     mensagem =
       'A autorização do documento mudou. Atualize a tela e solicite a edição novamente antes de tentar excluir ou salvar.'

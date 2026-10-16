@@ -1,3 +1,4 @@
+import { MensagemFlutuante } from '../components/MensagemFlutuante'
 import { mensagemErro } from '@shared/erros'
 import { PadroesConfig } from './PadroesConfig'
 import { NuvemSection } from './NuvemSection'
@@ -373,9 +374,9 @@ function SecaoEmpresa(): JSX.Element {
           </div>
         </div>
         {erro && (
-          <Mensagem className="mt-4">
+          <MensagemFlutuante className="mt-4">
             Não foi possível concluir a alteração dos dados da empresa. {erro}
-          </Mensagem>
+          </MensagemFlutuante>
         )}
 
         <BotaoSalvar salvando={operacao === 'salvar'} ok={ok} disabled={ocupado} />
@@ -568,7 +569,7 @@ function SecaoParametros(): JSX.Element {
             </Select>
           </Field>
         </div>
-        {erro && <Mensagem className="mt-4">{erro}</Mensagem>}
+        {erro && <MensagemFlutuante className="mt-4">{erro}</MensagemFlutuante>}
         <BotaoSalvar salvando={salvando} ok={ok} />
       </Card>
     </form>
@@ -820,7 +821,7 @@ function SecaoDados(): JSX.Element {
           {resultado}
         </p>
       )}
-      {erro && <Mensagem>{erro}</Mensagem>}
+      {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
       <ConfirmDialog
         open={Boolean(confirmacao)}
         title={confirmacao === 'restaurar' ? 'Restaurar backup' : 'Importar mantendo dados'}

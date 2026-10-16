@@ -365,6 +365,7 @@ export function criarMockApi(): AppApi {
       exportar: async () => ({ caminho: null })
     },
     nuvem: {
+      verificarConexao: async () => {},
       restaurarBase: async () => null,
       copiarInstalacao: async () => {
         throw new Error('Disponível no aplicativo desktop.')

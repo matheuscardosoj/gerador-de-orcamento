@@ -1,3 +1,5 @@
+import { classificarFalhaNuvem } from '@shared/falha-nuvem'
+import { confirmarAplicacoesRascunhos, atualizarAplicacoesRascunhos } from './rascunhos-envio'
 import { safeStorage } from 'electron'
 import { hostname } from 'os'
 import { all, get, run, texto, tx, db, type Linha } from './db/sqlite'
@@ -47,6 +49,9 @@ import {
   tentarNovamenteOperacao
 } from './fila-nuvem'
 
+let conexao: StatusNuvem['conexao'] = 'verificando'
+let ultimoContatoEm: string | null = null
+let falhaSincronizacao: StatusNuvem['falhaSincronizacao'] = null
 let ocupado = false
 let sincronizacaoAtual: Promise<StatusNuvem> | null = null
 let repetirSincronizacao = false
@@ -135,6 +140,9 @@ export function configurarSessaoConta(
   usarCentral: boolean
 ): void {
   geracaoSessao++
+  conexao = 'verificando'
+  ultimoContatoEm = null
+  falhaSincronizacao = null
   acessoInterrompido = false
   lembrarSessao = lembrar
   empresaSelecionada = empresa
@@ -241,12 +249,26 @@ export async function pedidoNuvem(
     const dados = await resposta.json().catch(() => null)
     if (geracao !== geracaoSessao)
       throw new Error('A empresa ativa mudou. A resposta anterior foi descartada.')
+    conexao = 'acessivel'
+    ultimoContatoEm = new Date().toISOString()
     if (!resposta.ok) {
       const erro = new Error(
         dados?.msg ?? dados?.message ?? dados?.erro ?? `Falha na nuvem (${resposta.status}).`
-      ) as Error & { codigo?: string; status?: number; details?: string; hint?: string }
+      ) as Error & {
+        codigo?: string
+        status?: number
+        details?: string
+        hint?: string
+        repetirAposMs?: number
+      }
       erro.codigo = dados?.code
       erro.status = resposta.status
+      const retry = resposta.headers?.get('retry-after')
+      if (retry) {
+        const segundos = Number(retry)
+        const ms = Number.isFinite(segundos) ? segundos * 1000 : Date.parse(retry) - Date.now()
+        if (Number.isFinite(ms) && ms > 0) erro.repetirAposMs = ms
+      }
       erro.details = typeof dados?.details === 'string' ? dados.details : undefined
       erro.hint = typeof dados?.hint === 'string' ? dados.hint : undefined
       const motivo = motivoIndisponibilidade(erro)
@@ -254,6 +276,16 @@ export async function pedidoNuvem(
       throw erro
     }
     return dados
+  } catch (erro) {
+    if (geracao === geracaoSessao && !acessoInterrompido) {
+      const falha = classificarFalhaNuvem(erro)
+      if (falha.temporaria) {
+        conexao = 'inacessivel'
+        falhaSincronizacao = falha
+        avisarDados({ origem: 'nuvem', entidades: [], status: true })
+      }
+    }
+    throw erro
   } finally {
     requisicoesAtivas.delete(controller)
   }
@@ -296,16 +328,34 @@ async function conferirGeracaoBase(): Promise<void> {
   }
   salvar('atualizacaoBasePendente', false)
 }
-async function reconhecerEmpresa(criar = false): Promise<ContextoNuvem> {
+async function reconhecerEmpresa(criar = false, timeoutMs = 30000): Promise<ContextoNuvem> {
   let contexto: ContextoNuvem
   try {
     contexto = central
-      ? ((await pedido('/rest/v1/rpc/gdo_contexto_v4', {
-          p_empresa: empresaSelecionada
-        })) as ContextoNuvem)
-      : ((await pedido('/rest/v1/rpc/gdo_contexto_v3', { p_criar: criar }).catch(async (e) => {
+      ? ((await pedido(
+          '/rest/v1/rpc/gdo_contexto_v4',
+          {
+            p_empresa: empresaSelecionada
+          },
+          false,
+          undefined,
+          timeoutMs
+        )) as ContextoNuvem)
+      : ((await pedido(
+          '/rest/v1/rpc/gdo_contexto_v3',
+          { p_criar: criar },
+          false,
+          undefined,
+          timeoutMs
+        ).catch(async (e) => {
           if ((e as { codigo?: string }).codigo !== 'PGRST202') throw e
-          return pedido('/rest/v1/rpc/gdo_contexto_v2', { p_criar: criar })
+          return pedido(
+            '/rest/v1/rpc/gdo_contexto_v2',
+            { p_criar: criar },
+            false,
+            undefined,
+            timeoutMs
+          )
         })) as ContextoNuvem)
   } catch (e) {
     if (central) {
@@ -374,6 +424,7 @@ async function reconhecerEmpresa(criar = false): Promise<ContextoNuvem> {
 }
 export function ativarTempoReal(): void {
   iniciarTempoReal({
+    status: statusNuvem,
     configuracao: configuracaoNuvem,
     identidade: () => {
       if (protocoloNuvem() < 2) return null
@@ -385,9 +436,18 @@ export function ativarTempoReal(): void {
     sincronizarCompleta: sincronizarNuvem,
     renovar: async () => {
       if (!sessao()) return
-      await reconhecerEmpresa()
-      const { renovarEdicoes } = await import('./colaboracao')
-      await renovarEdicoes()
+      try {
+        await reconhecerEmpresa(false, 8000)
+        const { renovarEdicoes } = await import('./colaboracao')
+        await renovarEdicoes()
+      } catch (erro) {
+        if (!acessoInterrompido) {
+          falhaSincronizacao = classificarFalhaNuvem(erro)
+          salvar('erroNuvem', mensagemErro(erro))
+          avisarDados({ origem: 'nuvem', entidades: [], status: true })
+        }
+        throw erro
+      }
     },
     estado: (estado, erro) => {
       if (estadoTempoReal === estado && erroTempoReal === erro) return
@@ -400,7 +460,7 @@ export function ativarTempoReal(): void {
 export async function inicializarNuvem(): Promise<void> {
   if (!sessao()) return
   try {
-    await reconhecerEmpresa()
+    await reconhecerEmpresa(false, 8000)
     if (protocoloNuvem() >= 2) {
       await pedido(
         `/rest/v1/rpc/${protocoloNuvem() >= 3 ? 'gdo_dispositivo_v3' : 'gdo_dispositivo_v2'}`,
@@ -409,9 +469,9 @@ export async function inicializarNuvem(): Promise<void> {
           p_nome: hostname()
         }
       )
-      ativarTempoReal()
     } else await sincronizarNuvem()
   } catch (e) {
+    falhaSincronizacao = classificarFalhaNuvem(e)
     salvar('erroNuvem', mensagemErro(e))
     avisarDados({ origem: 'nuvem', entidades: [], status: true })
     if (/EMPRESA_EXCLUIDA/.test((e as Error)?.message ?? '')) {
@@ -422,6 +482,8 @@ export async function inicializarNuvem(): Promise<void> {
         { codigo: 'EMPRESA_EXCLUIDA' }
       )
     }
+  } finally {
+    if (!acessoInterrompido && sessao()) ativarTempoReal()
   }
 }
 
@@ -455,6 +517,10 @@ export function statusNuvem(): StatusNuvem {
     ])
   ) as Record<TipoDocumento, number>
   return {
+    conexao,
+    sincronizando: ocupado,
+    ultimoContatoEm,
+    falhaSincronizacao,
     configurada: !!config<ConfigNuvem>('nuvem'),
     autenticada: !!sessaoVolatil || !!config<string>('sessaoNuvem'),
     computador: computadorId(),
@@ -881,7 +947,8 @@ function aplicar(e: Remoto): void {
 }
 export async function consultarDocumentoRemoto(
   tipo: TipoDocumento,
-  id: string
+  id: string,
+  timeoutMs = 30000
 ): Promise<Remoto | null> {
   if (protocoloNuvem() < 2)
     throw new Error('A conciliação compartilhada exige o protocolo 2 da nuvem.')
@@ -890,7 +957,10 @@ export async function consultarDocumentoRemoto(
     {
       p_tipo: tipo,
       p_id: id
-    }
+    },
+    false,
+    undefined,
+    timeoutMs
   )) as Remoto | null
 }
 export function adotarDocumentoRemoto(e: Remoto): void {
@@ -1038,6 +1108,8 @@ export async function finalizarAtualizacaoNumeracao(revisao: string): Promise<St
 async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
   if (ocupado || conectando) return statusNuvem()
   ocupado = true
+  falhaSincronizacao = null
+  avisarDados({ origem: 'nuvem', entidades: [], status: true })
   let erroEnvio: string | null = null
   try {
     if (!completa && config<AtualizacaoNumeracaoPendente>('atualizacaoNumeracaoPendente'))
@@ -1122,17 +1194,12 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
           salvar('atualizacaoBasePendente', true)
           throw e
         }
-        const erro = e as { status?: number; codigo?: string; name?: string }
-        const temporaria =
-          erro.status === 401 ||
-          erro.status === 408 ||
-          erro.status === 429 ||
-          (erro.status ?? 0) >= 500 ||
-          /TimeoutError|AbortError/.test(erro.name ?? '') ||
-          /fetch failed|Failed to fetch|network|ENETUNREACH|ECONNRESET|ETIMEDOUT/i.test(String(e))
+        const falha = classificarFalhaNuvem(e)
+        const temporaria = falha.temporaria || falha.motivo === 'sessao'
         // Uma falha de transporte pode ocultar uma confirmação. Mantém a identidade
         // da operação para reenvio idempotente; nunca cria uma operação substituta.
         if (temporaria) {
+          falhaSincronizacao = falha
           erroEnvio = mensagemErro(e)
           break
         }
@@ -1153,6 +1220,7 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
           JSON.stringify(result.remoto)
         ])
         marcarGrupo(fila, 'conflito')
+        atualizarAplicacoesRascunhos()
         if (protocoloNuvem() < 2)
           throw new Error('Conflito de sincronização. Compare as versões e escolha como continuar.')
         for (const l of fila) bloqueadas.add(texto(l.entidade))
@@ -1169,6 +1237,7 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
         if (protocoloNuvem() >= 3)
           for (const r of result.resultados ?? [])
             if (/^(clientes|servicos):/.test(r.entidade)) cadastrosConfirmados.add(r.entidade)
+        confirmarAplicacoesRascunhos(fila.map((l) => texto(l.id)))
         for (const l of fila) run('DELETE FROM fila_nuvem WHERE id=?', [l.id])
         for (const n of result.numeros ?? []) confirmarNumero(n.tipo, n.documentoId, n.numero)
       })
@@ -1460,9 +1529,12 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
     )
     avisarDados({ origem: 'nuvem', entidades: [], status: true })
   } catch (e) {
+    falhaSincronizacao = classificarFalhaNuvem(e)
     salvar('erroNuvem', mensagemErro(e))
   } finally {
+    atualizarAplicacoesRascunhos()
     ocupado = false
+    avisarDados({ origem: 'nuvem', entidades: [], status: true })
   }
   return statusNuvem()
 }

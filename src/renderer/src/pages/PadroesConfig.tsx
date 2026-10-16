@@ -1,3 +1,4 @@
+import { MensagemFlutuante } from '../components/MensagemFlutuante'
 import { mensagemErro } from '@shared/erros'
 import { useEffect, useRef, useState } from 'react'
 import { Pencil, Trash2, Save, FilterX } from 'lucide-react'
@@ -17,7 +18,6 @@ import {
   Field,
   IconButton,
   Input,
-  Mensagem,
   Modal,
   Select,
   Textarea
@@ -128,7 +128,7 @@ export function PadroesConfig({
         Defina os textos sugeridos nos documentos. Arraste pela alça para escolher a ordem; os
         documentos já salvos preservam seus textos.
       </p>
-      {(erro || error) && !novo && !edit && <Mensagem>{erro || error}</Mensagem>}
+      {(erro || error) && !novo && !edit && <MensagemFlutuante>{erro || error}</MensagemFlutuante>}
       {rascunhos?.map((r) => (
         <div
           key={r.idOrigem}
@@ -312,7 +312,7 @@ export function PadroesConfig({
         }
       >
         <div className="space-y-4">
-          {erro && <Mensagem>{erro}</Mensagem>}
+          {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
           <Field label="Texto">
             <Textarea
               value={texto}

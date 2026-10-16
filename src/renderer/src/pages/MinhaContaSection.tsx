@@ -1,10 +1,11 @@
+import { MensagemFlutuante } from '../components/MensagemFlutuante'
 import { useState } from 'react'
 import { LogOut, Save, KeyRound, Mail, ShieldCheck } from 'lucide-react'
 import { mensagemErro } from '@shared/erros'
 import { api } from '../lib/api'
 import { useBloqueioEdicao, useNav } from '../lib/nav'
 import { useConta } from '../components/ContaGate'
-import { Button, Card, Field, Input, Mensagem, PasswordInput, SectionTitle } from '../ui/primitives'
+import { Button, Card, Field, Input, PasswordInput, SectionTitle } from '../ui/primitives'
 
 export function MinhaContaSection(): JSX.Element {
   const { conta, atualizar } = useConta()
@@ -42,11 +43,11 @@ export function MinhaContaSection(): JSX.Element {
   }
   return (
     <div className="w-full space-y-4">
-      {erro && <Mensagem>{erro}</Mensagem>}
+      {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
       {sucesso && (
-        <Mensagem tom="sucesso" temporaria>
+        <MensagemFlutuante tom="sucesso" temporaria>
           {sucesso}
-        </Mensagem>
+        </MensagemFlutuante>
       )}
       <div className="grid gap-4">
         <Card className="space-y-5 p-6">

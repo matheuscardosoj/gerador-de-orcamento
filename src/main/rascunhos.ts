@@ -1,3 +1,4 @@
+import { vincularAplicacaoRascunho } from './rascunhos-envio'
 import { randomUUID } from 'crypto'
 import { join } from 'path'
 import { all, get, run, texto, tx, pastaDados } from './db/sqlite'
@@ -13,7 +14,6 @@ import {
 import { autorizarGravacao } from './colaboracao'
 import { snapshotRascunho, conciliarDocumento } from '@shared/conciliacao'
 import { exportarDadosPara } from './dados'
-import { temOperacaoAtiva } from './fila-nuvem'
 import type {
   Documento,
   TipoDocumento,
@@ -140,7 +140,11 @@ export function criarRascunho(
 }
 export function salvarRascunho(id: string, d: Documento): RascunhoCompartilhado {
   const r = obterRascunho(id)
+  if (r.estado === 'aguardando_confirmacao')
+    throw new Error('Este rascunho já foi aplicado localmente e aguarda confirmação da nuvem.')
   if (d.id !== r.documentoId) throw new Error('O rascunho não corresponde ao documento.')
+  // Um editor que ficou aberto durante o ACK não pode alterar o snapshot já aplicado.
+  if (r.estado === 'aplicado') return criarRascunho(r.tipo, r.documentoId, d)
   run('UPDATE rascunhos_compartilhados SET documento=?,atualizado_em=? WHERE id=?', [
     JSON.stringify(prepararSnapshot(d)),
     new Date().toISOString(),
@@ -153,7 +157,7 @@ export async function compararRascunho(
   escolhas: Record<string, 'local' | 'remoto'> = {}
 ): Promise<ComparacaoRascunho> {
   const r = obterRascunho(id),
-    envelope = await consultarDocumentoRemoto(r.tipo, r.documentoId)
+    envelope = await consultarDocumentoRemoto(r.tipo, r.documentoId, 8000)
   if (!envelope || envelope.payload.excluido)
     return {
       rascunho: r,
@@ -207,8 +211,19 @@ export async function aplicarRascunho(
   escolhas: Record<string, 'local' | 'remoto'>
 ): Promise<Documento> {
   const r = obterRascunho(id)
-  await autorizarGravacao(r.tipo, r.documentoId)
+  if (r.estado === 'aguardando_confirmacao' || r.estado === 'aplicado')
+    throw new Error(
+      'Este rascunho já foi aplicado. Aguarde a confirmação da nuvem antes de continuar.'
+    )
+  if (
+    get(
+      "SELECT 1 FROM rascunhos_compartilhados WHERE tipo=? AND documento_id=? AND estado='aguardando_confirmacao'",
+      [r.tipo, r.documentoId]
+    )
+  )
+    throw new Error('Este documento já tem um rascunho aplicado e aguarda confirmação da nuvem.')
   const comparacao = await compararRascunho(id, escolhas)
+  await autorizarGravacao(r.tipo, r.documentoId)
   if (!comparacao.remoto)
     throw new Error('O documento foi excluído. Crie um novo a partir deste rascunho.')
   if (comparacao.revisaoRemota !== revisaoEsperada)
@@ -226,7 +241,7 @@ export async function aplicarRascunho(
     throw new Error(
       'Mudanças de estado, recebimentos e estornos precisam das operações financeiras próprias. Preserve o rascunho e trate o pagamento separadamente.'
     )
-  const envelope = await consultarDocumentoRemoto(r.tipo, r.documentoId)
+  const envelope = await consultarDocumentoRemoto(r.tipo, r.documentoId, 8000)
   if (!envelope || envelope.revisao !== revisaoEsperada)
     throw new Error('A revisão mudou durante a comparação. Compare novamente.')
   const entidade = `${r.tipo}:${r.documentoId}`
@@ -246,6 +261,20 @@ export async function aplicarRascunho(
   }
   exportarDadosPara(join(pastaDados(), `antes-conciliacao-rascunho-${Date.now()}.gdo-backup`))
   tx(() => {
+    if (
+      get(
+        "SELECT 1 FROM rascunhos_compartilhados WHERE tipo=? AND documento_id=? AND estado='aguardando_confirmacao'",
+        [r.tipo, r.documentoId]
+      )
+    )
+      throw new Error('Este documento já tem um rascunho aplicado e aguarda confirmação da nuvem.')
+    const atual = obterRascunho(id)
+    if (atual.estado === 'aguardando_confirmacao' || atual.estado === 'aplicado')
+      throw new Error(
+        'Este rascunho já foi aplicado. Aguarde a confirmação da nuvem antes de continuar.'
+      )
+    if (JSON.stringify(atual.documento) !== JSON.stringify(r.documento))
+      throw new Error('O rascunho mudou durante a comparação. Compare novamente antes de aplicar.')
     run("DELETE FROM fila_nuvem WHERE entidade=? AND estado<>'preservada'", [entidade])
     run('DELETE FROM conflitos_nuvem WHERE entidade=?', [entidade])
     adotarDocumentoRemoto(envelope)
@@ -261,18 +290,33 @@ export async function aplicarRascunho(
       repo(r.tipo).update as (id: string, patch: Partial<Documento>) => Documento | null
     )(r.documentoId, { ...d, versao: comparacao.remoto!.versao })
     if (!atualizado) throw new Error('Documento não encontrado.')
-  })
-  const s = await sincronizarNuvem()
-  if (s.erro || temOperacaoAtiva(entidade)) {
-    run("UPDATE rascunhos_compartilhados SET estado='conflito' WHERE id=?", [id])
-    throw new Error(
-      s.erro ?? 'A aplicação aguarda confirmação da nuvem. O rascunho foi preservado.'
+    const operacoes = all("SELECT id FROM fila_nuvem WHERE entidade=? AND estado='pendente'", [
+      entidade
+    ])
+    vincularAplicacaoRascunho(
+      id,
+      operacoes.map((op) => texto(op.id))
     )
-  }
-  run("UPDATE rascunhos_compartilhados SET estado='aplicado' WHERE id=?", [id])
+  })
+  await sincronizarNuvem()
+  const estado = obterRascunho(id).estado
+  if (estado === 'conflito')
+    throw new Error(
+      'A versão ou autorização mudou durante o envio. O rascunho está preservado para nova comparação.'
+    )
+  if (estado === 'envio_interrompido')
+    throw new Error(
+      'O envio deste rascunho precisa de revisão em Nuvem. As alterações locais estão preservadas.'
+    )
+  if (estado !== 'aplicado')
+    throw new Error(
+      'A aplicação está salva neste computador e aguarda confirmação da nuvem. O envio será retomado automaticamente; não é necessário aplicar novamente.'
+    )
   return repo(r.tipo).get(r.documentoId) as Documento
 }
 export function copiarRascunho(id: string): Documento {
+  if (obterRascunho(id).estado === 'aguardando_confirmacao')
+    throw new Error('Aguarde a confirmação da aplicação antes de copiar este rascunho.')
   const r = obterRascunho(id),
     d = structuredClone(r.documento)
   const dto = {
@@ -302,5 +346,7 @@ export function copiarRascunho(id: string): Documento {
   })
 }
 export function descartarRascunho(id: string): void {
+  if (obterRascunho(id).estado === 'aguardando_confirmacao')
+    throw new Error('Aguarde a confirmação da aplicação antes de excluir este rascunho.')
   run('DELETE FROM rascunhos_compartilhados WHERE id=?', [id])
 }

@@ -1,3 +1,4 @@
+import { MensagemFlutuante } from '../components/MensagemFlutuante'
 import { mensagemErro } from '@shared/erros'
 import { useState } from 'react'
 import { UserRoundCheck, UserRoundX, Save, FilterX } from 'lucide-react'
@@ -96,7 +97,7 @@ function UsuariosLegadosSection({
           dados locais permanecem disponíveis.
         </Mensagem>
       )}
-      {(erro || error) && !novo && <Mensagem>{erro || error}</Mensagem>}
+      {(erro || error) && !novo && <MensagemFlutuante>{erro || error}</MensagemFlutuante>}
       <div className="flex flex-wrap items-center gap-3">
         <Input
           className="max-w-md"
@@ -203,7 +204,7 @@ function UsuariosLegadosSection({
             Crie e confirme a conta em Authentication. Depois informe o e-mail aqui. O usuário
             poderá entrar no aplicativo com seu próprio login.
           </p>
-          {erro && <Mensagem>{erro}</Mensagem>}
+          {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
           <Field label="Nome do usuário">
             <Input
               maxLength={120}

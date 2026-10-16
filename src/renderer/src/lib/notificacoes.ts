@@ -15,9 +15,22 @@ export type Notificacao = {
 }
 
 const evento = 'gdo:notificacao'
-let ultimaChave = ''
-let ultimaEm = 0
-const chavesAtivas = new Set<string>()
+let contexto = ''
+const ativas = new Map<string, Notificacao>()
+const publicar = (): void => {
+  window.dispatchEvent(new Event(evento))
+}
+const identificar = (chave: string): string => JSON.stringify([contexto, chave])
+
+export function definirContextoNotificacoes(proximo: string): void {
+  if (contexto === proximo) return
+  contexto = proximo
+  ativas.clear()
+  publicar()
+}
+export function notificacoesAtivas(): Notificacao[] {
+  return [...ativas.values()]
+}
 
 export function notificar(
   mensagem: string,
@@ -26,38 +39,50 @@ export function notificar(
 ): void {
   const texto = mensagem.trim()
   if (!texto) return
-  if (opcoes.chave && chavesAtivas.has(opcoes.chave)) return
-  const agora = Date.now()
-  const chave = `${nivel}:${texto}`
-  if (!opcoes.chave && chave === ultimaChave && agora - ultimaEm < 900) return
-  ultimaChave = chave
-  ultimaEm = agora
-  if (opcoes.chave) chavesAtivas.add(opcoes.chave)
-  window.dispatchEvent(
-    new CustomEvent<Notificacao>(evento, {
-      detail: {
-        id: `${agora}-${Math.random().toString(36).slice(2)}`,
-        mensagem: texto,
-        nivel,
-        criadaEm: agora,
-        ...opcoes
-      }
-    })
+  const chave = identificar(opcoes.chave ?? `${nivel}:${texto}`)
+  const anterior = ativas.get(chave)
+  // O mesmo aviso mantém identidade e prazo; uma mudança substitui seu conteúdo.
+  if (
+    anterior &&
+    anterior.mensagem === texto &&
+    anterior.nivel === nivel &&
+    anterior.acao?.rotulo === opcoes.acao?.rotulo &&
+    anterior.acao?.desabilitada === opcoes.acao?.desabilitada &&
+    anterior.acao?.executar === opcoes.acao?.executar
   )
+    return
+  const agora = Date.now()
+  ativas.set(chave, {
+    id: anterior?.id ?? `${agora}-${Math.random().toString(36).slice(2)}`,
+    mensagem: texto,
+    nivel,
+    criadaEm: anterior?.criadaEm ?? agora,
+    ...opcoes,
+    chave,
+    persistente: opcoes.persistente ?? (nivel === 'erro' || nivel === 'aviso' || !!opcoes.acao)
+  })
+  publicar()
 }
 
 export function concluirNotificacao(chave: string): void {
-  chavesAtivas.delete(chave)
-  window.dispatchEvent(new CustomEvent('gdo:notificacao-remover', { detail: chave }))
+  if (ativas.delete(identificar(chave))) publicar()
 }
-
 export function eventoNotificacao(): string {
   return evento
 }
-
 export function atualizarAcaoNotificacao(chave: string, desabilitada: boolean): void {
-  window.dispatchEvent(new CustomEvent('gdo:notificacao-acao', { detail: { chave, desabilitada } }))
+  const id = identificar(chave)
+  const item = ativas.get(id)
+  if (item?.acao && item.acao.desabilitada !== desabilitada) {
+    ativas.set(id, { ...item, acao: { ...item.acao, desabilitada } })
+    publicar()
+  }
 }
-export function dispensarNotificacao(chave: string): void {
-  chavesAtivas.delete(chave)
+export function dispensarNotificacao(id: string): void {
+  for (const [chave, item] of ativas)
+    if (item.id === id || chave === id) {
+      ativas.delete(chave)
+      publicar()
+      return
+    }
 }

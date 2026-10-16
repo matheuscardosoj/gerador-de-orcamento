@@ -419,7 +419,15 @@ const v13 = (d: Database): void => {
     PRIMARY KEY(tipo,id_origem)
   );`)
 }
-export const VERSAO_BANCO = 13
+const v14 = (d: Database): void => {
+  d.exec(`CREATE TABLE rascunhos_envios (
+    rascunho_id TEXT NOT NULL REFERENCES rascunhos_compartilhados(id) ON DELETE CASCADE,
+    operacao_id TEXT NOT NULL,
+    confirmada INTEGER NOT NULL DEFAULT 0 CHECK(confirmada IN (0,1)),
+    PRIMARY KEY(rascunho_id,operacao_id)
+  ); CREATE INDEX rascunhos_envios_operacao ON rascunhos_envios(operacao_id);`)
+}
+export const VERSAO_BANCO = 14
 const MIGRACOES: Array<(d: Database) => void> = [
   v1,
   v2,
@@ -433,7 +441,8 @@ const MIGRACOES: Array<(d: Database) => void> = [
   v10,
   v11,
   v12,
-  v13
+  v13,
+  v14
 ]
 
 export function aplicarMigracoes(d: Database, ate = MIGRACOES.length): void {

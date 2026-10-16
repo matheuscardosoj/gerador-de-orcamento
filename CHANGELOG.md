@@ -2,6 +2,23 @@
 
 Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
+## 1.5.2 — recuperação da conexão e avisos flutuantes
+
+- A sincronização continua tentando recuperar o serviço após interrupções prolongadas,
+  inclusive quando o aplicativo abre offline. Retorno da rede, foco e saída da suspensão
+  antecipam a verificação, com tentativas serializadas e intervalos variáveis limitados.
+- Disponibilidade HTTP e canal em tempo real têm estados separados. Falhas de transporte,
+  sessão, permissão, manutenção e conflitos recebem tratamento próprio.
+- Aplicações de rascunhos aguardam a confirmação das operações originais. Respostas
+  perdidas e reinício preservam a identidade do envio, sem duplicar versões. A aplicação
+  continua exigindo confirmação e autorização de edição.
+- Erros operacionais usam notificações flutuantes no padrão visual do aplicativo,
+  inclusive em modais. Erros e ações pendentes persistem; a fila limita a altura,
+  permite rolagem e atualiza avisos existentes em vez de duplicá-los.
+- Migração local SQLite v14 conserva os dados e registra as confirmações de rascunhos.
+  Nenhuma alteração remota de schema é necessária.
+- Candidato para teste real entre computadores; não representa validação em produção.
+
 ## 1.5.1 — cadastros e avisos do cálculo
 
 - Históricos de clientes e serviços usam paginação compartilhada de 12 registros,

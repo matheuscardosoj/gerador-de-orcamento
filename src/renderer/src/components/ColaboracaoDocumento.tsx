@@ -1,3 +1,4 @@
+import { MensagemFlutuante } from './MensagemFlutuante'
 import { useConta } from './ContaGate'
 import { consultarEdicao, aceitarEstadoEdicao, estadoEdicaoAtual } from '../lib/controle-edicao'
 import { mensagemErro } from '@shared/erros'
@@ -40,7 +41,7 @@ import {
   ConfirmDialog
 } from '../ui/primitives'
 import { DataTableViewport } from '../ui/dataTable'
-import { notificar } from '../lib/notificacoes'
+import { notificar, concluirNotificacao } from '../lib/notificacoes'
 
 const rotuloCampo = (campo: string): string =>
   campo
@@ -132,6 +133,7 @@ export function ColaboracaoDocumento({
   const [recuperar, setRecuperar] = useState(false),
     [destino, setDestino] = useState('')
   const [computadores, setComputadores] = useState<Array<{ id: string; nome: string }>>([])
+  const aguardandoConfirmacao = useRef(false)
   const vivo = useRef(true)
   const renovarRef = useRef<() => Promise<void>>(async () => {})
   const abrirPainelRef = useRef<() => void>(() => {})
@@ -142,7 +144,15 @@ export function ColaboracaoDocumento({
     try {
       await tarefa()
     } catch (e) {
-      if (vivo.current) setErro(mensagemErro(e))
+      if (vivo.current) {
+        const mensagem = mensagemErro(e)
+        if (mensagem.includes('aguarda confirmação da nuvem')) {
+          aguardandoConfirmacao.current = true
+          notificar(mensagem, 'aviso', { chave: `rascunho-envio:${tipo}:${documento.id}` })
+          setRascunhos(await api.rascunhos.list(tipo, documento.id))
+          setComparacao(null)
+        } else setErro(mensagem)
+      }
     } finally {
       if (vivo.current) setOcupado(false)
     }
@@ -182,8 +192,32 @@ export function ColaboracaoDocumento({
           definirControle(estado.controle)
         return
       }
-      if (e.status || e.entidades.includes(`controle:${tipo}:${documento.id}`))
+      if (e.status || e.entidades.includes(`controle:${tipo}:${documento.id}`)) {
         void renovarRef.current().catch(() => undefined)
+        void api.rascunhos
+          .list(tipo, documento.id)
+          .then((lista) => {
+            if (ativo) {
+              setRascunhos(lista)
+              if (
+                aguardandoConfirmacao.current &&
+                !lista.some((r) => r.estado === 'aguardando_confirmacao')
+              ) {
+                aguardandoConfirmacao.current = false
+                concluirNotificacao(`rascunho-envio:${tipo}:${documento.id}`)
+                notificar(
+                  lista.some((r) => r.estado === 'conflito' || r.estado === 'envio_interrompido')
+                    ? 'O envio do rascunho precisa de revisão. Suas alterações estão preservadas.'
+                    : 'Aplicação do rascunho confirmada na nuvem.',
+                  lista.some((r) => r.estado === 'conflito' || r.estado === 'envio_interrompido')
+                    ? 'aviso'
+                    : 'sucesso'
+                )
+              }
+            }
+          })
+          .catch(() => undefined)
+      }
     })
     return () => {
       ativo = false
@@ -407,7 +441,7 @@ export function ColaboracaoDocumento({
             </div>
           </Mensagem>
         )}
-        {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
+        {erro && <MensagemFlutuante className="mb-4">{erro}</MensagemFlutuante>}
         <div className="flex flex-wrap gap-2">
           {rascunhoId && (
             <Button
@@ -526,7 +560,6 @@ export function ColaboracaoDocumento({
         }
       >
         <div className="space-y-5">
-          {erro && <Mensagem>{erro}</Mensagem>}
           <SectionTitle
             title="Rascunhos deste computador"
             description="Alternativas preservadas a partir de uma revisão conhecida. Salvar um rascunho não registra pagamento nem altera o documento compartilhado."
@@ -550,7 +583,13 @@ export function ColaboracaoDocumento({
                     <td className="px-4 py-3">{r.baseRevisao}</td>
                     <td className="px-4 py-3">
                       <Badge color={r.estado === 'conflito' ? 'amber' : 'slate'}>
-                        {r.estado === 'conflito' ? 'Conflito' : 'Local'}
+                        {r.estado === 'envio_interrompido'
+                          ? 'Envio precisa de revisão'
+                          : r.estado === 'aguardando_confirmacao'
+                            ? 'Aguardando confirmação da nuvem'
+                            : r.estado === 'conflito'
+                              ? 'Conflito'
+                              : 'Local'}
                       </Badge>
                     </td>
                     <td className="px-4 py-3">
@@ -559,7 +598,7 @@ export function ColaboracaoDocumento({
                           icon={Trash2}
                           size="sm"
                           variant="outline"
-                          disabled={ocupado}
+                          disabled={ocupado || r.estado === 'aguardando_confirmacao'}
                           onClick={() => setExcluir(r)}
                         >
                           Excluir rascunho
@@ -568,7 +607,7 @@ export function ColaboracaoDocumento({
                           icon={Pencil}
                           size="sm"
                           variant="outline"
-                          disabled={ocupado}
+                          disabled={ocupado || r.estado === 'aguardando_confirmacao'}
                           onClick={() =>
                             executarComConfirmacao(() => {
                               onAbrir(r.documento, r.id)
@@ -582,7 +621,7 @@ export function ColaboracaoDocumento({
                           icon={GitCompareArrows}
                           size="sm"
                           variant="outline"
-                          disabled={ocupado}
+                          disabled={ocupado || r.estado === 'aguardando_confirmacao'}
                           onClick={() => void executar(() => comparar(r))}
                         >
                           Comparar

@@ -1,3 +1,4 @@
+import { MensagemFlutuante } from '../components/MensagemFlutuante'
 import { useEffect, useState } from 'react'
 import { Cloud, RefreshCw, LogOut, CloudDownload } from 'lucide-react'
 import { api } from '../lib/api'
@@ -14,8 +15,7 @@ import {
   PasswordInput,
   Select,
   ConfirmDialog,
-  SectionTitle,
-  Mensagem
+  SectionTitle
 } from '../ui/primitives'
 export function NuvemSection(): JSX.Element {
   const { navegar } = useNav()
@@ -151,12 +151,17 @@ export function NuvemSection(): JSX.Element {
           </details>
         </>
       )}
-      <Mensagem tom={resumo.tom} className="mb-4">
+      <section
+        aria-label="Estado da sincronização"
+        className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700"
+      >
         <p className="font-semibold">{resumo.titulo}</p>
         <p>{resumo.descricao}</p>
-      </Mensagem>
-      {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
-      {s?.erro && mensagemErro(s.erro) !== erro && <Mensagem className="mb-4">{s.erro}</Mensagem>}
+      </section>
+      {erro && <MensagemFlutuante className="mb-4">{erro}</MensagemFlutuante>}
+      {s?.erro && mensagemErro(s.erro) !== erro && (
+        <MensagemFlutuante className="mb-4">{s.erro}</MensagemFlutuante>
+      )}
       {s?.atualizacaoPendente && (
         <section
           className="mb-6 rounded-lg border border-slate-200 p-4"
@@ -440,9 +445,9 @@ export function NuvemSection(): JSX.Element {
             automaticamente.
           </p>
           {backupRestauracao && (
-            <Mensagem tom="info" temporaria>
+            <MensagemFlutuante tom="info" temporaria>
               Base recuperada. Cópia anterior guardada em: {backupRestauracao}
-            </Mensagem>
+            </MensagemFlutuante>
           )}
           <Button
             icon={CloudDownload}

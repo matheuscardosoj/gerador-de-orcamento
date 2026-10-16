@@ -1,10 +1,11 @@
+import { MensagemFlutuante } from './MensagemFlutuante'
 import { useCallback, useEffect, useState } from 'react'
 import { CopyPlus, RefreshCw, Trash2 } from 'lucide-react'
 import type { RascunhoCompartilhado, TipoDocumento } from '@shared/evolucao'
 import { mensagemErro } from '@shared/erros'
 import { api } from '../lib/api'
 import { useNav } from '../lib/nav'
-import { Button, Card, ConfirmDialog, Mensagem } from '../ui/primitives'
+import { Button, Card, ConfirmDialog } from '../ui/primitives'
 
 export function RascunhosHistorico({
   tipo,
@@ -50,7 +51,7 @@ export function RascunhosHistorico({
           Atualizar
         </Button>
       </div>
-      {erro && <Mensagem>{erro}</Mensagem>}
+      {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
       {orfaos.map((r) => (
         <div
           key={r.id}

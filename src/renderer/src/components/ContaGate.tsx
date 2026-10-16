@@ -1,4 +1,13 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { MensagemFlutuante } from './MensagemFlutuante'
+import { definirContextoNotificacoes } from '../lib/notificacoes'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useState,
+  type ReactNode
+} from 'react'
 import { Trash2 } from 'lucide-react'
 import type { EstadoConta } from '@shared/conta'
 import type { EmpresaConfig } from '@shared/types'
@@ -31,6 +40,9 @@ export function ContaGate({ children }: { children: ReactNode }): JSX.Element {
   const [empresa, setEmpresa] = useState<EmpresaConfig | null>(null)
   const [verificando, setVerificando] = useState(true)
   const [tentativa, setTentativa] = useState(0)
+  useLayoutEffect(() => {
+    definirContextoNotificacoes(JSON.stringify([conta?.email ?? '', conta?.empresa?.id ?? '']))
+  }, [conta?.email, conta?.empresa?.id])
   useEffect(() => {
     let vivo = true
     const atualizar = () => {
@@ -84,7 +96,7 @@ export function ContaGate({ children }: { children: ReactNode }): JSX.Element {
     return (
       <TelaAcesso>
         <SectionTitle title="Gerador de Orçamentos" description="Acessando sua conta" />
-        {erro ? <Mensagem>{erro}</Mensagem> : <p role="status">Carregando…</p>}
+        {erro ? <MensagemFlutuante>{erro}</MensagemFlutuante> : <p role="status">Carregando…</p>}
       </TelaAcesso>
     )
   if (conta.fase === 'empresaIndisponivel')
@@ -106,7 +118,7 @@ export function ContaGate({ children }: { children: ReactNode }): JSX.Element {
             : 'Encerrando as operações desta empresa…'}
         </p>
         {(erro || conta.indisponibilidade?.erro) && (
-          <Mensagem>{erro || conta.indisponibilidade?.erro}</Mensagem>
+          <MensagemFlutuante>{erro || conta.indisponibilidade?.erro}</MensagemFlutuante>
         )}
         <Button
           disabled={!conta.indisponibilidade?.concluida && !conta.indisponibilidade?.erro}
@@ -130,14 +142,14 @@ export function ContaGate({ children }: { children: ReactNode }): JSX.Element {
     return (
       <TelaAcesso>
         <p role="status">Preparando os dados da empresa…</p>
-        {erro && <Mensagem>{erro}</Mensagem>}
+        {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
       </TelaAcesso>
     )
   if (!empresa)
     return (
       <TelaAcesso>
         <SectionTitle title="Não foi possível abrir os dados da empresa" />
-        <Mensagem>{erro || 'Tente novamente para continuar.'}</Mensagem>
+        <MensagemFlutuante>{erro || 'Tente novamente para continuar.'}</MensagemFlutuante>
         <Button onClick={() => setTentativa((v) => v + 1)}>Tentar novamente</Button>
         <Button
           variant="ghost"
@@ -264,7 +276,7 @@ function Acesso({
           Selecione a empresa para abrir os dados compartilhados. O cadastro inicial só aparece
           quando os dados básicos dessa empresa ainda não foram preenchidos.
         </p>
-        {erro && <Mensagem>{erro}</Mensagem>}
+        {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
         {conta.empresas.length ? (
           conta.empresas.map((e) => (
             <div className="flex items-stretch gap-2" key={e.id}>
@@ -356,7 +368,7 @@ function Acesso({
                 ? `Todos os documentos, cadastros, vínculos e dados sincronizados de “${empresaExcluir.nome}” serão removidos. As contas de autenticação das pessoas serão preservadas. Ao reconectar, os computadores encerrarão o acesso e removerão o perfil local, incluindo rascunhos e alterações pendentes.`
                 : ''}
             </Mensagem>
-            {erroExclusao && <Mensagem>{erroExclusao}</Mensagem>}
+            {erroExclusao && <MensagemFlutuante>{erroExclusao}</MensagemFlutuante>}
             <Field
               label={
                 empresaExcluir ? `Digite exatamente: ${empresaExcluir.nome}` : 'Nome da empresa'
@@ -389,7 +401,7 @@ function Acesso({
             : 'Use o e-mail que recebeu o convite ou que já está cadastrado.'
         }
       />
-      {erro && <Mensagem>{erro}</Mensagem>}
+      {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
       <form
         className="space-y-4"
         onSubmit={(e) => {
@@ -579,8 +591,8 @@ function AtivarEmpresa(): JSX.Element {
             .finally(() => setOcupado(false))
         }}
       >
-        {erro && <Mensagem>{erro}</Mensagem>}
-        {aviso && <Mensagem tom="info">{aviso}</Mensagem>}
+        {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
+        {aviso && <MensagemFlutuante tom="info">{aviso}</MensagemFlutuante>}
         {atualizacaoPendente && (
           <Mensagem tom="aviso">
             Empresa criada. Não foi possível atualizar a lista.{' '}
@@ -652,7 +664,7 @@ function PrimeirosPassos({
         title="Vamos conhecer sua empresa"
         description="Informe o nome que aparecerá nos documentos. Os outros dados podem ser preenchidos agora ou depois em Configurações."
       />
-      {erro && <Mensagem>{erro}</Mensagem>}
+      {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
       <form
         className="space-y-4"
         onSubmit={(e) => {

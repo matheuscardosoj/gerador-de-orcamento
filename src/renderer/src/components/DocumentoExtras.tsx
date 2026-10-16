@@ -1,3 +1,4 @@
+import { MensagemFlutuante } from './MensagemFlutuante'
 import { mensagemErro } from '@shared/erros'
 import { useEffect, useState } from 'react'
 import { RefreshCw, History, RotateCcw, CopyPlus, FileDown, ArrowRightLeft } from 'lucide-react'
@@ -9,17 +10,7 @@ import type {
   VersaoDocumento
 } from '@shared/types'
 import { api } from '../lib/api'
-import {
-  Button,
-  Card,
-  Input,
-  Modal,
-  Select,
-  Checkbox,
-  SectionTitle,
-  Field,
-  Mensagem
-} from '../ui/primitives'
+import { Button, Card, Input, Modal, Select, Checkbox, SectionTitle, Field } from '../ui/primitives'
 import { useNav } from '../lib/nav'
 import { paginarDocumento } from '@shared/documento/paginar'
 import { compararDocumentos } from '@shared/comparacao-documentos'
@@ -170,7 +161,7 @@ export function LinhaTempo({
         }
       >
         <div className="space-y-4">
-          {erro && <Mensagem>{erro}</Mensagem>}
+          {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
           <Field label="Versão do documento">
             <Select
               aria-label="Escolher versão"

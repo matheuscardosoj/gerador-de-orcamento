@@ -1,3 +1,4 @@
+import { MensagemFlutuante } from '../components/MensagemFlutuante'
 import { mensagemErro } from '@shared/erros'
 import { RevisaoIA } from '../components/RevisaoIA'
 import { ColaboracaoDocumento } from '../components/ColaboracaoDocumento'
@@ -332,7 +333,7 @@ export function RecibosPage({
         )
       }
     >
-      {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
+      {erro && <MensagemFlutuante className="mb-4">{erro}</MensagemFlutuante>}
       {!r ? (
         <HistoricoDocumentos
           tipo="recibo"

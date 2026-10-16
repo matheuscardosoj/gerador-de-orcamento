@@ -25,6 +25,19 @@ export function resumirSincronizacao(s: StatusNuvem | null): ResumoSincronizacao
       descricao: 'Seus dados continuam neste computador. Entre para retomar a sincronização.',
       tom: 'aviso'
     }
+  if (s.conexao === 'inacessivel' || s.falhaSincronizacao?.temporaria)
+    return {
+      titulo: 'Sem acesso à nuvem',
+      descricao:
+        'As alterações locais estão preservadas. A conexão será verificada e o envio retomado automaticamente.',
+      tom: 'aviso'
+    }
+  if (s.sincronizando)
+    return {
+      titulo: 'Sincronizando…',
+      descricao: 'Conferindo alterações e confirmações na nuvem.',
+      tom: 'info'
+    }
   if (s.atualizacaoPendente)
     return {
       titulo: 'Este computador precisa ser atualizado',

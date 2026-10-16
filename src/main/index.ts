@@ -5,9 +5,9 @@ import { recibosRepo } from './recibos'
 import { concluirCallbackEmail, inicializarContas } from './contas/servico'
 import { callbacksNosArgumentos } from './contas/callback-email'
 import { registrarAvisoEmail } from './contas/avisos-email'
-import { pararTempoReal } from './tempo-real'
+import { pararTempoReal, solicitarRecuperacaoNuvem } from './tempo-real'
 import { observarDados } from './eventos'
-import { app, shell, dialog, BrowserWindow } from 'electron'
+import { app, shell, dialog, BrowserWindow, powerMonitor } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { abrirBanco, fecharBanco } from './db/sqlite'
@@ -120,6 +120,9 @@ function createWindow(): void {
 if (temTrava)
   app.whenReady().then(async () => {
     electronApp.setAppUserModelId('com.gerador.orcamentos')
+    powerMonitor.on('resume', solicitarRecuperacaoNuvem)
+    powerMonitor.on('unlock-screen', solicitarRecuperacaoNuvem)
+    app.on('browser-window-focus', solicitarRecuperacaoNuvem)
 
     // Inicializa o banco (cria arquivo, migra o JSON ou semeia) e registra o IPC.
     try {

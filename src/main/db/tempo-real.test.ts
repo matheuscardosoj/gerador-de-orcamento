@@ -3,12 +3,14 @@ import {
   AgendadorSincronizacao,
   iniciarTempoReal,
   pararTempoReal,
-  aguardarTempoReal
+  aguardarTempoReal,
+  solicitarRecuperacaoNuvem
 } from '../tempo-real'
 
 afterEach(() => {
   pararTempoReal()
   vi.useRealTimers()
+  vi.restoreAllMocks()
 })
 it('aguarda a renovação antiga e não reconecta depois de encerrar a conta', async () => {
   vi.useFakeTimers()
@@ -92,7 +94,7 @@ it('reenvia após falha transitória sem esperar cinco minutos e cancela ao ence
   })
   await vi.advanceTimersByTimeAsync(0)
   expect(sincronizar).toHaveBeenCalledTimes(1)
-  await vi.advanceTimersByTimeAsync(1000)
+  await vi.advanceTimersByTimeAsync(2400)
   expect(sincronizar).toHaveBeenCalledTimes(2)
   pararTempoReal()
   await vi.advanceTimersByTimeAsync(5 * 60000)
@@ -113,4 +115,66 @@ it('não repete tentativas automáticas de um conflito que precisa de decisão',
   })
   await vi.advanceTimersByTimeAsync(10000)
   expect(sincronizar).toHaveBeenCalledTimes(1)
+})
+
+it('continua recuperando depois de cinco falhas e confirma o serviço antes de sincronizar', async () => {
+  vi.useFakeTimers()
+  vi.spyOn(Math, 'random').mockReturnValue(0.5)
+  let acessivel = false
+  const renovar = vi.fn(async () => {
+    if (!acessivel) throw new TypeError('fetch failed')
+  })
+  const sincronizar = vi.fn(async () => ({ erro: null }))
+  iniciarTempoReal({
+    configuracao: () => ({ url: '', chavePublica: '', email: '' }),
+    identidade: () => null,
+    renovar,
+    sincronizar,
+    estado: () => {}
+  })
+  await vi.advanceTimersByTimeAsync(160000)
+  expect(renovar.mock.calls.length).toBeGreaterThan(5)
+  expect(sincronizar).not.toHaveBeenCalled()
+  acessivel = true
+  solicitarRecuperacaoNuvem()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(sincronizar).toHaveBeenCalledTimes(1)
+})
+it('respeita Retry-After mesmo com sinal de retorno da rede e vigilância periódica', async () => {
+  vi.useFakeTimers()
+  const renovar = vi
+    .fn()
+    .mockRejectedValueOnce(
+      Object.assign(new Error('limite'), { status: 429, repetirAposMs: 90000 })
+    )
+    .mockResolvedValue(undefined)
+  const sincronizar = vi.fn(async () => ({ erro: null }))
+  iniciarTempoReal({
+    configuracao: () => ({ url: '', chavePublica: '', email: '' }),
+    identidade: () => null,
+    renovar,
+    sincronizar,
+    estado: () => {}
+  })
+  await vi.advanceTimersByTimeAsync(0)
+  solicitarRecuperacaoNuvem()
+  await vi.advanceTimersByTimeAsync(89999)
+  expect(renovar).toHaveBeenCalledTimes(1)
+  await vi.advanceTimersByTimeAsync(1)
+  expect(sincronizar).toHaveBeenCalledTimes(1)
+})
+it('falha permanente não entra em repetição automática', async () => {
+  vi.useFakeTimers()
+  const renovar = vi
+    .fn()
+    .mockRejectedValue(Object.assign(new Error('acesso revogado'), { status: 403 }))
+  iniciarTempoReal({
+    configuracao: () => ({ url: '', chavePublica: '', email: '' }),
+    identidade: () => null,
+    renovar,
+    sincronizar: async () => null,
+    estado: () => {}
+  })
+  await vi.advanceTimersByTimeAsync(6 * 60000)
+  expect(renovar).toHaveBeenCalledTimes(1)
 })

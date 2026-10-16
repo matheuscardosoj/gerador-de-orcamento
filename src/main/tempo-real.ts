@@ -5,6 +5,7 @@ import {
 } from '@supabase/supabase-js'
 import type { ConfigNuvem, StatusNuvem } from '@shared/types'
 import { avisarDados, observarDados } from './eventos'
+import { classificarFalhaNuvem } from '@shared/falha-nuvem'
 
 /** Serializa avisos: uma mudança que chega durante a consulta agenda outra passagem. */
 export class AgendadorSincronizacao {
@@ -41,9 +42,15 @@ interface Opcoes {
   sincronizarCompleta?: () => Promise<unknown>
   estado: (estado: EstadoTempoReal, erro: string | null) => void
   renovar: () => Promise<void>
+  status?: () => StatusNuvem
   criarCliente?: (config: ConfigNuvem, opcoes: SupabaseClientOptions<'public'>) => SupabaseClient
 }
 let pararAtual: (() => void) | null = null
+let acordarAtual: (() => void) | null = null
+/** Sinais do Windows antecipam a consulta; não são prova de acesso ao serviço. */
+export function solicitarRecuperacaoNuvem(): void {
+  acordarAtual?.()
+}
 const renovacoesAtivas = new Set<Promise<void>>()
 export async function aguardarTempoReal(): Promise<void> {
   await Promise.allSettled([...renovacoesAtivas])
@@ -51,6 +58,7 @@ export async function aguardarTempoReal(): Promise<void> {
 export function pararTempoReal(): void {
   pararAtual?.()
   pararAtual = null
+  acordarAtual = null
 }
 export function iniciarTempoReal(opcoes: Opcoes): void {
   pararTempoReal()
@@ -60,38 +68,92 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
     encerrado = false
   let repeticao: ReturnType<typeof setTimeout> | null = null
   let tentativas = 0
-  let completarProxima = false
-  const repetir = (): void => {
-    if (encerrado || repeticao || tentativas >= 5) return
-    const espera = [1000, 3000, 10000, 30000, 30000][tentativas++]
+  let completarProxima = true
+  let verificarProxima = true
+  let recuperando = true
+  let bloqueada = false
+  let ultimoSinal = 0
+  let naoAntesDe = 0
+  const repetir = (minimo = 0): void => {
+    if (encerrado || repeticao || bloqueada) return
+    const base = [2000, 5000, 10000, 20000, 30000][Math.min(tentativas++, 4)]
+    naoAntesDe = Math.max(naoAntesDe, Date.now() + minimo)
+    const espera = Math.max(minimo, Math.round(base * (0.8 + Math.random() * 0.4)))
     repeticao = setTimeout(() => {
       repeticao = null
-      solicitar()
+      solicitar(true, true)
     }, espera)
   }
-  const agendador = new AgendadorSincronizacao(async () => {
+  const tratarFalha = (erro: unknown): void => {
+    if (encerrado) return
+    const falha = classificarFalhaNuvem(erro)
+    bloqueada = !falha.temporaria
+    if (falha.temporaria) {
+      recuperando = true
+      repetir(falha.repetirAposMs)
+    }
+  }
+  const agendador = new AgendadorSincronizacao(async (): Promise<void> => {
     try {
-      const completa = completarProxima
+      const verificar = verificarProxima
+      verificarProxima = false
+      if (verificar) {
+        const renovacao = opcoes.renovar()
+        renovacoesAtivas.add(renovacao)
+        try {
+          await renovacao
+        } finally {
+          renovacoesAtivas.delete(renovacao)
+        }
+      }
+      if (encerrado) return
+      await conectar()
+      if (encerrado) return
+      const completa = completarProxima || recuperando
       completarProxima = false
       const resultado = await (completa && opcoes.sincronizarCompleta
         ? opcoes.sincronizarCompleta()
         : opcoes.sincronizar())
-      const erro = (resultado as { erro?: string } | null)?.erro
-      if (erro && !/conflito|concilia/i.test(erro)) repetir()
-      else {
+      if (encerrado) return
+      const status = resultado as StatusNuvem | null
+      if (status?.falhaSincronizacao?.temporaria) {
+        recuperando = true
+        repetir(status.falhaSincronizacao.repetirAposMs)
+      } else if (status?.erro) {
+        // Erros de negócio não interrompem a vigilância, mas não são reenviados em loop.
+        bloqueada = ['sessao', 'permissao', 'manutencao'].includes(
+          status.falhaSincronizacao?.motivo ?? ''
+        )
+      } else {
+        recuperando = false
+        bloqueada = false
         tentativas = 0
         if (repeticao) clearTimeout(repeticao)
         repeticao = null
       }
-      return resultado
+      // Compatibilidade com provedores/testes que ainda não retornam classificação.
+      if (
+        status?.erro &&
+        !status.falhaSincronizacao &&
+        /Sem internet|Sem conexão/i.test(status.erro)
+      ) {
+        bloqueada = false
+        recuperando = true
+        repetir()
+      }
     } catch (e) {
-      repetir()
-      throw e
+      tratarFalha(e)
+      if (!encerrado)
+        opcoes.estado(
+          'indisponivel',
+          'A conexão automática está sendo verificada. Os dados locais estão preservados.'
+        )
     }
   })
-  const solicitar = (completa = false): void => {
+  const solicitar = (completa = false, verificar = false): void => {
     if (encerrado) return
     completarProxima ||= completa
+    verificarProxima ||= verificar
     void agendador.solicitar().catch(() => undefined)
   }
   const conectar = async (): Promise<void> => {
@@ -114,13 +176,20 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
         await cliente.realtime.setAuth(identidade.token)
         tokenAtual = identidade.token
       }
+      if (!cliente.realtime.isConnected()) cliente.realtime.connect()
       return
     }
     if (cliente) await cliente.removeAllChannels()
     const configuracaoCliente = {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
       accessToken: async () => opcoes.identidade()?.token ?? config.chavePublica,
-      realtime: { params: { eventsPerSecond: 5 } }
+      realtime: {
+        params: { eventsPerSecond: 5 },
+        reconnectAfterMs: (tentativa: number) =>
+          Math.round(
+            Math.min(30000, 1000 * 2 ** Math.min(tentativa, 5)) * (0.8 + Math.random() * 0.4)
+          )
+      }
     }
     cliente =
       opcoes.criarCliente?.(config, configuracaoCliente) ??
@@ -149,7 +218,7 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
         if (encerrado) return
         if (estado === 'SUBSCRIBED') {
           opcoes.estado('conectado', null)
-          solicitar()
+          solicitar(recuperando)
         } else if (estado === 'CHANNEL_ERROR' || estado === 'TIMED_OUT')
           opcoes.estado(
             'indisponivel',
@@ -159,26 +228,42 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
       })
   }
   const removerObservador = observarDados((evento) => {
-    if (evento.origem === 'local' && evento.entidades.length) solicitar()
+    if (evento.status && bloqueada && opcoes.status && !opcoes.status().erro) {
+      bloqueada = false
+      solicitar(true, true)
+    }
+    if (
+      evento.origem === 'local' &&
+      evento.entidades.length &&
+      !repeticao &&
+      Date.now() >= naoAntesDe
+    )
+      solicitar()
   })
+  acordarAtual = () => {
+    const agora = Date.now()
+    if (agora - ultimoSinal < 1000 || agora < naoAntesDe) return
+    ultimoSinal = agora
+    // Não antecipa Retry-After do servidor.
+    if (repeticao && tentativas > 0) {
+      clearTimeout(repeticao)
+      repeticao = null
+    }
+    if (!bloqueada) solicitar(true, true)
+  }
   const vigilancia = setInterval(() => {
-    if (encerrado || renovacoesAtivas.size) return
-    const renovacao = opcoes
-      .renovar()
-      .then(conectar)
-      .catch(() => {
-        if (encerrado) return
-        opcoes.estado(
-          'indisponivel',
-          'Não foi possível renovar a sessão ou a conexão. Suas alterações continuam guardadas neste computador.'
-        )
-      })
-    renovacoesAtivas.add(renovacao)
-    void renovacao.finally(() => renovacoesAtivas.delete(renovacao))
+    if (encerrado || repeticao || bloqueada) return
+    solicitar(recuperando, true)
   }, 30000)
-  const seguranca = setInterval(() => solicitar(true), 5 * 60 * 1000)
+  const seguranca = setInterval(
+    () => {
+      if (!bloqueada && !repeticao) solicitar(true, true)
+    },
+    5 * 60 * 1000
+  )
   pararAtual = () => {
     encerrado = true
+    acordarAtual = null
     if (repeticao) clearTimeout(repeticao)
     clearInterval(vigilancia)
     clearInterval(seguranca)
@@ -187,11 +272,7 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
     if (cliente) void cliente.removeAllChannels()
     opcoes.estado('desconectado', null)
   }
-  void conectar()
-    .then(() => solicitar())
-    .catch(() => {
-      if (!encerrado) opcoes.estado('indisponivel', 'A conexão em tempo real não iniciou.')
-    })
+  solicitar(true, true)
 }
 
 export function avisarEstadoTempoReal(): void {

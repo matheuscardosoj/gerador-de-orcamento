@@ -1106,7 +1106,7 @@ function mesclar(fonte: Database): Resumo {
         adaptar(x.documento),
         x.criado_em,
         x.atualizado_em,
-        x.estado
+        x.estado === 'aguardando_confirmacao' ? 'local' : x.estado
       ])
       run("INSERT INTO importacoes_documentos VALUES ('rascunho',?,?)", [chave, id])
       r.importados.rascunhos = (r.importados.rascunhos ?? 0) + 1
