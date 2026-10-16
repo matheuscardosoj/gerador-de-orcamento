@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { api } from '../lib/api'
+import { CicloAvisoConexao } from '../lib/ciclo-aviso-conexao'
 import { concluirNotificacao, notificar } from '../lib/notificacoes'
 import { useNav } from '../lib/nav'
 import { useConta } from './ContaGate'
@@ -10,24 +11,22 @@ export function MonitorConexao(): null {
   const empresa = conta.empresa?.id
   useEffect(() => {
     let ativo = true,
-      consulta = 0,
-      interrompida = false,
-      avisouRetorno = false
+      consulta = 0
+    const ciclo = new CicloAvisoConexao()
     const conferir = (): void => {
       const atual = ++consulta
       void api.nuvem
         .status()
         .then(async (s) => {
           if (!ativo || atual !== consulta || !s.configurada) return
-          if (s.falhaSincronizacao && !s.falhaSincronizacao.temporaria) {
+          const transicao = ciclo.atualizar(s)
+          if (transicao === 'encerrada') {
             concluirNotificacao('conexao')
             concluirNotificacao('retorno-conexao')
-            interrompida = false
             return
           }
-          if (s.conexao === 'inacessivel' || s.falhaSincronizacao?.temporaria) {
-            interrompida = true
-            avisouRetorno = false
+          if (transicao === 'indisponivel') {
+            concluirNotificacao('retorno-conexao')
             notificar(
               'Não foi possível acessar o serviço. As alterações locais estão preservadas; a conexão e os envios serão retomados automaticamente.',
               'aviso',
@@ -44,18 +43,15 @@ export function MonitorConexao(): null {
                 }
               }
             )
-          } else if (s.conexao === 'acessivel') {
+          } else if (transicao === 'retomando' || transicao === 'concluida') {
             concluirNotificacao('conexao')
-            if (interrompida && (s.sincronizando || s.recuperandoConexao)) {
+            if (transicao === 'retomando') {
               notificar('Conexão restabelecida. Retomando sincronização…', 'info', {
                 chave: 'retorno-conexao',
                 persistente: true
               })
               return
             }
-            concluirNotificacao('conexao')
-            if (!interrompida || avisouRetorno) return
-            avisouRetorno = true
             notificar(
               s.erro || s.pendentes
                 ? 'Conexão restabelecida. Existem alterações que precisam de revisão em Nuvem.'

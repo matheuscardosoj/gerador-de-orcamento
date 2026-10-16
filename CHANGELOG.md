@@ -2,6 +2,14 @@
 
 Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
+## 1.5.4 — conclusão da recuperação sem avisos reaparecendo
+
+- Encerra o ciclo do aviso ao confirmar a recuperação. Sincronizações posteriores
+  não substituem a conclusão pelo cartão de retomada.
+- O cartão de retomada é publicado apenas na transição de estado: fechá-lo não provoca
+  seu reaparecimento a cada atualização. Outra indisponibilidade permite um novo ciclo.
+- Regressão automatizada reproduz a sequência informada no teste real da 1.5.3.
+
 ## 1.5.3 — recuperação rápida e aviso único de conexão
 
 - Eventos de rede, foco, desbloqueio e suspensão antecipam uma consulta de disponibilidade

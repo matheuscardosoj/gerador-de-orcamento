@@ -82,3 +82,11 @@ na pasta do candidato.
 - SHA-256: `A1B3356C61C5421C4795234DF0826F9D9372D8751E28CA69821C2A4D5B7FB647`.
 - Instaladores anteriores preservados; nenhuma cópia para N foi realizada.
   Não declarar validação real da velocidade antes da confirmação acima.
+
+## Retorno do teste real — 16/10/2026
+
+O usuário confirmou aviso único e os testes de relatório/recibo. Reconhecimento da
+conexão em aproximadamente oito segundos; informou três segundos para sincronizar.
+Falhou a apresentação posterior: o aviso de conclusão voltou para retomada, persistindo
+ou reaparecendo após fechamento. As capturas mostram o rodapé sincronizado junto ao
+cartão de retomada. A 1.5.3 não é considerada aprovada; correção acompanhada na 1.5.4.
