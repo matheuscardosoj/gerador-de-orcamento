@@ -18,6 +18,7 @@ export type Notificacao = {
 
 const evento = 'gdo:notificacao'
 let contexto = ''
+let proximoId = 0
 let conexaoDispensada = false
 const ativas = new Map<string, Notificacao>()
 const publicar = (): void => {
@@ -65,11 +66,14 @@ export function notificar(
   if (!texto) return
   const chave = identificar(opcoes.chave ?? `${nivel}:${texto}`)
   const anterior = ativas.get(chave)
+  const persistente = opcoes.persistente ?? (nivel === 'erro' || nivel === 'aviso' || !!opcoes.acao)
   // O mesmo aviso mantém identidade e prazo; uma mudança substitui seu conteúdo.
   if (
     anterior &&
     anterior.mensagem === texto &&
     anterior.nivel === nivel &&
+    anterior.persistente === persistente &&
+    anterior.categoria === opcoes.categoria &&
     anterior.acao?.rotulo === opcoes.acao?.rotulo &&
     anterior.acao?.desabilitada === opcoes.acao?.desabilitada &&
     anterior.acao?.executar === opcoes.acao?.executar
@@ -77,13 +81,13 @@ export function notificar(
     return
   const agora = Date.now()
   ativas.set(chave, {
-    id: anterior?.id ?? `${agora}-${Math.random().toString(36).slice(2)}`,
+    id: anterior?.id ?? `notificacao-${++proximoId}`,
     mensagem: texto,
     nivel,
     criadaEm: anterior?.criadaEm ?? agora,
     ...opcoes,
     chave,
-    persistente: opcoes.persistente ?? (nivel === 'erro' || nivel === 'aviso' || !!opcoes.acao)
+    persistente
   })
   publicar()
 }

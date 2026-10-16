@@ -462,12 +462,42 @@ it('falha de pedido antigo não reverte uma confirmação mais recente do servi�
     await nuvem.pedidoNuvem('/rest/v1/gdo_entities?select=entidade&limit=1')
     const confirmado = nuvem.statusNuvem().ultimoContatoEm
     rejeitar(new TypeError('fetch failed'))
-    await antigo
+    const erroAntigo = await antigo
+    const { mensagemErro } = await import('@shared/erros')
+    expect(mensagemErro(erroAntigo)).toContain('ação anterior ficou sem confirmação')
+    expect(mensagemErro(erroAntigo)).not.toContain('Não foi possível acessar o serviço')
     expect(nuvem.statusNuvem()).toMatchObject({
       conexao: 'acessivel',
       ultimoContatoEm: confirmado,
       falhaSincronizacao: null
     })
+  } finally {
+    vi.stubGlobal('fetch', transporte)
+  }
+})
+
+it('interrompe paginação que repete cursor sem alterar a base', async () => {
+  const transporte = globalThis.fetch
+  let leituras = 0
+  const antes = sql.all('SELECT id FROM orcamentos ORDER BY id')
+  vi.stubGlobal('fetch', (url: string, opcoes: RequestInit) => {
+    if (String(url).includes('/rest/v1/gdo_entities?select=*&sequencia=gt.')) {
+      if (++leituras >= 3) throw new Error('Proteção do ensaio contra laço sem avanço')
+      return Promise.resolve(
+        new Response(
+          JSON.stringify([
+            { sequencia: 0, entidade: 'orcamento:invalido', revisao: 1, payload: {} }
+          ])
+        )
+      )
+    }
+    return transporte(url, opcoes)
+  })
+  try {
+    const resultado = await nuvem.sincronizarNuvem()
+    expect(resultado.erro).toMatch(/não avançou/)
+    expect(leituras).toBe(1)
+    expect(sql.all('SELECT id FROM orcamentos ORDER BY id')).toEqual(antes)
   } finally {
     vi.stubGlobal('fetch', transporte)
   }

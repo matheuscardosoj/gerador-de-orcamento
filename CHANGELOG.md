@@ -4,6 +4,14 @@ Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
 ## 1.5.4 — conclusão da recuperação sem avisos reaparecendo
 
+- Revisão após auditoria: uma confirmação por recuperação, Retry-After sem prorrogação
+  por eventos repetidos, bloqueio de falhas permanentes e backoff preservado enquanto
+  os envios falham. A vigilância usa um único temporizador periódico.
+- Leitura paginada exige avanço; respostas antigas não recriam falta de conexão;
+  ações de cartões antigos não publicam avisos depois de trocar de contexto.
+- Identidades dos cartões são únicas por processo, e persistência participa da atualização.
+- Pacote revisado em `candidato-1.5.4-revisado`; substitui o primeiro candidato 1.5.4.
+
 - Encerra o ciclo do aviso ao confirmar a recuperação. Sincronizações posteriores
   não substituem a conclusão pelo cartão de retomada.
 - O cartão de retomada é publicado apenas na transição de estado: fechá-lo não provoca

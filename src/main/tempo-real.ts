@@ -72,40 +72,48 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
   let tentativas = 0
   let completarProxima = true
   let verificarProxima = true
-  let servicoConfirmado = false
+  let servicoConfirmado = opcoes.status?.().conexao === 'acessivel'
+  let revisaoConfirmacao = 0
   let recuperando = true
   let bloqueada = false
   let ultimoSinal = 0
   let naoAntesDe = 0
+  let falhaObservada = opcoes.status?.().falhaSincronizacao
+  let conexaoObservada = opcoes.status?.().conexao
+  let proximaCompleta = Date.now() + 5 * 60000
   const repetir = (minimo = 0): void => {
+    minimo = Number.isFinite(minimo) && minimo > 0 ? minimo : 0
     naoAntesDe = Math.max(naoAntesDe, Date.now() + minimo)
     if (encerrado || repeticao || bloqueada) return
     const base = [1000, 2000, 5000][Math.min(tentativas++, 2)]
-    naoAntesDe = Math.max(naoAntesDe, Date.now() + minimo)
     const espera = Math.max(minimo, Math.round(base * (0.8 + Math.random() * 0.4)))
-    repeticao = setTimeout(() => {
-      repeticao = null
-      opcoes.gatilho?.('repeticao')
-      if (Date.now() < naoAntesDe) {
-        repetir(naoAntesDe - Date.now())
-        return
-      }
-      if (opcoes.verificar) void verificarAcesso()
-      else solicitar(true, true)
-    }, espera)
+    repeticao = setTimeout(
+      () => {
+        repeticao = null
+        opcoes.gatilho?.('repeticao')
+        if (Date.now() < naoAntesDe) {
+          repetir(naoAntesDe - Date.now())
+          return
+        }
+        if (opcoes.verificar && !servicoConfirmado) void verificarAcesso()
+        else solicitar(true, true)
+      },
+      Math.min(2147483647, espera)
+    )
   }
   let consultaAtiva: Promise<void> | null = null
   const verificarAcesso = (): Promise<void> => {
     if (encerrado || bloqueada || Date.now() < naoAntesDe) return Promise.resolve()
     if (consultaAtiva) return consultaAtiva
+    const eraRecuperacao = recuperando
+    const confirmacaoInicial = revisaoConfirmacao
     const consulta = (async () => {
       try {
         await opcoes.verificar?.()
         if (encerrado) return
-        tentativas = 0
-        if (repeticao) clearTimeout(repeticao)
-        repeticao = null
-        solicitar(true, true)
+        if (revisaoConfirmacao !== confirmacaoInicial) return
+        if (eraRecuperacao || recuperando) confirmarAcesso()
+        else solicitar(true, true)
       } catch (erro) {
         tratarFalha(erro)
       }
@@ -116,16 +124,38 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
     })
     return consulta
   }
+  const confirmarAcesso = (): void => {
+    if (!recuperando || servicoConfirmado || bloqueada) return
+    servicoConfirmado = true
+    revisaoConfirmacao++
+    if (Date.now() >= naoAntesDe && repeticao) {
+      clearTimeout(repeticao)
+      repeticao = null
+    }
+    solicitar(true, true)
+  }
   const tratarFalha = (erro: unknown): void => {
     if (encerrado) return
     const falha = classificarFalhaNuvem(erro)
     bloqueada = !falha.temporaria
+    falhaObservada = opcoes.status?.().falhaSincronizacao
+    conexaoObservada = opcoes.status?.().conexao
+    if (bloqueada && repeticao) {
+      clearTimeout(repeticao)
+      repeticao = null
+    }
     if (falha.temporaria) {
+      servicoConfirmado = false
       recuperando = true
       repetir(falha.repetirAposMs)
     }
   }
   const agendador = new AgendadorSincronizacao(async (): Promise<void> => {
+    if (encerrado || bloqueada) return
+    if (Date.now() < naoAntesDe) {
+      repetir()
+      return
+    }
     try {
       const verificar = verificarProxima
       verificarProxima = false
@@ -138,7 +168,11 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
           renovacoesAtivas.delete(renovacao)
         }
       }
-      if (encerrado) return
+      if (encerrado || bloqueada) return
+      if (Date.now() < naoAntesDe) {
+        repetir()
+        return
+      }
       await conectar()
       if (encerrado) return
       const completa = completarProxima || recuperando
@@ -149,6 +183,7 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
       if (encerrado) return
       const status = resultado as StatusNuvem | null
       if (status?.falhaSincronizacao?.temporaria) {
+        servicoConfirmado = false
         recuperando = true
         repetir(status.falhaSincronizacao.repetirAposMs)
       } else if (status?.erro) {
@@ -158,6 +193,8 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
         )
       } else {
         recuperando = false
+        servicoConfirmado = true
+        if (completa) proximaCompleta = Date.now() + 5 * 60000
         bloqueada = false
         tentativas = 0
         if (repeticao) clearTimeout(repeticao)
@@ -183,9 +220,13 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
     }
   })
   const solicitar = (completa = false, verificar = false): void => {
-    if (encerrado) return
+    if (encerrado || bloqueada) return
     completarProxima ||= completa
     verificarProxima ||= verificar
+    if (Date.now() < naoAntesDe) {
+      repetir()
+      return
+    }
     void agendador.solicitar().catch(() => undefined)
   }
   const conectar = async (): Promise<void> => {
@@ -260,26 +301,23 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
       })
   }
   const removerObservador = observarDados((evento) => {
-    if (evento.status && opcoes.verificar && opcoes.status?.().conexao === 'inacessivel') {
-      servicoConfirmado = false
-      recuperando = true
-      repetir(opcoes.status?.().falhaSincronizacao?.repetirAposMs)
-    }
-    if (
-      evento.status &&
-      recuperando &&
-      !servicoConfirmado &&
-      opcoes.verificar &&
-      opcoes.status?.().conexao === 'acessivel'
-    ) {
-      servicoConfirmado = true
-      if (repeticao) clearTimeout(repeticao)
-      repeticao = null
-      solicitar(true, true)
-    }
-    if (evento.status && bloqueada && opcoes.status && !opcoes.status().erro) {
-      bloqueada = false
-      solicitar(true, true)
+    const status = opcoes.status?.()
+    if (evento.status && status) {
+      const falha = status.falhaSincronizacao
+      if (bloqueada && !status.erro && !falha && status.conexao === 'acessivel') {
+        bloqueada = false
+        recuperando = true
+        servicoConfirmado = false
+      }
+      if (opcoes.verificar && status.conexao === 'inacessivel' && (!falha || falha.temporaria)) {
+        if (conexaoObservada !== status.conexao || falhaObservada !== falha) {
+          servicoConfirmado = false
+          recuperando = true
+          repetir(falha?.repetirAposMs)
+        }
+      } else if (opcoes.verificar && status.conexao === 'acessivel' && !falha) confirmarAcesso()
+      falhaObservada = falha
+      conexaoObservada = status.conexao
     }
     if (
       evento.origem === 'local' &&
@@ -306,20 +344,13 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
   }
   const vigilancia = setInterval(() => {
     if (encerrado || repeticao || bloqueada) return
-    solicitar(recuperando, true)
+    solicitar(recuperando || Date.now() >= proximaCompleta, true)
   }, 30000)
-  const seguranca = setInterval(
-    () => {
-      if (!bloqueada && !repeticao) solicitar(true, true)
-    },
-    5 * 60 * 1000
-  )
   pararAtual = () => {
     encerrado = true
     acordarAtual = null
     if (repeticao) clearTimeout(repeticao)
     clearInterval(vigilancia)
-    clearInterval(seguranca)
     removerObservador()
     agendador.parar()
     if (cliente) void cliente.removeAllChannels()

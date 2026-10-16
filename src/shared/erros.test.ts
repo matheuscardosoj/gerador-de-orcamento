@@ -183,3 +183,12 @@ describe('mensagens de erro para a interface', () => {
     )
   })
 })
+
+it('falha antiga após recuperar o serviço não volta a anunciar falta de conexão', () => {
+  const texto = mensagemErro({ message: 'fetch failed', conectividadeSuperada: true })
+  expect(texto).toContain('ação anterior ficou sem confirmação')
+  expect(texto).not.toContain('Não foi possível acessar o serviço')
+  expect(
+    mensagemErro(new Error("Error invoking remote method 'orcamentos.update': Error: " + texto))
+  ).toBe(texto)
+})

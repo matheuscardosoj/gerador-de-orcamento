@@ -1,5 +1,13 @@
 # Candidato 1.5.4 — ciclo dos avisos de recuperação
 
+## Revisão após auditoria
+
+**O instalador original desta página foi superado.** Usar o pacote em
+`release/candidato-1.5.4-revisado`. A auditoria encontrou riscos adicionais de repetição,
+que foram corrigidos e cobertos por testes. Ver [auditoria completa](AUDITORIA-RECUPERACAO-1.5.4.md).
+
+As evidências e o hash abaixo descrevem somente o pacote original, preservado para rastreabilidade.
+
 ## Problema reproduzido
 
 Na 1.5.3, o monitor marcava que já havia avisado a conclusão, mas verificava primeiro

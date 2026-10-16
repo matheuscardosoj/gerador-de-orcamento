@@ -69,3 +69,22 @@ it('unifica falhas de salvar e abrir controles, preserva ação e respeita dispe
   notificar('Sem autorização para editar.', 'erro')
   expect(notificacoesAtivas()).toHaveLength(2)
 })
+
+it('permite encerrar persistência mesmo mantendo o texto e a identidade', () => {
+  notificar('Conferência', 'info', { chave: 'estado', persistente: true })
+  const id = notificacoesAtivas()[0].id
+  notificar('Conferência', 'info', { chave: 'estado', persistente: false })
+  expect(notificacoesAtivas()[0]).toMatchObject({ id, persistente: false })
+})
+
+it('identidades continuam únicas sem depender do relógio ou aleatoriedade', () => {
+  const ids = new Set<string>()
+  for (let i = 0; i < 100; i++) {
+    notificar('Aviso ' + i, 'info')
+    ids.add(notificacoesAtivas().at(-1)!.id)
+  }
+  expect(ids.size).toBe(100)
+  definirContextoNotificacoes('outro-contexto-identidades')
+  notificar('Novo aviso', 'info')
+  expect(ids.has(notificacoesAtivas()[0].id)).toBe(false)
+})

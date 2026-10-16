@@ -145,12 +145,13 @@ function AvisoFlutuante({
                 .then((concluiu) => {
                   if (concluiu !== false) aoFechar(notificacao.id)
                 })
-                .catch(() =>
+                .catch(() => {
+                  if (!notificacoesAtivas().some((item) => item.id === notificacao.id)) return
                   notificar(
                     'Não foi possível confirmar a solicitação. Verifique a conexão e tente novamente.',
                     'aviso'
                   )
-                )
+                })
                 .finally(() => setOcupado(false))
             }}
           >

@@ -11,10 +11,12 @@ function detalhe(
   status?: number
   detalhes: string
   dica: string
+  conectividadeSuperada?: boolean
 } {
   if (typeof erro === 'string') return { texto: erro, codigo: '', nome: '', detalhes: '', dica: '' }
   if (erro && typeof erro === 'object') {
     const e = erro as {
+      conectividadeSuperada?: unknown
       message?: unknown
       code?: unknown
       codigo?: unknown
@@ -29,6 +31,7 @@ function detalhe(
         ? detalhe(e.cause, profundidade + 1)
         : undefined
     return {
+      conectividadeSuperada: e.conectividadeSuperada === true,
       texto: typeof e.message === 'string' ? e.message : '',
       codigo:
         typeof e.code === 'string'
@@ -88,10 +91,13 @@ export function diagnosticoErro(erro: unknown): {
  * Não altera o erro original, que permanece disponível para diagnóstico no processo principal.
  */
 export function mensagemErro(erro: unknown, contexto?: string): string {
-  const { texto, codigo, nome, status, detalhes } = detalhe(erro)
+  const { texto, codigo, nome, status, detalhes, conectividadeSuperada } = detalhe(erro)
   const limpa = semInvólucros(texto)
   let mensagem: string
-  if (/^(?:Invalid login credentials|Invalid credentials)$/i.test(limpa))
+  if (conectividadeSuperada)
+    mensagem =
+      'A ação anterior ficou sem confirmação. A conexão já foi restabelecida; confira o resultado antes de tentar novamente.'
+  else if (/^(?:Invalid login credentials|Invalid credentials)$/i.test(limpa))
     mensagem = 'E-mail ou senha incorretos. Confira os dados e tente conectar novamente.'
   else if (/^Email not confirmed\.?$/i.test(limpa))
     mensagem = 'Este e-mail ainda não foi confirmado. Confirme a conta antes de conectar.'

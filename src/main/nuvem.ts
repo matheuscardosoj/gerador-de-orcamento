@@ -254,6 +254,7 @@ export async function pedidoNuvem(
       signal: AbortSignal.any([controller.signal, limite])
     })
     const dados = await resposta.json().catch(() => null)
+    limite.throwIfAborted()
     if (geracao !== geracaoSessao)
       throw new Error('A empresa ativa mudou. A resposta anterior foi descartada.')
     if (resposta.ok && ordem >= ultimaEvidencia) {
@@ -289,9 +290,24 @@ export async function pedidoNuvem(
     }
     return dados
   } catch (erro) {
-    if (ordem < ultimaEvidencia && erro && typeof erro === 'object') falhasSuperadas.add(erro)
+    const falha = classificarFalhaNuvem(erro)
+    let erroApresentado = erro
+    if (
+      geracao === geracaoSessao &&
+      conexao === 'acessivel' &&
+      ordem < ultimaEvidencia &&
+      falha.temporaria &&
+      erro &&
+      typeof erro === 'object'
+    ) {
+      const anterior = erro as Error
+      erroApresentado = Object.assign(new Error(anterior.message, { cause: erro }), anterior, {
+        name: anterior.name,
+        conectividadeSuperada: true
+      })
+      falhasSuperadas.add(erroApresentado as object)
+    }
     if (geracao === geracaoSessao && !acessoInterrompido) {
-      const falha = classificarFalhaNuvem(erro)
       if (falha.temporaria && ordem >= ultimaEvidencia) {
         ultimaEvidencia = ordem
         recuperandoConexao = true
@@ -300,7 +316,7 @@ export async function pedidoNuvem(
         avisarDados({ origem: 'nuvem', entidades: [], status: true })
       }
     }
-    throw erro
+    throw erroApresentado
   } finally {
     requisicoesAtivas.delete(controller)
   }
@@ -900,9 +916,14 @@ async function baixarAlteracoes(inicio: number, protocolo = protocoloNuvem()): P
             `/rest/v1/gdo_entities?select=*&sequencia=gt.${cursor}&order=sequencia.asc&limit=50`
           )
     ) as Remoto[]
+    if (!Array.isArray(dados))
+      throw new Error('Resposta inválida ao consultar alterações da nuvem.')
     if (!dados.length) return todas
+    const proximo = Math.max(cursor, ...dados.map((e) => e.sequencia))
+    if (!Number.isSafeInteger(proximo) || proximo <= cursor)
+      throw new Error('A consulta de alterações não avançou. A base local foi preservada.')
     todas.push(...dados)
-    cursor = Math.max(cursor, ...dados.map((e) => e.sequencia))
+    cursor = proximo
   }
 }
 function ordenarDependencias(dados: Remoto[]): Remoto[] {
