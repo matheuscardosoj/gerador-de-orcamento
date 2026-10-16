@@ -2,6 +2,17 @@
 
 Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
+## 1.5.1 — cadastros e avisos do cálculo
+
+- Históricos de clientes e serviços usam paginação compartilhada de 12 registros,
+  com busca, filtros e ordenação retornando à primeira página.
+- Falhas ao excluir serviços aparecem na tela e impedem confirmação repetida enquanto
+  a operação está em andamento.
+- Erros e avisos do cálculo de preço passam a aparecer como notificações flutuantes
+  no mesmo componente usado por orçamentos e relatórios.
+- Validado com interface Electron sintética, fluxos de orçamento e relatório, suíte
+  completa, instalador isolado e conferência do artefato distribuído.
+
 ## 1.5.0-rc.9 — exclusões remotas e códigos de cadastro
 
 - Editores abertos avisam quando o documento foi excluído em outro computador,

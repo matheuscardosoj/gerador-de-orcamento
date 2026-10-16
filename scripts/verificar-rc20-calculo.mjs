@@ -160,7 +160,9 @@ try {
     assert.notEqual(await percentualGeral.inputValue(), '100')
     assert.match(await linha('Preço final').innerText(), /4.000,17/)
     await meta.fill('1500')
-    await modal.getByText(/A meta não cobre/).waitFor()
+    const avisos = page.locator('section[aria-label="Avisos"]')
+    await avisos.getByText(/A meta não cobre/).waitFor()
+    assert.equal(await modal.getByText(/A meta não cobre/).count(), 0)
     assert.equal(await meta.inputValue(), '1.500')
     assert.match(await linha('Preço final').innerText(), /1.861,70/)
     await modal
@@ -183,7 +185,10 @@ try {
       '1.500,00'
     )
     await modal.getByLabel('Dias de serviço', { exact: true }).fill('2')
-    await modal.getByText(/O cálculo foi alterado/).waitFor()
+    await page
+      .locator('section[aria-label="Avisos"]')
+      .getByText(/O cálculo foi alterado/)
+      .waitFor()
     await modal.getByRole('button', { name: 'Cancelar', exact: true }).click()
     await page.getByRole('button', { name: 'Prévia', exact: true }).click()
     const previa = page.getByRole('dialog')

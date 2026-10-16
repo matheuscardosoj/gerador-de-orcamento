@@ -27,7 +27,13 @@ import {
   NumericInput,
   Select
 } from '../ui/primitives'
-import { DataTableFrame, Pagination, SortableHeader, TableActions } from '../ui/dataTable'
+import {
+  DataTableFrame,
+  ITENS_POR_PAGINA,
+  Pagination,
+  SortableHeader,
+  TableActions
+} from '../ui/dataTable'
 import { ListaOrdenavel } from '../ui/ordenavel'
 import {
   colunasHistorico,
@@ -240,9 +246,9 @@ export function HistoricoDocumentos({
         }),
     [registros, pref]
   )
-  const total = Math.max(1, Math.ceil(filtrados.length / 12)),
+  const total = Math.max(1, Math.ceil(filtrados.length / ITENS_POR_PAGINA)),
     atual = Math.min(pagina, total),
-    inicio = (atual - 1) * 12
+    inicio = (atual - 1) * ITENS_POR_PAGINA
   const larguraColuna = (campo: string): number =>
     ['destinatario', 'servicos', 'descricao', 'anotacao', 'origem'].includes(campo)
       ? 240
@@ -450,7 +456,7 @@ export function HistoricoDocumentos({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtrados.slice(inicio, inicio + 12).map((r) => (
+              {filtrados.slice(inicio, inicio + ITENS_POR_PAGINA).map((r) => (
                 <tr key={r.id} className="group/linha-historico h-[62px] hover:bg-slate-50">
                   <td className="sticky left-0 z-[1] whitespace-nowrap bg-white px-4 py-3 font-medium text-slate-800 shadow-[1px_0_0_0_#e2e8f0] group-hover/linha-historico:bg-slate-50">
                     {r.numero > 0 ? String(r.numero).padStart(6, '0') : 'Aguardando numeração'}
@@ -557,7 +563,8 @@ export function HistoricoDocumentos({
           </DataTableFrame>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-xs text-slate-500">
-              Mostrando {inicio + 1}–{Math.min(inicio + 12, filtrados.length)} de {filtrados.length}
+              Mostrando {inicio + 1}–{Math.min(inicio + ITENS_POR_PAGINA, filtrados.length)} de{' '}
+              {filtrados.length}
             </span>
             {total > 1 && <Pagination pagina={atual} total={total} onIr={setPagina} />}
           </div>

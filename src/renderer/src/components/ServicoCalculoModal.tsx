@@ -1,6 +1,6 @@
 import { RevisaoIA } from './RevisaoIA'
 import { ListaOrdenavel } from '../ui/ordenavel'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { X, Plus, Check } from 'lucide-react'
 import {
   atingirPrecoDesejado,
@@ -22,9 +22,9 @@ import {
   NumberField,
   NumericInput,
   Select,
-  cn,
-  Mensagem
+  cn
 } from '../ui/primitives'
+import { concluirNotificacao, notificar } from '../lib/notificacoes'
 import { novoId, type ResultadoServico } from './tipos'
 import { mensagemValidacao, validarEntradaCalculo } from '@shared/validacao'
 
@@ -103,6 +103,27 @@ export function ServicoCalculoModal({
   )
   const [avisoMeta, setAvisoMeta] = useState('')
   const [erroMeta, setErroMeta] = useState('')
+  useEffect(() => {
+    const chave = 'calculo-servico-validacao'
+    concluirNotificacao(chave)
+    if (erro) notificar(erro, 'erro', { chave, persistente: true })
+    return () => concluirNotificacao(chave)
+  }, [erro])
+  useEffect(() => {
+    const chave = 'calculo-servico-meta-erro'
+    concluirNotificacao(chave)
+    if (erroMeta) notificar(erroMeta, 'erro', { chave, persistente: true })
+    return () => concluirNotificacao(chave)
+  }, [erroMeta])
+  useEffect(() => {
+    const chave = 'calculo-servico-meta-aviso'
+    concluirNotificacao(chave)
+    if (!avisoMeta) return () => concluirNotificacao(chave)
+    const persistente =
+      avisoMeta.startsWith('A meta não cobre') || avisoMeta.startsWith('O cálculo foi alterado')
+    notificar(avisoMeta, persistente ? 'aviso' : 'info', { chave, persistente })
+    return () => concluirNotificacao(chave)
+  }, [avisoMeta])
   const set = (patch: Partial<EntradaCalculo>): void => {
     const tinhaMetaAplicada = e.precoFinalDesejado != null
     if (tinhaMetaAplicada)
@@ -174,7 +195,6 @@ export function ServicoCalculoModal({
       title={modoServico === 'manual' ? 'Adicionar serviço' : 'Calcular preço do serviço'}
       size="3xl"
     >
-      {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         {/* Coluna de entradas */}
         <div className="space-y-4">
@@ -266,8 +286,6 @@ export function ServicoCalculoModal({
                         min={0}
                       />
                     </Field>
-                    {erroMeta && <Mensagem>{erroMeta}</Mensagem>}
-                    {avisoMeta && <Mensagem tom="info">{avisoMeta}</Mensagem>}
                   </div>
                 </div>
               </Bloco>

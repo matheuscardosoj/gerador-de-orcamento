@@ -22,7 +22,13 @@ import {
 import { IconButton } from '../ui/primitives'
 import { formatMoeda } from '@shared/format'
 import { correspondeBusca } from '@shared/historico-preferencias'
-import { DataTableFrame, TableActions, SortableHeader } from '../ui/dataTable'
+import {
+  DataTableFrame,
+  ITENS_POR_PAGINA,
+  Pagination,
+  TableActions,
+  SortableHeader
+} from '../ui/dataTable'
 import type { Cliente, ServicoCatalogo } from '@shared/types'
 import type { RascunhoCadastro } from '@shared/evolucao'
 import { useNav } from '../lib/nav'
@@ -104,10 +110,15 @@ function SecaoClientes({
   const [tipo, setTipo] = useState('')
   const [ordenarPorCodigo, setOrdenarPorCodigo] = useState(false)
   const [direcao, setDirecao] = useState<'asc' | 'desc'>('asc')
+  const [pagina, setPagina] = useState(1)
   const [excluir, setExcluir] = useState<Cliente | null>(null)
   const [erro, setErro] = useState<string | null>(null)
+  const [excluindo, setExcluindo] = useState(false)
+  useEffect(() => setPagina(1), [busca, estado, tipo, ordenarPorCodigo, direcao])
   const confirmar = async (): Promise<void> => {
-    if (!excluir) return
+    if (!excluir || excluindo) return
+    setExcluindo(true)
+    setErro(null)
     try {
       await api.clientes.remove(excluir.id)
       avisar(`Cliente “${excluir.nome}” excluído.`, 'sucesso')
@@ -115,6 +126,8 @@ function SecaoClientes({
       reload()
     } catch (e) {
       setErro(mensagemErro(e))
+    } finally {
+      setExcluindo(false)
     }
   }
 
@@ -141,6 +154,10 @@ function SecaoClientes({
           ? (a.codigo ?? 0) - (b.codigo ?? 0)
           : a.nome.localeCompare(b.nome, 'pt-BR')) * (direcao === 'asc' ? 1 : -1)
     )
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / ITENS_POR_PAGINA))
+  const paginaAtual = Math.min(pagina, totalPaginas)
+  const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA
+  const paginaFiltrada = filtrados.slice(inicio, inicio + ITENS_POR_PAGINA)
   return (
     <div className="space-y-4">
       {rascunhos?.map((r) => (
@@ -197,7 +214,6 @@ function SecaoClientes({
           Limpar filtros
         </Button>
       </div>
-      {erro && <Mensagem className="mb-4">{erro}</Mensagem>}
       {erroCarga && (
         <Mensagem className="mb-4">Não foi possível carregar os clientes. {erroCarga}</Mensagem>
       )}
@@ -270,7 +286,7 @@ function SecaoClientes({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {filtrados.map((c) => (
+            {paginaFiltrada.map((c) => (
               <tr key={c.id} className="group/linha-historico h-[62px] hover:bg-slate-50">
                 <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-800">
                   {c.codigo ? String(c.codigo).padStart(6, '0') : '—'}
@@ -325,9 +341,15 @@ function SecaoClientes({
         </DataTableFrame>
       )}
       {!loading && !!filtrados.length && (
-        <p className="text-xs text-slate-500">
-          {filtrados.length} de {data?.length ?? 0} clientes
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="text-xs text-slate-500">
+            Mostrando {inicio + 1}–{Math.min(inicio + ITENS_POR_PAGINA, filtrados.length)} de{' '}
+            {filtrados.length} clientes
+          </span>
+          {totalPaginas > 1 && (
+            <Pagination pagina={paginaAtual} total={totalPaginas} onIr={setPagina} />
+          )}
+        </div>
       )}
       {edit && (
         <ClienteModal
@@ -355,9 +377,13 @@ function SecaoClientes({
       <ConfirmDialog
         open={Boolean(excluir)}
         title="Excluir cliente"
-        description={`Excluir o cliente “${excluir?.nome ?? ''}”? Documentos já gravados continuarão preservados.`}
-        onCancel={() => setExcluir(null)}
+        description={`Excluir o cliente “${excluir?.nome ?? ''}”? Documentos já gravados continuarão preservados.${erro ? ` Não foi possível excluir: ${erro}` : ''}`}
+        onCancel={() => {
+          setExcluir(null)
+          setErro(null)
+        }}
         onConfirm={confirmar}
+        busy={excluindo}
       />
     </div>
   )
@@ -625,7 +651,26 @@ function SecaoServicos({
   const [busca, setBusca] = useState('')
   const [ordenarPorCodigo, setOrdenarPorCodigo] = useState(false)
   const [direcaoCodigo, setDirecaoCodigo] = useState<'asc' | 'desc'>('asc')
+  const [pagina, setPagina] = useState(1)
   const [excluir, setExcluir] = useState<ServicoCatalogo | null>(null)
+  const [erro, setErro] = useState<string | null>(null)
+  const [excluindo, setExcluindo] = useState(false)
+  useEffect(() => setPagina(1), [busca, ordenarPorCodigo, direcaoCodigo])
+  const confirmar = async (): Promise<void> => {
+    if (!excluir || excluindo) return
+    setExcluindo(true)
+    setErro(null)
+    try {
+      await api.servicos.remove(excluir.id)
+      avisar(`Serviço “${excluir.nome}” excluído.`, 'sucesso')
+      setExcluir(null)
+      reload()
+    } catch (e) {
+      setErro(mensagemErro(e))
+    } finally {
+      setExcluindo(false)
+    }
+  }
   const filtrados = (data ?? [])
     .filter((s) =>
       correspondeBusca(busca, [String(s.codigo ?? ''), s.nome, s.descricaoPadrao, s.unidade])
@@ -635,6 +680,10 @@ function SecaoServicos({
         ? ((a.codigo ?? 0) - (b.codigo ?? 0)) * (direcaoCodigo === 'asc' ? 1 : -1)
         : a.nome.localeCompare(b.nome, 'pt-BR')
     )
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / ITENS_POR_PAGINA))
+  const paginaAtual = Math.min(pagina, totalPaginas)
+  const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA
+  const paginaFiltrada = filtrados.slice(inicio, inicio + ITENS_POR_PAGINA)
   return (
     <div className="space-y-4">
       {rascunhos?.map((r) => (
@@ -722,7 +771,7 @@ function SecaoServicos({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {filtrados.map((s) => (
+            {paginaFiltrada.map((s) => (
               <tr key={s.id} className="group/linha-historico h-[62px] hover:bg-slate-50">
                 <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-800">
                   {s.codigo ? String(s.codigo).padStart(6, '0') : '—'}
@@ -753,7 +802,10 @@ function SecaoServicos({
                     <IconButton
                       icon={Trash2}
                       label={`Excluir serviço ${s.nome}`}
-                      onClick={() => setExcluir(s)}
+                      onClick={() => {
+                        setErro(null)
+                        setExcluir(s)
+                      }}
                     />
                   </TableActions>
                 </td>
@@ -763,9 +815,15 @@ function SecaoServicos({
         </DataTableFrame>
       )}
       {!loading && !!filtrados.length && (
-        <p className="text-xs text-slate-500">
-          {filtrados.length} de {data?.length ?? 0} serviços
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="text-xs text-slate-500">
+            Mostrando {inicio + 1}–{Math.min(inicio + ITENS_POR_PAGINA, filtrados.length)} de{' '}
+            {filtrados.length} serviços
+          </span>
+          {totalPaginas > 1 && (
+            <Pagination pagina={paginaAtual} total={totalPaginas} onIr={setPagina} />
+          )}
+        </div>
       )}
       {edit && (
         <ServicoModal
@@ -793,16 +851,13 @@ function SecaoServicos({
       <ConfirmDialog
         open={Boolean(excluir)}
         title="Excluir serviço"
-        description={`Excluir o serviço “${excluir?.nome ?? ''}” do catálogo? Itens já gravados não serão alterados.`}
-        onCancel={() => setExcluir(null)}
-        onConfirm={async () => {
-          if (excluir) {
-            await api.servicos.remove(excluir.id)
-            avisar(`Serviço “${excluir.nome}” excluído.`, 'sucesso')
-            setExcluir(null)
-            reload()
-          }
+        description={`Excluir o serviço “${excluir?.nome ?? ''}” do catálogo? Itens já gravados não serão alterados.${erro ? ` Não foi possível excluir: ${erro}` : ''}`}
+        onCancel={() => {
+          setExcluir(null)
+          setErro(null)
         }}
+        onConfirm={confirmar}
+        busy={excluindo}
       />
     </div>
   )

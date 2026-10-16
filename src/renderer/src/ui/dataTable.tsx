@@ -2,6 +2,8 @@ import type { CSSProperties, ReactNode } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { AppIcon, Button, Card, cn } from './primitives'
 
+export const ITENS_POR_PAGINA = 12
+
 export function DataTableFrame({
   children,
   minWidth = '1000px'
