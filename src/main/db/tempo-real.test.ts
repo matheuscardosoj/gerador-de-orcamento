@@ -178,3 +178,88 @@ it('falha permanente não entra em repetição automática', async () => {
   await vi.advanceTimersByTimeAsync(6 * 60000)
   expect(renovar).toHaveBeenCalledTimes(1)
 })
+
+it('consulta imediatamente fora da fila lenta e consolida eventos simultâneos', async () => {
+  vi.useFakeTimers()
+  let liberar!: () => void
+  let confirmar!: () => void
+  const renovar = vi.fn(
+    () =>
+      new Promise<void>((r) => {
+        liberar = r
+      })
+  )
+  const verificar = vi.fn(
+    () =>
+      new Promise<void>((r) => {
+        confirmar = r
+      })
+  )
+  iniciarTempoReal({
+    configuracao: () => ({ url: '', chavePublica: '', email: '' }),
+    identidade: () => null,
+    sincronizar: async () => null,
+    renovar,
+    verificar,
+    estado: () => {}
+  })
+  solicitarRecuperacaoNuvem('online')
+  await vi.advanceTimersByTimeAsync(0)
+  expect(verificar).toHaveBeenCalledTimes(1)
+  await vi.advanceTimersByTimeAsync(1100)
+  solicitarRecuperacaoNuvem('focus')
+  expect(verificar).toHaveBeenCalledTimes(1)
+  confirmar()
+  await vi.advanceTimersByTimeAsync(0)
+  pararTempoReal()
+  liberar()
+  await aguardarTempoReal()
+})
+it('verifica sem evento em até cinco segundos durante interrupção', async () => {
+  vi.useFakeTimers()
+  const verificar = vi
+    .fn()
+    .mockRejectedValueOnce(new TypeError('fetch failed'))
+    .mockResolvedValue(undefined)
+  const renovar = vi
+    .fn()
+    .mockRejectedValueOnce(new TypeError('fetch failed'))
+    .mockResolvedValue(undefined)
+  iniciarTempoReal({
+    configuracao: () => ({ url: '', chavePublica: '', email: '' }),
+    identidade: () => null,
+    sincronizar: async () => null,
+    renovar,
+    verificar,
+    estado: () => {}
+  })
+  await vi.advanceTimersByTimeAsync(5000)
+  expect(verificar).toHaveBeenCalledTimes(2)
+})
+
+it('consulta independente respeita Retry-After mesmo com eventos de rede', async () => {
+  vi.useFakeTimers()
+  const verificar = vi
+    .fn()
+    .mockRejectedValueOnce(
+      Object.assign(new Error('Servidor ocupado'), { status: 429, repetirAposMs: 90000 })
+    )
+    .mockResolvedValue(undefined)
+  iniciarTempoReal({
+    configuracao: () => ({ url: '', chavePublica: '', email: '' }),
+    identidade: () => null,
+    sincronizar: async () => null,
+    renovar: async () => {},
+    verificar,
+    estado: () => {}
+  })
+  await vi.advanceTimersByTimeAsync(0)
+  solicitarRecuperacaoNuvem('online')
+  await vi.advanceTimersByTimeAsync(0)
+  expect(verificar).toHaveBeenCalledTimes(1)
+  await vi.advanceTimersByTimeAsync(10000)
+  solicitarRecuperacaoNuvem('focus')
+  expect(verificar).toHaveBeenCalledTimes(1)
+  await vi.advanceTimersByTimeAsync(80000)
+  expect(verificar).toHaveBeenCalledTimes(2)
+})

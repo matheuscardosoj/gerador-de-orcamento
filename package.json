@@ -1,6 +1,6 @@
 {
   "name": "gerador-de-orcamento",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "Documentos de serviços, cálculo de custos e gestão comercial",
   "main": "./out/main/index.js",
   "author": "Matheus",

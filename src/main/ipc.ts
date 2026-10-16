@@ -183,7 +183,10 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
   'versoes.restaurar': (id, c) => restaurarVersao(id as string, c as boolean),
   'versoes.exportar': (id, f) => exportarVersao(id as string, f as never),
   'nuvem.config': () => configuracaoNuvem(),
-  'nuvem.verificarConexao': () => solicitarRecuperacaoNuvem(),
+  'nuvem.verificarConexao': (origem) =>
+    solicitarRecuperacaoNuvem(
+      ['online', 'offline'].includes(String(origem)) ? String(origem) : 'manual'
+    ),
   'nuvem.status': () => statusNuvem(),
   'nuvem.conectar': (c, s, m) => conectarNuvem(c as never, s as string, m as never),
   'nuvem.sincronizar': () => sincronizarNuvem(),

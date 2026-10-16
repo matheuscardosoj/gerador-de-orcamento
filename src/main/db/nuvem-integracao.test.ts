@@ -446,3 +446,29 @@ it('inicia offline e recupera a nuvem sem reiniciar nem clicar em sincronizar', 
     offline = false
   }
 })
+
+it('falha de pedido antigo não reverte uma confirmação mais recente do serviço', async () => {
+  const transporte = globalThis.fetch
+  let rejeitar!: (erro: Error) => void
+  vi.stubGlobal('fetch', (url: string, opcoes: RequestInit) => {
+    if (String(url).endsWith('/pedido-antigo'))
+      return new Promise<Response>((_, reject) => {
+        rejeitar = reject
+      })
+    return transporte(url, opcoes)
+  })
+  try {
+    const antigo = nuvem.pedidoNuvem('/pedido-antigo').catch((e) => e)
+    await nuvem.pedidoNuvem('/rest/v1/gdo_entities?select=entidade&limit=1')
+    const confirmado = nuvem.statusNuvem().ultimoContatoEm
+    rejeitar(new TypeError('fetch failed'))
+    await antigo
+    expect(nuvem.statusNuvem()).toMatchObject({
+      conexao: 'acessivel',
+      ultimoContatoEm: confirmado,
+      falhaSincronizacao: null
+    })
+  } finally {
+    vi.stubGlobal('fetch', transporte)
+  }
+})

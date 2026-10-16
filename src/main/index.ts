@@ -120,9 +120,9 @@ function createWindow(): void {
 if (temTrava)
   app.whenReady().then(async () => {
     electronApp.setAppUserModelId('com.gerador.orcamentos')
-    powerMonitor.on('resume', solicitarRecuperacaoNuvem)
-    powerMonitor.on('unlock-screen', solicitarRecuperacaoNuvem)
-    app.on('browser-window-focus', solicitarRecuperacaoNuvem)
+    powerMonitor.on('resume', () => solicitarRecuperacaoNuvem('resume'))
+    powerMonitor.on('unlock-screen', () => solicitarRecuperacaoNuvem('unlock'))
+    app.on('browser-window-focus', () => solicitarRecuperacaoNuvem('focus'))
 
     // Inicializa o banco (cria arquivo, migra o JSON ou semeia) e registra o IPC.
     try {

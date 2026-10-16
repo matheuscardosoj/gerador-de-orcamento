@@ -19,6 +19,12 @@ export function MonitorConexao(): null {
         .status()
         .then(async (s) => {
           if (!ativo || atual !== consulta || !s.configurada) return
+          if (s.falhaSincronizacao && !s.falhaSincronizacao.temporaria) {
+            concluirNotificacao('conexao')
+            concluirNotificacao('retorno-conexao')
+            interrompida = false
+            return
+          }
           if (s.conexao === 'inacessivel' || s.falhaSincronizacao?.temporaria) {
             interrompida = true
             avisouRetorno = false
@@ -27,6 +33,8 @@ export function MonitorConexao(): null {
               'aviso',
               {
                 chave: 'conexao',
+                categoria: 'conectividade',
+                origem: 'automatica',
                 acao: {
                   rotulo: 'Tentar agora',
                   executar: async () => {
@@ -36,15 +44,23 @@ export function MonitorConexao(): null {
                 }
               }
             )
-          } else if (s.conexao === 'acessivel' && !s.sincronizando) {
+          } else if (s.conexao === 'acessivel') {
+            concluirNotificacao('conexao')
+            if (interrompida && (s.sincronizando || s.recuperandoConexao)) {
+              notificar('Conexão restabelecida. Retomando sincronização…', 'info', {
+                chave: 'retorno-conexao',
+                persistente: true
+              })
+              return
+            }
             concluirNotificacao('conexao')
             if (!interrompida || avisouRetorno) return
             avisouRetorno = true
             notificar(
-              s.erro
+              s.erro || s.pendentes
                 ? 'Conexão restabelecida. Existem alterações que precisam de revisão em Nuvem.'
                 : 'Conexão restabelecida. Sincronização concluída.',
-              s.erro ? 'aviso' : 'sucesso',
+              s.erro || s.pendentes ? 'aviso' : 'sucesso',
               { chave: 'retorno-conexao' }
             )
             const rascunhos = await api.rascunhos.list()
@@ -84,8 +100,10 @@ export function MonitorConexao(): null {
         })
         .catch(() => undefined)
     }
-    const sinal = (): void => {
-      void api.nuvem.verificarConexao().catch(() => undefined)
+    const sinal = (evento: Event): void => {
+      void api.nuvem
+        .verificarConexao(evento.type === 'offline' ? 'offline' : 'online')
+        .catch(() => undefined)
     }
     window.addEventListener('online', sinal)
     window.addEventListener('offline', sinal)

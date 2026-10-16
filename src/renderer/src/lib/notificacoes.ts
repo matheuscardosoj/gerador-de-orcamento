@@ -5,6 +5,8 @@ export type Notificacao = {
   mensagem: string
   nivel: NivelNotificacao
   criadaEm: number
+  categoria?: 'conectividade'
+  origem?: 'automatica' | 'acao'
   persistente?: boolean
   chave?: string
   acao?: {
@@ -16,6 +18,7 @@ export type Notificacao = {
 
 const evento = 'gdo:notificacao'
 let contexto = ''
+let conexaoDispensada = false
 const ativas = new Map<string, Notificacao>()
 const publicar = (): void => {
   window.dispatchEvent(new Event(evento))
@@ -26,6 +29,7 @@ export function definirContextoNotificacoes(proximo: string): void {
   if (contexto === proximo) return
   contexto = proximo
   ativas.clear()
+  conexaoDispensada = false
   publicar()
 }
 export function notificacoesAtivas(): Notificacao[] {
@@ -35,8 +39,28 @@ export function notificacoesAtivas(): Notificacao[] {
 export function notificar(
   mensagem: string,
   nivel: NivelNotificacao = 'info',
-  opcoes: Pick<Notificacao, 'persistente' | 'chave' | 'acao'> = {}
+  opcoes: Pick<Notificacao, 'persistente' | 'chave' | 'acao' | 'categoria' | 'origem'> = {}
 ): void {
+  const conectividade =
+    opcoes.categoria === 'conectividade' ||
+    mensagem.startsWith('Não foi possível acessar o serviço.') ||
+    mensagem ===
+      'A solicitação demorou mais que o esperado. Tente novamente quando a conexão ou o serviço estiver disponível.'
+  if (conectividade) {
+    if (conexaoDispensada && opcoes.origem === 'automatica') return
+    conexaoDispensada = false
+    const anterior = ativas.get(identificar('conexao'))
+    opcoes = {
+      ...opcoes,
+      chave: 'conexao',
+      categoria: 'conectividade',
+      persistente: true,
+      acao: opcoes.acao ?? anterior?.acao
+    }
+    nivel = 'aviso'
+    mensagem =
+      'Não foi possível acessar o serviço. A conexão será verificada automaticamente. Aguarde a confirmação antes de considerar um envio concluído.'
+  }
   const texto = mensagem.trim()
   if (!texto) return
   const chave = identificar(opcoes.chave ?? `${nivel}:${texto}`)
@@ -65,6 +89,7 @@ export function notificar(
 }
 
 export function concluirNotificacao(chave: string): void {
+  if (chave === 'conexao') conexaoDispensada = false
   if (ativas.delete(identificar(chave))) publicar()
 }
 export function eventoNotificacao(): string {
@@ -81,6 +106,7 @@ export function atualizarAcaoNotificacao(chave: string, desabilitada: boolean): 
 export function dispensarNotificacao(id: string): void {
   for (const [chave, item] of ativas)
     if (item.id === id || chave === id) {
+      if (item.categoria === 'conectividade') conexaoDispensada = true
       ativas.delete(chave)
       publicar()
       return

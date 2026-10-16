@@ -2,6 +2,18 @@
 
 Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
+## 1.5.3 — recuperação rápida e aviso único de conexão
+
+- Eventos de rede, foco, desbloqueio e suspensão antecipam uma consulta de disponibilidade
+  independente da fila e dos controles de edição, com prazo total de três segundos.
+- Durante interrupções, a consulta usa intervalos de 1, 2 e até 5 segundos com variação,
+  respeitando Retry-After. Respostas antigas não desfazem evidências mais recentes.
+- Salvar, abrir rascunhos e o monitor compartilham um aviso de conexão por contexto.
+  O botão de tentativa é preservado e o fechamento manual silencia repetições automáticas.
+- A recuperação do acesso e a confirmação dos envios têm mensagens distintas.
+- Preservados a fila idempotente, os rascunhos e os bancos existentes, sem migração.
+- Candidato para confirmação de velocidade no computador real.
+
 ## 1.5.2 — recuperação da conexão e avisos flutuantes
 
 - A sincronização continua tentando recuperar o serviço após interrupções prolongadas,

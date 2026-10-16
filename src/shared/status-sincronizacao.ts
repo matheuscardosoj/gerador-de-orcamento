@@ -32,7 +32,7 @@ export function resumirSincronizacao(s: StatusNuvem | null): ResumoSincronizacao
         'As alterações locais estão preservadas. A conexão será verificada e o envio retomado automaticamente.',
       tom: 'aviso'
     }
-  if (s.sincronizando)
+  if (s.sincronizando || s.recuperandoConexao)
     return {
       titulo: 'Sincronizando…',
       descricao: 'Conferindo alterações e confirmações na nuvem.',

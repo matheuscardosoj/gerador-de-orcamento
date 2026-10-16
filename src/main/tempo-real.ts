@@ -41,15 +41,17 @@ interface Opcoes {
   sincronizar: () => Promise<unknown>
   sincronizarCompleta?: () => Promise<unknown>
   estado: (estado: EstadoTempoReal, erro: string | null) => void
+  gatilho?: (origem: string) => void
+  verificar?: () => Promise<void>
   renovar: () => Promise<void>
   status?: () => StatusNuvem
   criarCliente?: (config: ConfigNuvem, opcoes: SupabaseClientOptions<'public'>) => SupabaseClient
 }
 let pararAtual: (() => void) | null = null
-let acordarAtual: (() => void) | null = null
+let acordarAtual: ((origem: string) => void) | null = null
 /** Sinais do Windows antecipam a consulta; não são prova de acesso ao serviço. */
-export function solicitarRecuperacaoNuvem(): void {
-  acordarAtual?.()
+export function solicitarRecuperacaoNuvem(origem = 'manual'): void {
+  acordarAtual?.(origem)
 }
 const renovacoesAtivas = new Set<Promise<void>>()
 export async function aguardarTempoReal(): Promise<void> {
@@ -70,19 +72,49 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
   let tentativas = 0
   let completarProxima = true
   let verificarProxima = true
+  let servicoConfirmado = false
   let recuperando = true
   let bloqueada = false
   let ultimoSinal = 0
   let naoAntesDe = 0
   const repetir = (minimo = 0): void => {
+    naoAntesDe = Math.max(naoAntesDe, Date.now() + minimo)
     if (encerrado || repeticao || bloqueada) return
-    const base = [2000, 5000, 10000, 20000, 30000][Math.min(tentativas++, 4)]
+    const base = [1000, 2000, 5000][Math.min(tentativas++, 2)]
     naoAntesDe = Math.max(naoAntesDe, Date.now() + minimo)
     const espera = Math.max(minimo, Math.round(base * (0.8 + Math.random() * 0.4)))
     repeticao = setTimeout(() => {
       repeticao = null
-      solicitar(true, true)
+      opcoes.gatilho?.('repeticao')
+      if (Date.now() < naoAntesDe) {
+        repetir(naoAntesDe - Date.now())
+        return
+      }
+      if (opcoes.verificar) void verificarAcesso()
+      else solicitar(true, true)
     }, espera)
+  }
+  let consultaAtiva: Promise<void> | null = null
+  const verificarAcesso = (): Promise<void> => {
+    if (encerrado || bloqueada || Date.now() < naoAntesDe) return Promise.resolve()
+    if (consultaAtiva) return consultaAtiva
+    const consulta = (async () => {
+      try {
+        await opcoes.verificar?.()
+        if (encerrado) return
+        tentativas = 0
+        if (repeticao) clearTimeout(repeticao)
+        repeticao = null
+        solicitar(true, true)
+      } catch (erro) {
+        tratarFalha(erro)
+      }
+    })()
+    consultaAtiva = consulta
+    void consulta.finally(() => {
+      if (consultaAtiva === consulta) consultaAtiva = null
+    })
+    return consulta
   }
   const tratarFalha = (erro: unknown): void => {
     if (encerrado) return
@@ -228,6 +260,23 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
       })
   }
   const removerObservador = observarDados((evento) => {
+    if (evento.status && opcoes.verificar && opcoes.status?.().conexao === 'inacessivel') {
+      servicoConfirmado = false
+      recuperando = true
+      repetir(opcoes.status?.().falhaSincronizacao?.repetirAposMs)
+    }
+    if (
+      evento.status &&
+      recuperando &&
+      !servicoConfirmado &&
+      opcoes.verificar &&
+      opcoes.status?.().conexao === 'acessivel'
+    ) {
+      servicoConfirmado = true
+      if (repeticao) clearTimeout(repeticao)
+      repeticao = null
+      solicitar(true, true)
+    }
     if (evento.status && bloqueada && opcoes.status && !opcoes.status().erro) {
       bloqueada = false
       solicitar(true, true)
@@ -240,7 +289,8 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
     )
       solicitar()
   })
-  acordarAtual = () => {
+  acordarAtual = (origem) => {
+    opcoes.gatilho?.(origem)
     const agora = Date.now()
     if (agora - ultimoSinal < 1000 || agora < naoAntesDe) return
     ultimoSinal = agora
@@ -249,7 +299,10 @@ export function iniciarTempoReal(opcoes: Opcoes): void {
       clearTimeout(repeticao)
       repeticao = null
     }
-    if (!bloqueada) solicitar(true, true)
+    if (!bloqueada) {
+      if (opcoes.verificar) void verificarAcesso()
+      else solicitar(true, true)
+    }
   }
   const vigilancia = setInterval(() => {
     if (encerrado || repeticao || bloqueada) return

@@ -78,6 +78,8 @@ export interface RascunhoCadastro {
 export interface StatusNuvem {
   conexao?: 'verificando' | 'acessivel' | 'inacessivel'
   sincronizando?: boolean
+  ultimaOrigemVerificacao?: string
+  recuperandoConexao?: boolean
   ultimoContatoEm?: string | null
   falhaSincronizacao?: {
     motivo: import('./falha-nuvem').MotivoFalhaNuvem

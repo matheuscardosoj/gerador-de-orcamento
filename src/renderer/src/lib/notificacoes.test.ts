@@ -44,3 +44,28 @@ it('atualiza a ação e permite fechar um aviso com seu identificador', () => {
   dispensarNotificacao(notificacoesAtivas()[0].id)
   expect(notificacoesAtivas()).toHaveLength(0)
 })
+
+it('unifica falhas de salvar e abrir controles, preserva ação e respeita dispensa', () => {
+  const texto =
+    'Não foi possível acessar o serviço. Verifique a conexão e se o serviço está disponível; depois tente novamente.'
+  const acao = { rotulo: 'Tentar agora', executar: () => false }
+  notificar(texto, 'aviso', { categoria: 'conectividade', origem: 'automatica', acao })
+  const id = notificacoesAtivas()[0].id
+  notificar(texto, 'erro', { chave: 'salvar-orcamento' })
+  notificar(texto, 'erro', { chave: 'rascunhos-relatorio' })
+  notificar(texto, 'erro', { chave: 'salvar-recibo' })
+  expect(notificacoesAtivas()).toHaveLength(1)
+  expect(notificacoesAtivas()[0]).toMatchObject({ id, acao })
+  concluirNotificacao('rascunhos-relatorio')
+  expect(notificacoesAtivas()).toHaveLength(1)
+  dispensarNotificacao(id)
+  notificar(texto, 'aviso', { categoria: 'conectividade', origem: 'automatica' })
+  expect(notificacoesAtivas()).toHaveLength(0)
+  notificar(texto, 'erro', { chave: 'nova-acao' })
+  expect(notificacoesAtivas()).toHaveLength(1)
+  concluirNotificacao('conexao')
+  notificar(texto, 'aviso', { categoria: 'conectividade', origem: 'automatica' })
+  expect(notificacoesAtivas()).toHaveLength(1)
+  notificar('Sem autorização para editar.', 'erro')
+  expect(notificacoesAtivas()).toHaveLength(2)
+})

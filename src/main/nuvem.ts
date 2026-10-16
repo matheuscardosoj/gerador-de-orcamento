@@ -52,6 +52,8 @@ import {
 let conexao: StatusNuvem['conexao'] = 'verificando'
 let ultimoContatoEm: string | null = null
 let falhaSincronizacao: StatusNuvem['falhaSincronizacao'] = null
+let ultimaOrigemVerificacao: string | undefined
+let recuperandoConexao = false
 let ocupado = false
 let sincronizacaoAtual: Promise<StatusNuvem> | null = null
 let repetirSincronizacao = false
@@ -140,6 +142,7 @@ export function configurarSessaoConta(
   usarCentral: boolean
 ): void {
   geracaoSessao++
+  recuperandoConexao = false
   conexao = 'verificando'
   ultimoContatoEm = null
   falhaSincronizacao = null
@@ -181,6 +184,9 @@ function aguardarRenovacao(pedido: Promise<Sessao>, sinal: AbortSignal): Promise
     )
   })
 }
+const falhasSuperadas = new WeakSet<object>()
+let ordemPedido = 0
+let ultimaEvidencia = 0
 export async function pedidoNuvem(
   path: string,
   body?: unknown,
@@ -189,6 +195,7 @@ export async function pedidoNuvem(
   timeoutMs = 30000
 ): Promise<unknown> {
   if (acessoInterrompido) throw new Error('O acesso a esta empresa foi encerrado.')
+  const ordem = ++ordemPedido
   const limite = AbortSignal.timeout(timeoutMs)
   const geracao = geracaoSessao
   const c = configuracaoNuvem()
@@ -249,8 +256,13 @@ export async function pedidoNuvem(
     const dados = await resposta.json().catch(() => null)
     if (geracao !== geracaoSessao)
       throw new Error('A empresa ativa mudou. A resposta anterior foi descartada.')
-    conexao = 'acessivel'
-    ultimoContatoEm = new Date().toISOString()
+    if (resposta.ok && ordem >= ultimaEvidencia) {
+      ultimaEvidencia = ordem
+      conexao = 'acessivel'
+      ultimoContatoEm = new Date().toISOString()
+      if (falhaSincronizacao?.temporaria) falhaSincronizacao = null
+      avisarDados({ origem: 'nuvem', entidades: [], status: true })
+    }
     if (!resposta.ok) {
       const erro = new Error(
         dados?.msg ?? dados?.message ?? dados?.erro ?? `Falha na nuvem (${resposta.status}).`
@@ -277,9 +289,12 @@ export async function pedidoNuvem(
     }
     return dados
   } catch (erro) {
+    if (ordem < ultimaEvidencia && erro && typeof erro === 'object') falhasSuperadas.add(erro)
     if (geracao === geracaoSessao && !acessoInterrompido) {
       const falha = classificarFalhaNuvem(erro)
-      if (falha.temporaria) {
+      if (falha.temporaria && ordem >= ultimaEvidencia) {
+        ultimaEvidencia = ordem
+        recuperandoConexao = true
         conexao = 'inacessivel'
         falhaSincronizacao = falha
         avisarDados({ origem: 'nuvem', entidades: [], status: true })
@@ -424,6 +439,36 @@ async function reconhecerEmpresa(criar = false, timeoutMs = 30000): Promise<Cont
 }
 export function ativarTempoReal(): void {
   iniciarTempoReal({
+    gatilho: (origem) => {
+      ultimaOrigemVerificacao = origem
+    },
+    verificar: async () => {
+      if (!central && protocoloNuvem() < 2) {
+        await pedidoNuvem(
+          '/rest/v1/gdo_entities?select=entidade&limit=1',
+          undefined,
+          false,
+          undefined,
+          3000
+        )
+        return
+      }
+      const inicio = Date.now()
+      const consultar = (versao: number): Promise<unknown> =>
+        pedidoNuvem(
+          `/rest/v1/rpc/gdo_contexto_v${versao}`,
+          central ? { p_empresa: empresaSelecionada } : { p_criar: false },
+          false,
+          undefined,
+          Math.max(1, 3000 - (Date.now() - inicio))
+        )
+      try {
+        await consultar(central ? 4 : 3)
+      } catch (erro) {
+        if (!central && (erro as { codigo?: string }).codigo === 'PGRST202') await consultar(2)
+        else throw erro
+      }
+    },
     status: statusNuvem,
     configuracao: configuracaoNuvem,
     identidade: () => {
@@ -442,7 +487,10 @@ export function ativarTempoReal(): void {
         await renovarEdicoes()
       } catch (erro) {
         if (!acessoInterrompido) {
-          falhaSincronizacao = classificarFalhaNuvem(erro)
+          falhaSincronizacao =
+            erro && typeof erro === 'object' && falhasSuperadas.has(erro)
+              ? null
+              : classificarFalhaNuvem(erro)
           salvar('erroNuvem', mensagemErro(erro))
           avisarDados({ origem: 'nuvem', entidades: [], status: true })
         }
@@ -471,7 +519,8 @@ export async function inicializarNuvem(): Promise<void> {
       )
     } else await sincronizarNuvem()
   } catch (e) {
-    falhaSincronizacao = classificarFalhaNuvem(e)
+    falhaSincronizacao =
+      e && typeof e === 'object' && falhasSuperadas.has(e) ? null : classificarFalhaNuvem(e)
     salvar('erroNuvem', mensagemErro(e))
     avisarDados({ origem: 'nuvem', entidades: [], status: true })
     if (/EMPRESA_EXCLUIDA/.test((e as Error)?.message ?? '')) {
@@ -520,6 +569,8 @@ export function statusNuvem(): StatusNuvem {
     conexao,
     sincronizando: ocupado,
     ultimoContatoEm,
+    recuperandoConexao,
+    ultimaOrigemVerificacao,
     falhaSincronizacao,
     configurada: !!config<ConfigNuvem>('nuvem'),
     autenticada: !!sessaoVolatil || !!config<string>('sessaoNuvem'),
@@ -986,6 +1037,15 @@ export function sincronizarNuvem(completa = true): Promise<StatusNuvem> {
     do {
       repetirSincronizacao = false
       resultado = await executarSincronizacao(completa)
+      if (
+        conexao === 'acessivel' &&
+        ((!resultado.erro && !resultado.pendentes) ||
+          (resultado.erro && !resultado.falhaSincronizacao?.temporaria))
+      ) {
+        recuperandoConexao = false
+        resultado = statusNuvem()
+        avisarDados({ origem: 'nuvem', entidades: [], status: true })
+      }
       completa = repetirCompleta
       repetirCompleta = false
     } while (repetirSincronizacao && !acessoInterrompido)
@@ -1199,7 +1259,7 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
         // Uma falha de transporte pode ocultar uma confirmação. Mantém a identidade
         // da operação para reenvio idempotente; nunca cria uma operação substituta.
         if (temporaria) {
-          falhaSincronizacao = falha
+          falhaSincronizacao = e && typeof e === 'object' && falhasSuperadas.has(e) ? null : falha
           erroEnvio = mensagemErro(e)
           break
         }
@@ -1529,7 +1589,8 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
     )
     avisarDados({ origem: 'nuvem', entidades: [], status: true })
   } catch (e) {
-    falhaSincronizacao = classificarFalhaNuvem(e)
+    falhaSincronizacao =
+      e && typeof e === 'object' && falhasSuperadas.has(e) ? null : classificarFalhaNuvem(e)
     salvar('erroNuvem', mensagemErro(e))
   } finally {
     atualizarAplicacoesRascunhos()
