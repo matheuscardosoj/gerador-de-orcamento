@@ -10,6 +10,8 @@ import { exigeNumeracaoAtualizada } from './bloqueio-numeracao'
 import { urlDoAplicativo } from './origem-janela'
 import { exportarDiagnostico } from './diagnostico-exportar'
 import { registrarDiagnostico } from './diagnostico'
+import type { CanalDeTratador } from '@shared/canais'
+import { validarArgumentos } from './ipc-validacao'
 import { contaApi } from './contas/servico'
 import { exigirAcesso, iniciarOperacao } from './contas/acesso'
 import { mensagemErro } from '../shared/erros'
@@ -119,7 +121,7 @@ async function selecionarLogo(): Promise<string | null> {
   }
 }
 
-const handlers: Record<string, (...args: unknown[]) => unknown> = {
+const handlers: Record<CanalDeTratador, (...args: unknown[]) => unknown> = {
   'rascunhosCadastros.guardar': (tipo, id, dados) =>
     guardarRascunhoCadastro(
       tipo as TipoRascunhoCadastro,
@@ -305,6 +307,7 @@ export function registrarIpc(): void {
       try {
         if (!urlDoAplicativo(evento.senderFrame?.url ?? '', process.env['ELECTRON_RENDERER_URL']))
           throw new Error('Origem não autorizada para esta operação.')
+        validarArgumentos(canal as CanalDeTratador, args)
         exigirAcesso(canal, args)
         if (canal === 'nuvem.sair') return await contaApi.sair()
         finalizar = iniciarOperacao()

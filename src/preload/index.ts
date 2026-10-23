@@ -1,75 +1,83 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { AppApi, CrudApi } from '@shared/api'
+import type { ArgumentosDoCanal, Canal, RetornoDoCanal } from '@shared/canais'
 
 type EventoDados = import('../shared/evolucao').EventoDados
 const ouvintesDados = new Set<(dados: EventoDados) => void>()
 let escutandoDados = false
 
-const invoke = (canal: string, ...args: unknown[]): Promise<unknown> =>
+/** Chamada tipada pelo contrato de `AppApi`: argumentos e retorno vêm de `@shared/canais`. */
+const invoke = <C extends Canal>(
+  canal: C,
+  ...args: ArgumentosDoCanal<C>
+): Promise<RetornoDoCanal<C>> => ipcRenderer.invoke(canal, ...args)
+
+// Os quatro cadastros compartilham a mesma forma; o genérico `T`/`C` só existe no renderer.
+const invocarCadastro = (canal: string, ...args: unknown[]): Promise<unknown> =>
   ipcRenderer.invoke(canal, ...args)
 
-function crud<T, C>(dominio: string): CrudApi<T, C> {
+function crud<T, C>(
+  dominio: 'clientes' | 'servicos' | 'observacoes' | 'pagamentos'
+): CrudApi<T, C> {
   return {
-    list: () => invoke(`${dominio}.list`) as Promise<T[]>,
-    create: (dto) => invoke(`${dominio}.create`, dto) as Promise<T>,
-    update: (id, patch) => invoke(`${dominio}.update`, id, patch) as Promise<T | null>,
-    remove: (id) => invoke(`${dominio}.remove`, id) as Promise<void>
+    list: () => invocarCadastro(`${dominio}.list`) as Promise<T[]>,
+    create: (dto) => invocarCadastro(`${dominio}.create`, dto) as Promise<T>,
+    update: (id, patch) => invocarCadastro(`${dominio}.update`, id, patch) as Promise<T | null>,
+    remove: (id) => invocarCadastro(`${dominio}.remove`, id) as Promise<void>
   }
 }
 
 const api: AppApi = {
   conta: {
-    status: () => invoke('conta.status') as never,
-    entrar: (email, senha, lembrar) => invoke('conta.entrar', email, senha, lembrar) as never,
-    selecionarEmpresa: (id) => invoke('conta.selecionarEmpresa', id) as never,
-    sair: () => invoke('conta.sair') as never,
-    atualizarNome: (nome) => invoke('conta.atualizarNome', nome) as never,
-    alterarEmail: (atual, novo) => invoke('conta.alterarEmail', atual, novo) as never,
-    confirmarAlteracaoEmail: (codigo) => invoke('conta.confirmarAlteracaoEmail', codigo) as never,
-    alterarSenha: (atual, nova) => invoke('conta.alterarSenha', atual, nova) as never,
-    alterarPapel: (usuario, papel) => invoke('conta.alterarPapel', usuario, papel) as never,
-    enviarCodigo: (email, tipo) => invoke('conta.enviarCodigo', email, tipo) as never,
+    status: () => invoke('conta.status'),
+    entrar: (email, senha, lembrar) => invoke('conta.entrar', email, senha, lembrar),
+    selecionarEmpresa: (id) => invoke('conta.selecionarEmpresa', id),
+    sair: () => invoke('conta.sair'),
+    atualizarNome: (nome) => invoke('conta.atualizarNome', nome),
+    alterarEmail: (atual, novo) => invoke('conta.alterarEmail', atual, novo),
+    confirmarAlteracaoEmail: (codigo) => invoke('conta.confirmarAlteracaoEmail', codigo),
+    alterarSenha: (atual, nova) => invoke('conta.alterarSenha', atual, nova),
+    alterarPapel: (usuario, papel) => invoke('conta.alterarPapel', usuario, papel),
+    enviarCodigo: (email, tipo) => invoke('conta.enviarCodigo', email, tipo),
     confirmarCodigo: (email, codigo, tipo, senha) =>
-      invoke('conta.confirmarCodigo', email, codigo, tipo, senha) as never,
-    convites: () => invoke('conta.convites') as never,
-    convidar: (email, nome, papel) => invoke('conta.convidar', email, nome, papel) as never,
-    cancelarConvite: (id) => invoke('conta.cancelarConvite', id) as never,
-    reenviarConvite: (id) => invoke('conta.reenviarConvite', id) as never,
-    atualizarEmpresas: () => invoke('conta.atualizarEmpresas') as never,
-    criarEmpresa: (nome, email, admin) => invoke('conta.criarEmpresa', nome, email, admin) as never,
-    excluirEmpresa: (id, nome) => invoke('conta.excluirEmpresa', id, nome) as never,
-    continuarAposIndisponibilidade: () => invoke('conta.continuarAposIndisponibilidade') as never,
-    avisosEmail: () => invoke('conta.avisosEmail') as never
+      invoke('conta.confirmarCodigo', email, codigo, tipo, senha),
+    convites: () => invoke('conta.convites'),
+    convidar: (email, nome, papel) => invoke('conta.convidar', email, nome, papel),
+    cancelarConvite: (id) => invoke('conta.cancelarConvite', id),
+    reenviarConvite: (id) => invoke('conta.reenviarConvite', id),
+    atualizarEmpresas: () => invoke('conta.atualizarEmpresas'),
+    criarEmpresa: (nome, email, admin) => invoke('conta.criarEmpresa', nome, email, admin),
+    excluirEmpresa: (id, nome) => invoke('conta.excluirEmpresa', id, nome),
+    continuarAposIndisponibilidade: () => invoke('conta.continuarAposIndisponibilidade'),
+    avisosEmail: () => invoke('conta.avisosEmail')
   },
   rascunhos: {
-    list: (tipo, id) => invoke('rascunhos.list', tipo, id) as never,
-    get: (id) => invoke('rascunhos.get', id) as never,
-    create: (tipo, id, documento) => invoke('rascunhos.create', tipo, id, documento) as never,
-    save: (id, documento) => invoke('rascunhos.save', id, documento) as never,
-    comparar: (id, escolhas) => invoke('rascunhos.comparar', id, escolhas) as never,
-    aplicar: (id, revisao, escolhas) => invoke('rascunhos.aplicar', id, revisao, escolhas) as never,
-    copiar: (id) => invoke('rascunhos.copiar', id) as never,
-    remove: (id) => invoke('rascunhos.remove', id) as never
+    list: (tipo, id) => invoke('rascunhos.list', tipo, id),
+    get: (id) => invoke('rascunhos.get', id),
+    create: (tipo, id, documento) => invoke('rascunhos.create', tipo, id, documento),
+    save: (id, documento) => invoke('rascunhos.save', id, documento),
+    comparar: (id, escolhas) => invoke('rascunhos.comparar', id, escolhas),
+    aplicar: (id, revisao, escolhas) => invoke('rascunhos.aplicar', id, revisao, escolhas),
+    copiar: (id) => invoke('rascunhos.copiar', id),
+    remove: (id) => invoke('rascunhos.remove', id)
   },
   rascunhosCadastros: {
-    guardar: (tipo, idOrigem, dados) =>
-      invoke('rascunhosCadastros.guardar', tipo, idOrigem, dados) as never,
-    listar: (tipo) => invoke('rascunhosCadastros.listar', tipo) as never,
-    descartar: (tipo, idOrigem) => invoke('rascunhosCadastros.descartar', tipo, idOrigem) as never
+    guardar: (tipo, idOrigem, dados) => invoke('rascunhosCadastros.guardar', tipo, idOrigem, dados),
+    listar: (tipo) => invoke('rascunhosCadastros.listar', tipo),
+    descartar: (tipo, idOrigem) => invoke('rascunhosCadastros.descartar', tipo, idOrigem)
   },
   colaboracao: {
-    acompanhados: () => invoke('colaboracao.acompanhados') as never,
-    revisarRecebimentos: (tipo, id) => invoke('colaboracao.revisarRecebimentos', tipo, id) as never,
+    acompanhados: () => invoke('colaboracao.acompanhados'),
+    revisarRecebimentos: (tipo, id) => invoke('colaboracao.revisarRecebimentos', tipo, id),
     conciliarRecebimentos: (revisao, acao) =>
-      invoke('colaboracao.conciliarRecebimentos', revisao, acao) as never,
-    acompanhar: (tipo, id, ativo) => invoke('colaboracao.acompanhar', tipo, id, ativo) as never,
-    membros: () => invoke('colaboracao.membros') as never,
-    vincularMembro: (email, nome) => invoke('colaboracao.vincularMembro', email, nome) as never,
-    ativarMembro: (usuario, ativo) => invoke('colaboracao.ativarMembro', usuario, ativo) as never,
+      invoke('colaboracao.conciliarRecebimentos', revisao, acao),
+    acompanhar: (tipo, id, ativo) => invoke('colaboracao.acompanhar', tipo, id, ativo),
+    membros: () => invoke('colaboracao.membros'),
+    vincularMembro: (email, nome) => invoke('colaboracao.vincularMembro', email, nome),
+    ativarMembro: (usuario, ativo) => invoke('colaboracao.ativarMembro', usuario, ativo),
     estadoEdicao: (tipo, id, acao, destino) =>
-      invoke('colaboracao.estadoEdicao', tipo, id, acao, destino) as never,
-    edicao: (tipo, id, acao, destino) =>
-      invoke('colaboracao.edicao', tipo, id, acao, destino) as never
+      invoke('colaboracao.estadoEdicao', tipo, id, acao, destino),
+    edicao: (tipo, id, acao, destino) => invoke('colaboracao.edicao', tipo, id, acao, destino)
   },
   eventos: {
     observarDados: (callback) => {
@@ -94,114 +102,114 @@ const api: AppApi = {
     }
   },
   preferencias: {
-    historico: (tipo) => invoke('preferencias.historico', tipo) as never,
-    salvarHistorico: (tipo, dados) => invoke('preferencias.salvarHistorico', tipo, dados) as never
+    historico: (tipo) => invoke('preferencias.historico', tipo),
+    salvarHistorico: (tipo, dados) => invoke('preferencias.salvarHistorico', tipo, dados)
   },
-  reordenarCadastro: (tipo, ids) => invoke('cadastros.reordenar', tipo, ids) as never,
+  reordenarCadastro: (tipo, ids) => invoke('cadastros.reordenar', tipo, ids),
   recibos: {
-    alterarNumero: (id, n) => invoke('recibos.alterarNumero', id, n) as never,
-    numeracao: () => invoke('recibos.numeracao') as never,
-    definirProximoNumero: (n) => invoke('recibos.definirProximoNumero', n) as never,
-    list: () => invoke('recibos.list') as never,
-    get: (id) => invoke('recibos.get', id) as never,
-    create: (dto) => invoke('recibos.create', dto) as never,
-    update: (id, p) => invoke('recibos.update', id, p) as never,
-    confirmar: (id) => invoke('recibos.confirmar', id) as never,
-    cancelar: (id) => invoke('recibos.cancelar', id) as never,
-    remove: (id, estornar) => invoke('recibos.remove', id, estornar) as Promise<void>
+    alterarNumero: (id, n) => invoke('recibos.alterarNumero', id, n),
+    numeracao: () => invoke('recibos.numeracao'),
+    definirProximoNumero: (n) => invoke('recibos.definirProximoNumero', n),
+    list: () => invoke('recibos.list'),
+    get: (id) => invoke('recibos.get', id),
+    create: (dto) => invoke('recibos.create', dto),
+    update: (id, p) => invoke('recibos.update', id, p),
+    confirmar: (id) => invoke('recibos.confirmar', id),
+    cancelar: (id) => invoke('recibos.cancelar', id),
+    remove: (id, estornar) => invoke('recibos.remove', id, estornar)
   },
   versoes: {
-    html: (id) => invoke('versoes.html', id) as never,
-    nomear: (id, d) => invoke('versoes.nomear', id, d) as never,
-    list: (t, id) => invoke('versoes.list', t, id) as never,
-    restaurar: (id, c) => invoke('versoes.restaurar', id, c) as never,
-    exportar: (id, f) => invoke('versoes.exportar', id, f) as never
+    html: (id) => invoke('versoes.html', id),
+    nomear: (id, d) => invoke('versoes.nomear', id, d),
+    list: (t, id) => invoke('versoes.list', t, id),
+    restaurar: (id, c) => invoke('versoes.restaurar', id, c),
+    exportar: (id, f) => invoke('versoes.exportar', id, f)
   },
   nuvem: {
-    verificarConexao: (origem) => invoke('nuvem.verificarConexao', origem) as Promise<void>,
-    copiarInstalacao: () => invoke('nuvem.copiarInstalacao') as never,
-    config: () => invoke('nuvem.config') as never,
-    status: () => invoke('nuvem.status') as never,
-    conectar: (c, s, m) => invoke('nuvem.conectar', c, s, m) as never,
-    sincronizar: () => invoke('nuvem.sincronizar') as never,
-    restaurarBase: () => invoke('nuvem.restaurarBase') as never,
-    tentarNovamente: (id) => invoke('nuvem.tentarNovamente', id) as never,
-    finalizarAtualizacao: (revisao) => invoke('nuvem.finalizarAtualizacao', revisao) as never,
-    dispositivos: () => invoke('nuvem.dispositivos') as never,
-    transferir: (t, id, d) => invoke('nuvem.transferir', t, id, d) as never,
-    sair: () => invoke('nuvem.sair') as never,
-    aceitarRemoto: (id) => invoke('nuvem.aceitarRemoto', id) as never
+    verificarConexao: (origem) => invoke('nuvem.verificarConexao', origem),
+    copiarInstalacao: () => invoke('nuvem.copiarInstalacao'),
+    config: () => invoke('nuvem.config'),
+    status: () => invoke('nuvem.status'),
+    conectar: (c, s, m) => invoke('nuvem.conectar', c, s, m),
+    sincronizar: () => invoke('nuvem.sincronizar'),
+    restaurarBase: () => invoke('nuvem.restaurarBase'),
+    tentarNovamente: (id) => invoke('nuvem.tentarNovamente', id),
+    finalizarAtualizacao: (revisao) => invoke('nuvem.finalizarAtualizacao', revisao),
+    dispositivos: () => invoke('nuvem.dispositivos'),
+    transferir: (t, id, d) => invoke('nuvem.transferir', t, id, d),
+    sair: () => invoke('nuvem.sair'),
+    aceitarRemoto: (id) => invoke('nuvem.aceitarRemoto', id)
   },
   aplicativo: {
-    versao: () => invoke('aplicativo.versao') as never,
-    alteracoesPendentes: (ativo) => invoke('aplicativo.alteracoesPendentes', ativo) as never,
-    definirTema: (modo) => invoke('aplicativo.definirTema', modo) as never,
-    exportarDiagnostico: () => invoke('aplicativo.exportarDiagnostico') as never
+    versao: () => invoke('aplicativo.versao'),
+    alteracoesPendentes: (ativo) => invoke('aplicativo.alteracoesPendentes', ativo),
+    definirTema: (modo) => invoke('aplicativo.definirTema', modo),
+    exportarDiagnostico: () => invoke('aplicativo.exportarDiagnostico')
   },
   empresa: {
-    get: () => invoke('empresa.get') as never,
-    save: (patch) => invoke('empresa.save', patch) as never
+    get: () => invoke('empresa.get'),
+    save: (patch) => invoke('empresa.save', patch)
   },
   parametros: {
-    get: () => invoke('parametros.get') as never,
-    save: (patch) => invoke('parametros.save', patch) as never
+    get: () => invoke('parametros.get'),
+    save: (patch) => invoke('parametros.save', patch)
   },
   clientes: crud('clientes'),
   servicos: crud('servicos'),
   observacoes: crud('observacoes'),
   pagamentos: crud('pagamentos'),
   orcamentos: {
-    list: () => invoke('orcamentos.list') as never,
-    get: (id) => invoke('orcamentos.get', id) as never,
-    proximoNumero: () => invoke('orcamentos.proximoNumero') as never,
-    create: (dto) => invoke('orcamentos.create', dto) as never,
-    update: (id, patch) => invoke('orcamentos.update', id, patch) as never,
-    remove: (id) => invoke('orcamentos.remove', id) as never,
-    duplicate: (id) => invoke('orcamentos.duplicate', id) as never,
-    numeracao: () => invoke('orcamentos.numeracao') as never,
-    definirProximoNumero: (n) => invoke('orcamentos.definirProximoNumero', n) as never,
-    alterarNumero: (id, n) => invoke('orcamentos.alterarNumero', id, n) as never
+    list: () => invoke('orcamentos.list'),
+    get: (id) => invoke('orcamentos.get', id),
+    proximoNumero: () => invoke('orcamentos.proximoNumero'),
+    create: (dto) => invoke('orcamentos.create', dto),
+    update: (id, patch) => invoke('orcamentos.update', id, patch),
+    remove: (id) => invoke('orcamentos.remove', id),
+    duplicate: (id) => invoke('orcamentos.duplicate', id),
+    numeracao: () => invoke('orcamentos.numeracao'),
+    definirProximoNumero: (n) => invoke('orcamentos.definirProximoNumero', n),
+    alterarNumero: (id, n) => invoke('orcamentos.alterarNumero', id, n)
   },
   relatorios: {
-    list: () => invoke('relatorios.list') as never,
-    get: (id) => invoke('relatorios.get', id) as never,
-    proximoNumero: () => invoke('relatorios.proximoNumero') as never,
-    create: (dto) => invoke('relatorios.create', dto) as never,
-    update: (id, patch) => invoke('relatorios.update', id, patch) as never,
-    remove: (id) => invoke('relatorios.remove', id) as never,
-    numeracao: () => invoke('relatorios.numeracao') as never,
-    definirProximoNumero: (n) => invoke('relatorios.definirProximoNumero', n) as never,
-    alterarNumero: (id, n) => invoke('relatorios.alterarNumero', id, n) as never,
-    criarDeOrcamento: (id) => invoke('relatorios.criarDeOrcamento', id) as never
+    list: () => invoke('relatorios.list'),
+    get: (id) => invoke('relatorios.get', id),
+    proximoNumero: () => invoke('relatorios.proximoNumero'),
+    create: (dto) => invoke('relatorios.create', dto),
+    update: (id, patch) => invoke('relatorios.update', id, patch),
+    remove: (id) => invoke('relatorios.remove', id),
+    numeracao: () => invoke('relatorios.numeracao'),
+    definirProximoNumero: (n) => invoke('relatorios.definirProximoNumero', n),
+    alterarNumero: (id, n) => invoke('relatorios.alterarNumero', id, n),
+    criarDeOrcamento: (id) => invoke('relatorios.criarDeOrcamento', id)
   },
   anexos: {
-    imagem: (id) => invoke('anexos.imagem', id) as never
+    imagem: (id) => invoke('anexos.imagem', id)
   },
   anexosRelatorio: {
-    imagem: (id) => invoke('anexosRelatorio.imagem', id) as never
+    imagem: (id) => invoke('anexosRelatorio.imagem', id)
   },
   ia: {
-    revisarTexto: (entrada) => invoke('ia.revisarTexto', entrada) as never,
-    cancelarRevisao: (id) => invoke('ia.cancelarRevisao', id) as never,
-    get: () => invoke('ia.get') as never,
-    save: (patch) => invoke('ia.save', patch) as never,
-    status: () => invoke('ia.status') as never,
-    sugerirObservacao: (entrada) => invoke('ia.sugerirObservacao', entrada) as never
+    revisarTexto: (entrada) => invoke('ia.revisarTexto', entrada),
+    cancelarRevisao: (id) => invoke('ia.cancelarRevisao', id),
+    get: () => invoke('ia.get'),
+    save: (patch) => invoke('ia.save', patch),
+    status: () => invoke('ia.status'),
+    sugerirObservacao: (entrada) => invoke('ia.sugerirObservacao', entrada)
   },
   logo: {
-    selecionar: () => invoke('logo.selecionar') as never
+    selecionar: () => invoke('logo.selecionar')
   },
   documentos: {
-    gerarReciboPdf: (id) => invoke('documentos.gerarReciboPdf', id) as never,
-    gerarReciboDocx: (id) => invoke('documentos.gerarReciboDocx', id) as never,
-    gerarPdf: (id) => invoke('documentos.gerarPdf', id) as never,
-    gerarDocx: (id) => invoke('documentos.gerarDocx', id) as never,
-    gerarRelatorioPdf: (id) => invoke('documentos.gerarRelatorioPdf', id) as never,
-    gerarRelatorioDocx: (id) => invoke('documentos.gerarRelatorioDocx', id) as never
+    gerarReciboPdf: (id) => invoke('documentos.gerarReciboPdf', id),
+    gerarReciboDocx: (id) => invoke('documentos.gerarReciboDocx', id),
+    gerarPdf: (id) => invoke('documentos.gerarPdf', id),
+    gerarDocx: (id) => invoke('documentos.gerarDocx', id),
+    gerarRelatorioPdf: (id) => invoke('documentos.gerarRelatorioPdf', id),
+    gerarRelatorioDocx: (id) => invoke('documentos.gerarRelatorioDocx', id)
   },
   dados: {
-    exportar: () => invoke('dados.exportar') as never,
-    importar: (modo) => invoke('dados.importar', modo) as never
+    exportar: () => invoke('dados.exportar'),
+    importar: (modo) => invoke('dados.importar', modo)
   }
 }
 
