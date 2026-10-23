@@ -4,6 +4,7 @@ import { linhasCliente } from '../clientes'
 import type { AnexoOrcamento, AnexoRelatorio, EmpresaConfig, Orcamento, Relatorio } from '../types'
 import { formatMoeda } from '../format'
 import { valorPorExtenso } from '../extenso'
+import { PADRAO_DATA_URL_IMAGEM } from '../imagem-segura'
 import { destinatarioNoDocumento, LIMITE_ANEXO_MM, localEData } from './comum'
 
 function esc(s: string): string {
@@ -14,15 +15,13 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
-const IMAGEM_SEGURA = /^data:image\/(?:png|jpe?g|gif|bmp|webp);base64,[A-Za-z0-9+/=]+$/i
-
 /**
  * Valor seguro para `src` de imagem: só data URL de imagem com base64 válido.
  * Qualquer outra coisa (inclusive aspas ou `>` vindos de dados sincronizados)
  * é descartada em vez de entrar no atributo.
  */
 function srcSeguro(src: string | null | undefined): string {
-  return src && IMAGEM_SEGURA.test(src) ? src : ''
+  return src && PADRAO_DATA_URL_IMAGEM.test(src) ? src : ''
 }
 
 function nl2br(s: string): string {

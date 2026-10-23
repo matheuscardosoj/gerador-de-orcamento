@@ -1,4 +1,5 @@
 import { classificarFalhaNuvem } from '@shared/falha-nuvem'
+import { linhaImagemValida } from '@shared/imagem-segura'
 import { confirmarAplicacoesRascunhos, atualizarAplicacoesRascunhos } from './rascunhos-envio'
 import { safeStorage } from 'electron'
 import { hostname } from 'os'
@@ -948,7 +949,11 @@ function aplicar(e: Remoto): void {
     )
       throw new Error('Configuração não compartilhável.')
     if (p.row) {
-      upsert(p.tabela, p.row)
+      // Imagem malformada vinda da nuvem é ignorada (não grava nem trava a sincronização
+      // dos demais): o conteúdo vai parar em atributos `src` dos documentos.
+      if (p.tabela === 'imagens' && !linhaImagemValida(p.row))
+        console.warn(`[nuvem] imagem remota inválida ignorada: ${String(p.id).slice(0, 16)}`)
+      else upsert(p.tabela, p.row)
       if (p.tabela === 'clientes') {
         const dados = JSON.parse(texto(p.row.dados_json) || '{}') as { codigo?: number }
         registrarCodigoRemoto('cliente', dados.codigo, p.id)
