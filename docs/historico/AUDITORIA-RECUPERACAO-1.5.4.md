@@ -45,7 +45,7 @@ intencionalmente, com intervalo limitado; essas tentativas cessam após a recupe
   abertura offline, falha tardia e página sem avanço interrompida sem modificar documentos.
 - Os testes existentes de colaboração/rascunhos continuam aprovados: resposta perdida,
   reinício e reenvio idempotente, sem duplicar versões em orçamento, relatório e recibo.
-- `scripts/verificar-1-5-4-auditoria-interface.mjs`: ensaio Electron aprovado, sem erros
+- `scripts/legado/verificar-1-5-4-auditoria-interface.mjs`: ensaio Electron aprovado, sem erros
   JavaScript, com modal, teclado, 1024/1440 pixels, deduplicação, fechamento, conclusão
   seguida de sincronizações e ação antiga rejeitada após troca de contexto.
   Evidência: `output/playwright/1-5-4-auditoria/resultado.json`.

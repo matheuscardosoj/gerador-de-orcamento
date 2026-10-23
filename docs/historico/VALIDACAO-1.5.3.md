@@ -36,7 +36,7 @@
 - Notificações: falhas de salvar e abrir controles de documentos distintos convergem
   para um cartão, preservando ação/identidade; limpeza de componente não o remove;
   fechamento manual, nova ação, resolução e erro de autorização separado.
-- `scripts/verificar-1-5-3-interface.mjs`: Electron com API sintética, modalidades de erro
+- `scripts/legado/verificar-1-5-3-interface.mjs`: Electron com API sintética, modalidades de erro
   de conexão por origem, modal acessível, teclado, 1024/1440 pixels, persistência e rolagem.
   Evidência em `output/playwright/1-5-3-cadastros/resultado.json`.
 - O ensaio visual exercita a política central com origens sintéticas; não representa

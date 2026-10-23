@@ -12,6 +12,7 @@
     "preview": "electron-vite preview",
     "start": "electron-vite preview",
     "test": "vitest run",
+    "test:rapido": "vitest run --exclude \"src/main/db/**\"",
     "pretest": "node scripts/gerar-schema-nuvem.mjs",
     "schema:nuvem": "node scripts/gerar-schema-nuvem.mjs",
     "test:watch": "vitest",

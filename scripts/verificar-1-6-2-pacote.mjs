@@ -1,13 +1,14 @@
-// Valida o executável final da 1.6.1 com um perfil novo e descartável: abertura, versão,
+// Valida o executável final da 1.6.2 com um perfil novo e descartável: abertura, versão,
 // recursos empacotados (IA, migração 013 e rollback), tema escuro salvo ao reabrir e o
 // bloqueio de navegação externa da janela.
-// Uso: node scripts/verificar-1-6-1-pacote.mjs [pasta-do-pacote]  (padrão: release/1.6.1)
+// Uso: node scripts/verificar-1-6-2-pacote.mjs [pasta-do-pacote]  (padrão: release/1.6.2)
 import assert from 'node:assert/strict'
 import {
   existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  utimesSync,
   readFileSync,
   rmSync,
   statSync,
@@ -17,11 +18,11 @@ import { tmpdir } from 'node:os'
 import { resolve, join } from 'node:path'
 import { _electron } from 'playwright'
 
-const pasta = resolve(process.argv[2] ?? 'release/1.6.1')
+const pasta = resolve(process.argv[2] ?? 'release/1.6.2')
 const desempacotado = join(pasta, 'win-unpacked')
 const executavel = join(desempacotado, 'Gerador de Orçamentos.exe')
 const recursos = join(desempacotado, 'resources')
-const perfil = mkdtempSync(join(tmpdir(), 'gdo-validacao-1.6.1-'))
+const perfil = mkdtempSync(join(tmpdir(), 'gdo-validacao-1.6.2-'))
 mkdirSync(pasta, { recursive: true })
 
 // Recursos que precisam estar dentro do instalador.
@@ -50,6 +51,13 @@ try {
   // Perfil com `contas.json` truncado (como em um computador com registro danificado): o
   // aplicativo precisa abrir, guardar o arquivo ao lado e registrar a causa.
   writeFileSync(join(perfil, 'contas.json'), '{"atual": "abc", "perfis": [{"id"')
+  // `banco.lock` de dois dias atrás com o PID de um processo vivo (este): o Windows reaproveitou
+  // o PID. O aplicativo deve reconhecer a trava como velha e abrir o banco.
+  mkdirSync(join(perfil, 'data'), { recursive: true })
+  const travaVelha = join(perfil, 'data', 'banco.lock')
+  writeFileSync(travaVelha, `${process.pid}\n`)
+  const doisDiasAtras = new Date(Date.now() - 2 * 24 * 3600 * 1000)
+  utimesSync(travaVelha, doisDiasAtras, doisDiasAtras)
   const app = await abrir()
   try {
     const page = await app.firstWindow()
@@ -59,7 +67,7 @@ try {
     resultado.titulo = await page.title()
     resultado.versao = await page.evaluate(() => window.api.aplicativo.versao())
     assert.match(resultado.titulo, /Gerador de Orçamentos/)
-    assert.equal(resultado.versao, '1.6.1')
+    assert.equal(resultado.versao, '1.6.2')
     assert.match(await page.locator('body').innerText(), /Bem-vindo/)
 
     // Diagnóstico: arquivo guardado, registro com código e exportação disponível na tela de login.
@@ -69,12 +77,13 @@ try {
     )
     const registro = readFileSync(join(perfil, 'logs', 'app.jsonl'), 'utf8')
     assert.match(registro, /"etapa":"contas-json-ilegivel"/)
+    assert.match(registro, /"etapa":"trava-obsoleta"/)
     assert.match(registro, /"id":"[0-9A-F]{6}"/)
     assert.equal(
       await page.evaluate(() => typeof window.api.aplicativo.exportarDiagnostico),
       'function'
     )
-    resultado.diagnostico = 'contas.json guardado e causa registrada'
+    resultado.diagnostico = 'contas.json guardado, trava velha substituída e causas registradas'
 
     // Janela endurecida: navegar para fora é bloqueado e o IPC aceita o próprio app.
     assert.equal(await page.evaluate(() => typeof window.api.aplicativo.definirTema), 'function')
@@ -96,7 +105,7 @@ try {
       () => getComputedStyle(document.body).backgroundColor
     )
     assert.equal(resultado.fundoEscuro, 'rgb(10, 10, 10)')
-    await page.screenshot({ path: join(pasta, '1.6.1-abertura-escuro.png'), fullPage: true })
+    await page.screenshot({ path: join(pasta, '1.6.2-abertura-escuro.png'), fullPage: true })
   } finally {
     await app.close()
   }
@@ -117,14 +126,14 @@ try {
     })
     await page.waitForLoadState('domcontentloaded')
     await page.waitForFunction(() => !document.documentElement.classList.contains('dark'))
-    await page.screenshot({ path: join(pasta, '1.6.1-abertura-claro.png'), fullPage: true })
+    await page.screenshot({ path: join(pasta, '1.6.2-abertura-claro.png'), fullPage: true })
   } finally {
     await novamente.close()
   }
 
   assert.deepEqual(resultado.erros, [])
   resultado.ok = true
-  writeFileSync(join(pasta, 'abertura-1.6.1.json'), JSON.stringify(resultado, null, 2))
+  writeFileSync(join(pasta, 'abertura-1.6.2.json'), JSON.stringify(resultado, null, 2))
   console.log(JSON.stringify(resultado))
 } finally {
   rmSync(perfil, { recursive: true, force: true })

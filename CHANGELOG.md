@@ -2,6 +2,36 @@
 
 Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
+## 1.6.2 — banco travado por um processo que não é mais o aplicativo
+
+- Correção: o `banco.lock` deixado por uma execução encerrada à força (por exemplo, o instalador
+  fechando o aplicativo para atualizar) guardava só o PID; quando o Windows entregava esse PID a
+  outro processo, o aplicativo recusava abrir ("O banco de dados já está aberto por outra
+  instância") e nenhuma empresa daquele perfil abria. A trava agora guarda também a hora de
+  início do processo; se o PID está vivo mas o processo começou depois da trava, ela é
+  considerada velha, substituída e registrada em `logs/app.jsonl` como `trava-obsoleta`. Sem
+  conseguir consultar o processo, a trava continua valendo.
+- Diagnosticado com o "Exportar diagnóstico" da 1.6.1, que mostrou o `banco.lock` com PID de dois
+  dias antes.
+- Engenharia (sem mudança visível para quem usa):
+  - IPC: os canais agora derivam de um contrato tipado único (`src/shared/canais.ts`), o que
+    eliminou 113 conversões `as never` do preload e faz um canal sem tratador (ou o contrário) deixar
+    de compilar; o processo principal confere a forma dos argumentos de cada canal antes de executar
+    (`src/main/ipc-validacao.ts`: id é texto, patch é objeto, formato é `pdf` ou `docx`…).
+  - Testes: `App.fumaca.test.tsx` (jsdom e Testing Library) monta o aplicativo contra a API de
+    demonstração, percorre as telas e abre os editores falhando em qualquer `console.error`;
+    `npm run test:rapido` roda só os testes que não sobem o banco em WebAssembly.
+  - Código: `nuvem.ts` (1981 → 1671 linhas) perdeu configuração, aplicação de pacotes remotos e
+    captura de cadastros; `repositories.ts` (1359 → 143) virou um índice sobre
+    `repositories/{base,orcamentos,relatorios,textos-padrao,clientes}`; `dados.ts` ganhou
+    `dados-auxiliares`; o editor de orçamento, os cadastros e o modal de cálculo foram divididos em
+    cartões, seções e blocos. Nenhuma assinatura pública mudou.
+  - O pacote de produção não inclui mais a API de demonstração (o bundle caiu de 975 para 954 kB).
+  - O instalador inclui toda migração do Supabase automaticamente (antes cada arquivo era listado à
+    mão e uma migração nova esquecida só falharia em produção); o CI audita as dependências de
+    produção (`npm audit --audit-level=high`); a regra `no-explicit-any` do lint passou a ser erro.
+  - Scripts e documentos de versões anteriores foram para `scripts/legado/` e `docs/historico/`.
+
 ## 1.6.1 — acesso que não travava mais e diagnóstico para o suporte
 
 - Correção: quando o banco local do perfil salvo não abria (por exemplo em um computador com

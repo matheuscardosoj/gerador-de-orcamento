@@ -28,8 +28,8 @@ Branch `claude`; alterações locais anteriores preservadas. Implementação sem
 - PostgreSQL isolado (PGlite), funções reais: 50 dispositivos, cinco usuários, duas empresas, dois documentos e 20 transferências; pedidos repetidos sem duplicação, um responsável por documento e rejeição do antigo responsável.
 - Sincronização real com SQLite e PGlite, transporte atrasado: uma leitura de controles retida não reduz a geração já confirmada por outra RPC.
 - Serviço de contas real com HTTP simulado: criação uma vez, falha na leitura, nova leitura bem-sucedida e lista atualizada sem repetir convite.
-- `scripts/verificar-rc18-interface.mjs`: Electron com perfil descartável e API simulada; 20 eventos resultam em duas consultas, 20 alternâncias, pedido antigo rejeitado, ação offline desabilitada, dispensa respeitada e cancelamento da navegação preservando aviso. Larguras 1024 e 1600, sem erros de JavaScript.
-- `scripts/verificar-rc18-empresas.mjs`: abrir exclusão não exibe erro nem chama exclusão; criação e recuperação da lista sem novo login, uma criação, duas leituras e zero exclusões.
+- `scripts/legado/verificar-rc18-interface.mjs`: Electron com perfil descartável e API simulada; 20 eventos resultam em duas consultas, 20 alternâncias, pedido antigo rejeitado, ação offline desabilitada, dispensa respeitada e cancelamento da navegação preservando aviso. Larguras 1024 e 1600, sem erros de JavaScript.
+- `scripts/legado/verificar-rc18-empresas.mjs`: abrir exclusão não exibe erro nem chama exclusão; criação e recuperação da lista sem novo login, uma criação, duas leituras e zero exclusões.
 - Evidências visuais e resultados em `output/playwright/rc18-interface` e `output/playwright/rc18-empresas`.
 
 ## Fundamentos da solução

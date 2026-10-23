@@ -21,8 +21,8 @@ Implementação local na branch `claude`, preservando as alterações anteriores
 - Instalador gerado: `release/Gerador de Orçamentos Setup 1.5.0-rc.16.exe`, 1.222.553.275 bytes; SHA-256 `52A0B9E8B98E6D3F374BF325441DAB8770E854DD72EE1C92072A2A7A2806D29B`. Main, preload e assets do ASAR foram comparados byte a byte com o build aprovado. Versão do pacote confirmada como `1.5.0-rc.16`. A geração não comprova instalação ou testes nos dispositivos.
 - `npm run check`: lint, formatação, tipos, **316 testes em 58 arquivos** e compilação aprovados. Log: `output/rc16-check.log`.
 - Testes novos: sequência schema + serviço central + 009/010/011/012; operador sem vínculo solicitando/cancelando/recebendo edição; convite de outra empresa; empresa excluída; manutenção e reenvio obsoleto; respostas atrasadas; cancelamento de requisições concorrentes; falha de rede sem remoção de dados; deduplicação/exclusão de rascunhos; restauração preservando snapshots anteriores.
-- `scripts/verificar-rc11-interface.mjs`: dez telas, 1024 e 1600 px, tabelas e cálculo de lucro próprio de 150% aprovados com API de demonstração. Capturas em `output/playwright/rc11-interface`.
-- `scripts/verificar-rc16-interface.mjs`: criação, retorno, cancelamento e exclusão de rascunho; tela de empresa excluída para operador e membro em 1024 e 1600 px; sem erros de página. Capturas em `output/playwright/rc16-interface`.
+- `scripts/legado/verificar-rc11-interface.mjs`: dez telas, 1024 e 1600 px, tabelas e cálculo de lucro próprio de 150% aprovados com API de demonstração. Capturas em `output/playwright/rc11-interface`.
+- `scripts/legado/verificar-rc16-interface.mjs`: criação, retorno, cancelamento e exclusão de rascunho; tela de empresa excluída para operador e membro em 1024 e 1600 px; sem erros de página. Capturas em `output/playwright/rc16-interface`.
 - Metadados do executável empacotado conferidos pelo Windows: FileDescription e ProductName corretos; OriginalFilename “Gerador de Orçamentos.exe”. Essa conferência não substitui a inspeção do processo após instalar.
 
 ## Validação real nos dispositivos — 15/10/2026

@@ -17,9 +17,9 @@ Versão: `1.5.0-rc.20`
 ## Verificações
 
 - `npm run check`: lint, Prettier, TypeScript, build e 359 testes em 66 arquivos aprovados.
-- `node scripts/verificar-rc20-calculo.mjs`: fluxo de orçamento e relatório exercitado com API simulada. Conferidos valor próprio de R$ 750, valor geral de R$ 1.000, exemplo com imposto a 6% (custo de serviço R$ 1.000, outros custos R$ 1.000, lucro R$ 1.000, imposto R$ 191,49, preço final R$ 3.191,49), meta abaixo do mínimo, salvamento/reabertura, prévia e exportações PDF/DOCX.
+- `node scripts/legado/verificar-rc20-calculo.mjs`: fluxo de orçamento e relatório exercitado com API simulada. Conferidos valor próprio de R$ 750, valor geral de R$ 1.000, exemplo com imposto a 6% (custo de serviço R$ 1.000, outros custos R$ 1.000, lucro R$ 1.000, imposto R$ 191,49, preço final R$ 3.191,49), meta abaixo do mínimo, salvamento/reabertura, prévia e exportações PDF/DOCX.
 - O roteiro visual verificou larguras de 1024 e 1600 px, ambas sem rolagem horizontal da página.
-- `node scripts/verificar-rc20-pacote.mjs`: executável extraído abriu com perfil temporário isolado, reportou `1.5.0-rc.20` e não teve erros de renderer.
+- `node scripts/legado/verificar-rc20-pacote.mjs`: executável extraído abriu com perfil temporário isolado, reportou `1.5.0-rc.20` e não teve erros de renderer.
 - A meta mínima foi validada para os dois métodos de imposto; repasses e custos por dia seguem cobertos pelo conjunto de testes do motor.
 - Supabase e dados da VS não foram alterados.
 

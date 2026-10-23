@@ -34,10 +34,10 @@
   do perfil, reenvio dos mesmos IDs e uma única versão adicional em orçamento, relatório e recibo.
 - `src/main/db/rascunhos-envio.test.ts`: migração v13 para v14 preserva fila/rascunhos;
   confirmação parcial e erro de outro registro não confirmam nem conflitam o rascunho.
-- `scripts/verificar-1-5-2-interface.mjs`: Electron com API sintética, aviso de erro em
+- `scripts/legado/verificar-1-5-2-interface.mjs`: Electron com API sintética, aviso de erro em
   modal, teclado, larguras 1024/1440, conexão deduplicada, persistência e lista com rolagem.
   Resultados e capturas em `output/playwright/1-5-2-cadastros`.
-- `scripts/verificar-1-5-2-pacote.mjs`: abertura do executável empacotado com perfil novo,
+- `scripts/legado/verificar-1-5-2-pacote.mjs`: abertura do executável empacotado com perfil novo,
   versão visível, IPC de verificação e registro dos eventos de recuperação.
 
 ## Artefato conferido

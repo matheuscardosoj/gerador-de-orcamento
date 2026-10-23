@@ -134,7 +134,7 @@ os códigos canônicos de clientes e serviços, inclusive cadastros antigos, e c
 os padrões somente quando uma empresa nova é criada. Exige backup recuperável e
 ensaio isolado. Não recria padrões excluídos nem altera registros existentes.
 O aplicativo reconfere códigos antigos sem sobrescrever operações locais pendentes.
-Evidências da aplicação e procedimento de reversão: `docs/VALIDACAO-RC11-CORRECOES.md`.
+Evidências da aplicação e procedimento de reversão: `docs/historico/VALIDACAO-RC11-CORRECOES.md`.
 
 Em projetos que executaram a versão anterior de `004_codigos_cadastros.sql`, a
 chave `codigos_cadastros_empresa_id_fkey` pode apontar para `auth.users(id)`.
