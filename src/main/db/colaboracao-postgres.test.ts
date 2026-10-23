@@ -339,3 +339,54 @@ it('não avisa os computadores quando só o prazo da sessão de edição é reno
   await edicao('novo', 'liberar', pcA, c.geracao)
   expect(await avisos()).toBeGreaterThan(antes)
 })
+it('continua transmitindo em tempo real toda mudança real de dados e de posse', async () => {
+  await pg.exec('RESET ROLE')
+  try {
+    const avisos = async (): Promise<number> =>
+      Number((await pg.query<{ n: number }>('SELECT count(*) AS n FROM realtime.avisos')).rows[0].n)
+    const alvo = (
+      await pg.query<{ tipo: string; documento_id: string }>(
+        'SELECT tipo,documento_id FROM edicoes_documento LIMIT 1'
+      )
+    ).rows[0]
+    const chave = [alvo.tipo, alvo.documento_id]
+    const where = 'WHERE tipo=$1 AND documento_id=$2'
+
+    // Só o prazo (batimento da sessão) é ignorado.
+    let antes = await avisos()
+    await pg.query(
+      `UPDATE edicoes_documento SET expira_em=now()+interval '5 minutes' ${where}`,
+      chave
+    )
+    expect(await avisos()).toBe(antes)
+
+    // Posse, geração, modo offline e revisão continuam avisando todos os computadores.
+    for (const alteracao of [
+      'geracao=geracao+1',
+      'offline=NOT offline',
+      'revisao=revisao+1',
+      'dispositivo=(SELECT id FROM computadores WHERE id<>edicoes_documento.dispositivo AND empresa_id=edicoes_documento.empresa_id LIMIT 1)'
+    ]) {
+      antes = await avisos()
+      await pg.query(`UPDATE edicoes_documento SET ${alteracao} ${where}`, chave)
+      expect(await avisos(), alteracao).toBeGreaterThan(antes)
+    }
+
+    // Alteração de prazo junto com outra mudança também avisa.
+    antes = await avisos()
+    await pg.query(
+      `UPDATE edicoes_documento SET expira_em=now()+interval '9 minutes',geracao=geracao+1 ${where}`,
+      chave
+    )
+    expect(await avisos()).toBeGreaterThan(antes)
+
+    // Dados sincronizados (entidades) sempre avisam, mesmo sem mudar o conteúdo.
+    antes = await avisos()
+    await pg.query(
+      'UPDATE sincronizacao.entidades SET revisao=revisao WHERE ctid IN (SELECT ctid FROM sincronizacao.entidades LIMIT 1)'
+    )
+    expect(await avisos()).toBeGreaterThan(antes)
+  } finally {
+    await pg.exec('SET ROLE authenticated')
+  }
+})
