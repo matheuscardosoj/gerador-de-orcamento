@@ -2,7 +2,7 @@
 
 Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
-## Não lançado
+## 1.6.0 — tema escuro, revisão de textos com IA mais segura e menos tráfego
 
 - Tema escuro (preto e cinza neutros) com três opções em Configurações → Minha conta →
   Aparência: Claro, Escuro e Automático (segue o Windows). Um botão na barra lateral alterna
