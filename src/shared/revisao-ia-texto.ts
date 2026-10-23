@@ -78,7 +78,15 @@ const PAPEIS: Array<[chave: string, padrao: RegExp]> = [
   ['empresa', /\bempresas?\b/],
   ['prestador', /\bprestadore?s?\b/],
   ['prestadora', /\bprestadoras?\b/],
-  ['proprietario', /\bproprietari[oa]s?\b/]
+  ['proprietario', /\bproprietari[oa]s?\b/],
+  // Formas de pagamento: acrescentar, trocar ou remover uma muda o combinado com o cliente.
+  ['dinheiro', /\bdinheiro\b/],
+  ['pix', /\bpix\b/],
+  ['cartao', /\bcart(?:ao|oes)\b/],
+  ['boleto', /\bboletos?\b/],
+  ['cheque', /\bcheques?\b/],
+  ['transferencia', /\btransferencias?\b|\bted\b/],
+  ['deposito', /\bdepositos?\b/]
 ]
 
 /** Verbos e pronomes em primeira pessoa que mudariam quem fala no texto. */
@@ -117,10 +125,113 @@ export function violacaoDePapeis(original: string, sugestao: string): string | n
   const b = papeisDe(sugestao)
   const trocados = [...a, ...b].filter((p) => a.has(p) !== b.has(p))
   if (trocados.length)
-    return 'A sugestão trocou quem é a contratante, o cliente ou a empresa e foi recusada.'
+    return 'A sugestão trocou quem é a contratante, o cliente ou a empresa, ou a forma de pagamento, e foi recusada.'
   const antes = primeiraPessoaDe(original)
   if ([...primeiraPessoaDe(sugestao)].some((p) => !antes.has(p)))
     return 'A sugestão passou o texto para a primeira pessoa e foi recusada.'
+  return null
+}
+
+// ------------------------------------------------------------------ Trava de conteúdo
+
+/** Palavras de ligação com 4 letras ou mais: não carregam o significado do texto. */
+const PALAVRAS_DE_LIGACAO = new Set([
+  'para',
+  'como',
+  'mais',
+  'menos',
+  'esta',
+  'este',
+  'esse',
+  'essa',
+  'isso',
+  'esses',
+  'essas',
+  'estes',
+  'estas',
+  'entre',
+  'sobre',
+  'sendo',
+  'apos',
+  'pela',
+  'pelo',
+  'pelas',
+  'pelos',
+  'numa',
+  'umas',
+  'uns',
+  'dele',
+  'dela',
+  'deles',
+  'delas',
+  'seus',
+  'suas',
+  'nosso',
+  'nossa',
+  'quando',
+  'onde',
+  'cada',
+  'todo',
+  'toda',
+  'todos',
+  'todas',
+  'qualquer',
+  'tambem',
+  'ainda',
+  'apenas',
+  'somente',
+  'conforme',
+  'segue',
+  'sera',
+  'serao',
+  'seja',
+  'foram',
+  'sido',
+  'ser',
+  'tera',
+  'quem',
+  'qual',
+  'quais',
+  'cujo',
+  'cuja',
+  'porem',
+  'entao',
+  'assim',
+  'logo',
+  'pois',
+  'mas'
+])
+
+/** Palavras de conteúdo (4+ letras, sem acentos e sem ligação), sem repetição. */
+const palavrasDeConteudo = (texto: string): string[] => [
+  ...new Set((forma(texto).match(/[a-z]{4,}/g) ?? []).filter((p) => !PALAVRAS_DE_LIGACAO.has(p)))
+]
+
+/** Raiz grosseira (5 letras): "árvore/árvores", "roçada/roçadas", "remoção/remoções". */
+const mesmaRaiz = (a: string, b: string): boolean => {
+  const x = a.slice(0, 5)
+  const y = b.slice(0, 5)
+  return x.startsWith(y) || y.startsWith(x)
+}
+
+/**
+ * O modelo pequeno às vezes troca o conteúdo ("serviço de roçada" por "Remoção"), apaga parte
+ * do texto ou acrescenta informações que ninguém escreveu. Ajustes de redação são aceitos (a
+ * troca de uma palavra em cada três, plural, acento, pontuação); substituições maiores não.
+ * Devolve o motivo da recusa ou `null`.
+ */
+export function trocaDeConteudo(original: string, sugestao: string): string | null {
+  const antes = palavrasDeConteudo(original)
+  const depois = palavrasDeConteudo(sugestao)
+  if (!antes.length) return null
+  const perdidas = antes.filter((p) => !depois.some((q) => mesmaRaiz(p, q)))
+  const novas = depois.filter((q) => !antes.some((p) => mesmaRaiz(p, q)))
+  // Até um terço das palavras pode mudar (e 1 em textos de 2 palavras: "cortar" por "corte").
+  const permitidas = antes.length <= 1 ? 0 : Math.max(1, Math.floor(antes.length * 0.34))
+  if (perdidas.length > permitidas)
+    return 'A sugestão trocou ou removeu palavras importantes do texto original e foi recusada.'
+  if (novas.length >= 3 && novas.length / depois.length > 0.5)
+    return 'A sugestão acrescentou informações que não estavam no texto e foi recusada.'
   return null
 }
 
@@ -327,7 +438,7 @@ export function prepararSugestao(
   const base = original.trim()
   const automatica = corrigirTexto(base, campo)
   const limpa = limparRotulos(resposta, base)
-  const motivo = limpa ? violacaoDePapeis(base, limpa) : null
+  const motivo = limpa ? (violacaoDePapeis(base, limpa) ?? trocaDeConteudo(base, limpa)) : null
   if (!limpa || motivo) {
     if (automatica !== base) return { texto: automatica, origem: 'automatica' }
     if (motivo) throw new Error(`${motivo} Tente novamente ou edite o texto manualmente.`)

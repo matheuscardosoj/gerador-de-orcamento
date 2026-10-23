@@ -28,6 +28,9 @@ Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
   devolver o mesmo texto, há uma segunda tentativa com mais variação; se ainda não houver nada
   a mudar, a tela avisa "Nenhuma alteração sugerida". O prompt descreve o campo em linguagem
   natural (o nome interno vazava para a resposta).
+  A sugestão também é recusada quando troca ou apaga mais de um terço das palavras de conteúdo
+  do original ("roçada" virando "Remoção"), acrescenta informações novas ou altera a forma de
+  pagamento (dinheiro, Pix, cartão…).
 - CI no GitHub Actions (`npm run check`).
 
 ## 1.5.4 — conclusão da recuperação sem avisos reaparecendo

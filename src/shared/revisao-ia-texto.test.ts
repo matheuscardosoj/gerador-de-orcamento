@@ -4,6 +4,7 @@ import {
   corrigirTexto,
   limparRotulos,
   prepararSugestao,
+  trocaDeConteudo,
   violacaoDePapeis
 } from './revisao-ia-texto'
 import { numerosTexto } from './revisao-ia'
@@ -174,6 +175,17 @@ describe('violacaoDePapeis', () => {
     expect(violacaoDePapeis('a contratante paga', 'A Contratante paga o valor')).toBeNull()
   })
 
+  it('recusa acrescentar, trocar ou remover a forma de pagamento', () => {
+    const original = '50% na entrada e 50% na entrega via pix'
+    expect(
+      violacaoDePapeis(original, '50% em dinheiro na entrada e 50% via Pix na entrega')
+    ).toMatch(/forma de pagamento/)
+    expect(violacaoDePapeis(original, '50% na entrada e 50% na entrega, via cartão')).not.toBeNull()
+    expect(violacaoDePapeis('Pago em dinheiro no ato', 'Pago no ato')).not.toBeNull()
+    expect(violacaoDePapeis(original, '50% na entrada e 50% na entrega, via Pix.')).toBeNull()
+    expect(violacaoDePapeis('Pagamento por Transferência', 'Pagamento por TED')).toBeNull()
+  })
+
   it('recusa passar o texto para a primeira pessoa', () => {
     expect(violacaoDePapeis('pago em dinheiro no ato', 'paguei em dinheiro no ato')).toMatch(
       /primeira pessoa/
@@ -186,17 +198,96 @@ describe('violacaoDePapeis', () => {
   })
 })
 
+describe('trocaDeConteudo', () => {
+  it('recusa trocar o serviço por outro (caso real do modelo de 3B)', () => {
+    expect(trocaDeConteudo('ref. serviço de roçada terreno', 'Ref. Remoção terreno.')).toMatch(
+      /trocou ou removeu/
+    )
+  })
+
+  it('aceita ajustes de redação: plural, acento, pontuação e palavras de ligação', () => {
+    expect(
+      trocaDeConteudo(
+        'Poda de 3 árvores de grande porte, com remoção dos resíduos gerados.',
+        'Poda de 3 árvores de grande porte, remoção dos resíduos gerados.'
+      )
+    ).toBeNull()
+    expect(
+      trocaDeConteudo(
+        'fazer a poda de 3 arvores e remocao dos residuos',
+        'Fazer a poda de 3 árvores e a remoção dos resíduos.'
+      )
+    ).toBeNull()
+    expect(trocaDeConteudo('serviço de roçada', 'Serviços de roçadas.')).toBeNull()
+    expect(trocaDeConteudo('pago em dinheiro no ato', 'Pago em dinheiro no ato.')).toBeNull()
+  })
+
+  it('aceita pequenas expansões que detalham o que já estava no texto', () => {
+    expect(trocaDeConteudo('Poda de árvores', 'Poda de árvores de grande porte')).toBeNull()
+  })
+
+  it('recusa reescrita que perde mais de um terço do conteúdo', () => {
+    expect(
+      trocaDeConteudo(
+        'poda de arvores e remocao dos residuos',
+        'Poda de árvores e limpeza do terreno.'
+      )
+    ).toMatch(/trocou ou removeu/)
+    // Reescrita que troca a maior parte das palavras também é recusada.
+    expect(
+      trocaDeConteudo(
+        '50% na entrada e 50% na entrega via pix',
+        '50% no pagamento inicial e 50% no pagamento à entrega através de Pix.'
+      )
+    ).not.toBeNull()
+    // Em textos curtos, uma palavra pode mudar de forma (verbo vira substantivo).
+    expect(
+      trocaDeConteudo('Cortar 3 árvores por R$ 1.600,00.', 'Corte de 3 árvores por R$ 1.600,00.')
+    ).toBeNull()
+    expect(trocaDeConteudo('Poda', 'Corte')).toMatch(/trocou ou removeu/)
+  })
+
+  it('recusa acrescentar informações que não estavam no texto', () => {
+    expect(
+      trocaDeConteudo(
+        'poda de arvores',
+        'Poda de árvores, remoção de entulho, limpeza do terreno e transporte'
+      )
+    ).toMatch(/acrescentou/)
+  })
+
+  it('texto sem palavras de conteúdo (valores, siglas) não aciona a trava', () => {
+    expect(trocaDeConteudo('R$ 100', 'R$ 100,00.')).toBeNull()
+    expect(trocaDeConteudo('', 'qualquer coisa')).toBeNull()
+  })
+})
+
 describe('prepararSugestao', () => {
+  it('cai para as correções automáticas quando o modelo troca o serviço', () => {
+    const r = prepararSugestao(
+      'ref. serviço de roçada terreno',
+      'Ref. Remoção terreno.',
+      'descricaoRecibo'
+    )
+    expect(r.origem).toBe('automatica')
+    expect(r.texto).toBe('Ref. Serviço de roçada terreno.')
+  })
+
   it('usa a resposta do modelo quando ela melhora o texto', () => {
     const r = prepararSugestao(
       'poda de arvores',
-      'Poda de árvores de grande porte, com remoção dos resíduos',
+      'Poda de árvores de grande porte',
       'descricaoServico'
     )
-    expect(r).toEqual({
-      texto: 'Poda de árvores de grande porte, com remoção dos resíduos.',
-      origem: 'modelo'
-    })
+    expect(r).toEqual({ texto: 'Poda de árvores de grande porte.', origem: 'modelo' })
+    // Já acrescentar serviços que ninguém escreveu é invenção e cai para as correções automáticas.
+    expect(
+      prepararSugestao(
+        'poda de arvores',
+        'Poda de árvores de grande porte, com remoção dos resíduos',
+        'descricaoServico'
+      )
+    ).toEqual({ texto: 'Poda de árvores.', origem: 'automatica' })
   })
 
   it('remove rótulo vazado e aplica as correções', () => {
