@@ -8,6 +8,7 @@ import {
   openSync,
   closeSync,
   readFileSync,
+  statSync,
   unlinkSync,
   writeFileSync
 } from 'fs'
@@ -16,6 +17,7 @@ import { Database } from 'node-sqlite3-wasm'
 import { aplicarMigracoes } from './schema'
 import { prepararMigracao, verificarBanco } from './pre-migracao'
 import { registrarDiagnostico } from '../diagnostico'
+import { conteudoDaTrava, travaObsoleta } from './trava-processo'
 
 export type Linha = Record<string, string | number | Uint8Array | null>
 
@@ -50,13 +52,15 @@ function adquirirTrava(): void {
   const caminho = join(pastaDados(), 'banco.lock')
   try {
     const fd = openSync(caminho, 'wx')
-    writeFileSync(fd, `${process.pid}\n`, 'utf8')
+    writeFileSync(fd, conteudoDaTrava(), 'utf8')
     trava = { caminho, fd }
   } catch (erro) {
     if (!existsSync(caminho)) throw erro
+    let conteudo = ''
     let pid = 0
     try {
-      pid = Number.parseInt(readFileSync(caminho, 'utf8').trim(), 10)
+      conteudo = readFileSync(caminho, 'utf8')
+      pid = Number.parseInt(conteudo.trim(), 10)
     } catch {
       pid = 0
     }
@@ -69,6 +73,11 @@ function adquirirTrava(): void {
         vivo = false
       }
     }
+    // Trava deixada por uma execução encerrada à força cujo PID o Windows entregou a outro processo.
+    if (vivo && travaObsoleta(conteudo, statSync(caminho).mtimeMs)) {
+      registrarDiagnostico('trava-obsoleta', new Error('PID da trava reaproveitado'), { pid })
+      vivo = false
+    }
     if (vivo) throw new Error('O banco de dados já está aberto por outra instância do aplicativo.')
     try {
       unlinkSync(caminho)
@@ -76,7 +85,7 @@ function adquirirTrava(): void {
       throw new Error('Não foi possível obter a trava do banco de dados.')
     }
     const fd = openSync(caminho, 'wx')
-    writeFileSync(fd, `${process.pid}\n`, 'utf8')
+    writeFileSync(fd, conteudoDaTrava(), 'utf8')
     trava = { caminho, fd }
   }
 }
