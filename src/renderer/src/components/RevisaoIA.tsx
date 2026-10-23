@@ -63,6 +63,10 @@ export function RevisaoIA({
     onAplicar(sugestao)
     cancelar()
   }
+  // A IA e as correções automáticas não encontraram nada a mudar: avisa em vez de deixar
+  // duas caixas idênticas sem explicação.
+  const semAlteracao =
+    !anotacao && !gerando && !erro && !!sugestao && sugestao.trim() === original.trim()
   return (
     <>
       <Button
@@ -94,7 +98,7 @@ export function RevisaoIA({
               Tentar novamente
             </Button>
             <Button
-              disabled={gerando || !sugestao}
+              disabled={gerando || !sugestao || semAlteracao}
               onClick={() => (texto !== original ? setConfirmar(true) : aplicar())}
             >
               Aplicar
@@ -112,6 +116,15 @@ export function RevisaoIA({
           </p>
         )}
         {erro && <MensagemFlutuante className="mb-4">{erro}</MensagemFlutuante>}
+        {semAlteracao && (
+          <p
+            role="status"
+            className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+          >
+            Nenhuma alteração sugerida: o texto já parece estar adequado. Se quiser outra versão,
+            use &quot;Tentar novamente&quot;.
+          </p>
+        )}
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Texto original">
             <Textarea value={original} readOnly className="min-h-[220px]" />

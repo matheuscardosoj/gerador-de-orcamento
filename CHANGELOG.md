@@ -21,6 +21,13 @@ Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 - Correções: arredondamento de valores negativos e "-R$ 0,00"; valor por extenso de milhões;
   total do orçamento calculado a partir dos itens; textos longos e listas passam a ser
   divididos entre páginas no PDF.
+- Revisão de texto com IA: a resposta do modelo passa por uma camada determinística
+  (`src/shared/revisao-ia-texto.ts`) que remove rótulos e a instrução do prompt repetidos,
+  recusa trocar quem é a contratante, o cliente ou a empresa (e passar o texto para a primeira
+  pessoa), e corrige espaços, acentos de palavras comuns, maiúsculas e ponto final. Se o modelo
+  devolver o mesmo texto, há uma segunda tentativa com mais variação; se ainda não houver nada
+  a mudar, a tela avisa "Nenhuma alteração sugerida". O prompt descreve o campo em linguagem
+  natural (o nome interno vazava para a resposta).
 - CI no GitHub Actions (`npm run check`).
 
 ## 1.5.4 — conclusão da recuperação sem avisos reaparecendo
