@@ -458,7 +458,7 @@ export function HistoricoDocumentos({
             <tbody className="divide-y divide-slate-100">
               {filtrados.slice(inicio, inicio + ITENS_POR_PAGINA).map((r) => (
                 <tr key={r.id} className="group/linha-historico h-[62px] hover:bg-slate-50">
-                  <td className="sticky left-0 z-[1] whitespace-nowrap bg-white px-4 py-3 font-medium text-slate-800 shadow-[1px_0_0_0_#e2e8f0] group-hover/linha-historico:bg-slate-50">
+                  <td className="sticky left-0 z-[1] whitespace-nowrap bg-surface px-4 py-3 font-medium text-slate-800 shadow-[1px_0_0_0_#e2e8f0] group-hover/linha-historico:bg-slate-50">
                     {r.numero > 0 ? String(r.numero).padStart(6, '0') : 'Aguardando numeração'}
                   </td>
                   {pref.colunas.map((k) => (
@@ -494,7 +494,7 @@ export function HistoricoDocumentos({
                         )}
                     </td>
                   ))}
-                  <td className="sticky right-0 z-[1] bg-white px-4 py-3 shadow-[-1px_0_0_0_#e2e8f0] group-hover/linha-historico:bg-slate-50">
+                  <td className="sticky right-0 z-[1] bg-surface px-4 py-3 shadow-[-1px_0_0_0_#e2e8f0] group-hover/linha-historico:bg-slate-50">
                     <TableActions>
                       <IconButton
                         icon={

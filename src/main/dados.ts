@@ -18,6 +18,7 @@ import {
   pagamentosRepo
 } from './repositories'
 import type { ResultadoImportacaoDados } from '@shared/api'
+import { linhaImagemValida } from '@shared/imagem-segura'
 import type {
   FormaPagamentoPadrao,
   ItemMaterial,
@@ -667,7 +668,8 @@ function mesclar(fonte: Database): Resumo {
     pagamentosRepo.list().map((item) => [chaveTexto(item.texto, item.aplicacao), item] as const)
   )
   if (temTabela(fonte, 'imagens'))
-    for (const x of linhas(fonte, 'SELECT * FROM imagens'))
+    for (const x of linhas(fonte, 'SELECT * FROM imagens')) {
+      if (!linhaImagemValida(x)) continue
       run('INSERT OR IGNORE INTO imagens VALUES (?,?,?,?,?,?,?)', [
         x.hash,
         x.mime,
@@ -677,6 +679,7 @@ function mesclar(fonte: Database): Resumo {
         x.largura,
         x.altura
       ])
+    }
   const idsAntes = new Set(
     [
       ...linhas(fonte, "SELECT 'orcamento' AS tipo,id FROM orcamentos"),

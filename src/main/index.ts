@@ -1,4 +1,4 @@
-import { registrarVersao } from './versoes'
+import { documentoJaVersionado, registrarVersao } from './versoes'
 import { orcamentosRepo, relatoriosRepo } from './repositories'
 import { mensagemErro } from '@shared/erros'
 import { recibosRepo } from './recibos'
@@ -15,6 +15,7 @@ import { migrarJsonSeExistir } from './db/migrar-json'
 import { bancoVazio, semear } from './repositories'
 import { encerrarIA } from './ia'
 import { haAlteracoesPendentes, liberarAlteracoesPendentes, registrarIpc } from './ipc'
+import { urlDoAplicativo } from './origem-janela'
 
 // Usado só por testes automatizados e validações de pacote. Nunca é definido
 // pelo instalador, portanto o perfil normal do usuário continua inalterado.
@@ -79,7 +80,7 @@ function createWindow(): void {
     title: 'Gerador de Orçamentos',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false,
+      sandbox: true,
       contextIsolation: true,
       nodeIntegration: false
     }
@@ -104,6 +105,14 @@ function createWindow(): void {
     if (escolha === 0) evento.preventDefault()
     else liberarAlteracoesPendentes()
   })
+
+  // A janela só exibe o próprio aplicativo: nada a redireciona para conteúdo externo,
+  // que herdaria o acesso do preload ao IPC.
+  const bloquearNavegacaoExterna = (evento: { preventDefault: () => void }, url: string): void => {
+    if (!urlDoAplicativo(url, process.env['ELECTRON_RENDERER_URL'])) evento.preventDefault()
+  }
+  mainWindow.webContents.on('will-navigate', bloquearNavegacaoExterna)
+  mainWindow.webContents.on('will-redirect', bloquearNavegacaoExterna)
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
     if (/^https?:\/\//i.test(details.url)) void shell.openExternal(details.url)
@@ -135,6 +144,8 @@ if (temTrava)
               ? relatoriosRepo
               : recibosRepo
         for (const d of repo.list()) {
+          // Evita montar o documento completo (com imagens) quando já há versão.
+          if (documentoJaVersionado(tipo, d.id)) continue
           const completo = repo.get(d.id)
           if (completo && !completo.versao)
             registrarVersao(tipo, completo, 'Versão inicial após migração')

@@ -131,7 +131,11 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
       rel ? calcularTotaisRelatorio(rel.itensServico, rel.adiantamentos, rel.reembolsos) : null,
     [rel]
   )
-  const sujo = rel !== null && snapshotSalvo !== null && JSON.stringify(rel) !== snapshotSalvo
+  // Serializar o documento (com miniaturas) é caro: só quando ele ou o snapshot mudam.
+  const sujo = useMemo(
+    () => rel !== null && snapshotSalvo !== null && JSON.stringify(rel) !== snapshotSalvo,
+    [rel, snapshotSalvo]
+  )
   useBloqueioEdicao(sujo)
   const atualizacao = useDocumentoRemoto(
     'relatorio',

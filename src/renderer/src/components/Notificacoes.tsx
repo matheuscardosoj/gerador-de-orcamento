@@ -78,7 +78,7 @@ export function Notificacoes(): JSX.Element | null {
       {fila.length > 3 && (
         <button
           type="button"
-          className="pointer-events-auto self-end rounded-full bg-slate-800 px-2.5 py-1 text-xs font-medium text-white shadow"
+          className="pointer-events-auto self-end rounded-full bg-inverso px-2.5 py-1 text-xs font-medium text-white shadow"
           aria-expanded={expandida}
           onClick={() => setExpandida((aberta) => !aberta)}
         >
@@ -118,7 +118,7 @@ function AvisoFlutuante({
     <div
       role={notificacao.nivel === 'erro' ? 'alert' : 'status'}
       aria-atomic="true"
-      className={`pointer-events-auto flex items-start gap-3 rounded-xl border bg-white p-3 shadow-lg ${estilo.cor}`}
+      className={`pointer-events-auto flex items-start gap-3 rounded-xl border bg-surface p-3 shadow-lg ${estilo.cor}`}
       onMouseEnter={() => setPausado(true)}
       onMouseLeave={() => setPausado(false)}
       onFocus={() => setPausado(true)}

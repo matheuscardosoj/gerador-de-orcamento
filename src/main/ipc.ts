@@ -7,6 +7,7 @@ import {
   type TipoRascunhoCadastro
 } from './rascunhos-cadastros'
 import { exigeNumeracaoAtualizada } from './bloqueio-numeracao'
+import { urlDoAplicativo } from './origem-janela'
 import { contaApi } from './contas/servico'
 import { exigirAcesso, iniciarOperacao } from './contas/acesso'
 import { mensagemErro } from '../shared/erros'
@@ -63,7 +64,8 @@ import {
   capturarCadastros,
   protocoloNuvem
 } from './nuvem'
-import { app, ipcMain, dialog, nativeImage } from 'electron'
+import { app, ipcMain, dialog, nativeImage, nativeTheme } from 'electron'
+import { PREFERENCIAS_TEMA, modoNativoTema, type PreferenciaTema } from '@shared/tema'
 import { readFileSync } from 'fs'
 import {
   empresaRepo,
@@ -204,6 +206,10 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
   'aplicativo.alteracoesPendentes': (ativo) => {
     alteracoesPendentes = Boolean(ativo)
   },
+  'aplicativo.definirTema': (modo) => {
+    if (!(PREFERENCIAS_TEMA as readonly unknown[]).includes(modo)) throw new Error('Tema inválido.')
+    nativeTheme.themeSource = modoNativoTema(modo as PreferenciaTema)
+  },
   'empresa.get': () => empresaRepo.get(),
   'empresa.save': (patch) => empresaRepo.save(patch as never),
 
@@ -288,29 +294,34 @@ export function registrarIpc(): void {
     })
   }
   for (const [canal, fn] of Object.entries(handlers)) {
-    ipcMain.handle(canal, async (_evento, ...args) => {
+    ipcMain.handle(canal, async (evento, ...args) => {
       let finalizar: (() => void) | undefined
+      const inicio = performance.now()
       try {
+        if (!urlDoAplicativo(evento.senderFrame?.url ?? '', process.env['ELECTRON_RENDERER_URL']))
+          throw new Error('Origem não autorizada para esta operação.')
         exigirAcesso(canal, args)
         if (canal === 'nuvem.sair') return await contaApi.sair()
         finalizar = iniciarOperacao()
         const dominio = canal.split('.')[0]
+        // As condições do canal vêm primeiro: statusNuvem() faz dezenas de consultas
+        // e só importa para os canais que gravam.
         if (
-          statusNuvem().atualizacaoBasePendente &&
           (exigeNumeracaoAtualizada(canal) ||
             /^(clientes|servicos|empresa|parametros|observacoes|pagamentos)\.(create|update|save|remove)$/.test(
               canal
             ) ||
             canal.startsWith('documentos.gerar') ||
             canal === 'rascunhos.aplicar' ||
-            canal === 'cadastros.reordenar')
+            canal === 'cadastros.reordenar') &&
+          statusNuvem().atualizacaoBasePendente
         )
           throw new Error(
             'A base da empresa foi reorganizada ou está em manutenção. Confira Nuvem / Sincronização antes de gravar. Suas alterações locais foram preservadas.'
           )
         if (
-          (statusNuvem().atualizandoNumeracao || statusNuvem().atualizacaoPendente) &&
-          exigeNumeracaoAtualizada(canal)
+          exigeNumeracaoAtualizada(canal) &&
+          (statusNuvem().atualizandoNumeracao || statusNuvem().atualizacaoPendente)
         )
           throw new Error(
             'Aguarde a atualização da numeração da base antes de salvar. Suas alterações no formulário continuam preservadas.'
@@ -387,6 +398,8 @@ export function registrarIpc(): void {
         throw new Error(mensagemErro(erro), { cause: erro })
       } finally {
         finalizar?.()
+        const ms = performance.now() - inicio
+        if (ms > 500) console.warn(`[desempenho] ${canal} levou ${Math.round(ms)} ms`)
       }
     })
   }

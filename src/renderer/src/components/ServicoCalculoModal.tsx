@@ -296,7 +296,7 @@ export function ServicoCalculoModal({
         {/* Coluna de resumo */}
         <div className="xl:sticky xl:top-4 xl:self-start">
           <Card className="overflow-hidden">
-            <div className="border-b border-slate-200 bg-white px-4 py-3">
+            <div className="border-b border-slate-200 bg-surface px-4 py-3">
               <h4 className="text-sm font-semibold text-slate-700">Resumo do cálculo</h4>
             </div>
             <div className="max-h-[40vh] space-y-1.5 overflow-y-auto px-4 py-3">
@@ -331,7 +331,7 @@ export function ServicoCalculoModal({
                 )
               })}
             </div>
-            <div className="space-y-1.5 border-t border-slate-200 bg-white px-4 py-3 text-sm">
+            <div className="space-y-1.5 border-t border-slate-200 bg-surface px-4 py-3 text-sm">
               <Linha
                 label="Custo do serviço"
                 valor={resultado.custoServico ?? resultado.custoTotal}

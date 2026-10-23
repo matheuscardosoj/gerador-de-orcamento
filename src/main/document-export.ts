@@ -24,6 +24,7 @@ import {
 import { numeroNuvem, registrarNumeroEmitido } from './numeros'
 import { imagemDataUrl } from './imagens'
 import { run, tx } from './db/sqlite'
+import { comPrazo } from './prazo'
 import type { Documento, Orcamento, Relatorio, Recibo, TipoDocumento } from '@shared/types'
 import type { DocumentoResultado } from '@shared/api'
 function preparar(tipo: TipoDocumento, id: string): Documento {
@@ -147,19 +148,26 @@ async function exportar(
   if (formato === 'pdf' || recibo) {
     const tmp = join(app.getPath('temp'), `gdo-${randomUUID()}.html`)
     const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true } })
+    // A janela só renderiza o HTML gerado: não navega nem abre outras janelas.
+    win.webContents.on('will-navigate', (evento) => evento.preventDefault())
+    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     try {
       await writeFile(tmp, html, 'utf8')
-      await win.loadFile(tmp)
-      await win.webContents.executeJavaScript('document.fonts.ready')
-      await win.webContents.executeJavaScript(`(${paginarDocumento.toString()})(document)`)
+      await comPrazo(win.loadFile(tmp))
+      await comPrazo(win.webContents.executeJavaScript('document.fonts.ready'))
+      await comPrazo(
+        win.webContents.executeJavaScript(`(${paginarDocumento.toString()})(document)`)
+      )
       if (formato === 'pdf')
-        buffer = await win.webContents.printToPDF({
-          printBackground: true,
-          preferCSSPageSize: true
-        })
+        buffer = await comPrazo(
+          win.webContents.printToPDF({
+            printBackground: true,
+            preferCSSPageSize: true
+          })
+        )
       else {
-        const paginacao = await win.webContents.executeJavaScript(
-          `(${lerPaginacaoRecibo.toString()})(document)`
+        const paginacao = await comPrazo(
+          win.webContents.executeJavaScript(`(${lerPaginacaoRecibo.toString()})(document)`)
         )
         buffer = await Packer.toBuffer(montarReciboDocx(d as Recibo, empresa, paginacao))
       }

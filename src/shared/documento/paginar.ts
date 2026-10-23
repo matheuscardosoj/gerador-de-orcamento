@@ -197,6 +197,118 @@ export function paginarDocumento(doc: Document): void {
       return miolo
     }
 
+    // Blocos mais altos que uma folha inteira (texto longo, lista com muitos
+    // itens) não têm onde caber inteiros: são divididos como as tabelas.
+    const TAGS_INLINE = [
+      'BR',
+      'STRONG',
+      'B',
+      'EM',
+      'I',
+      'SPAN',
+      'A',
+      'MARK',
+      'U',
+      'SMALL',
+      'SUB',
+      'SUP'
+    ]
+
+    function listaDoBloco(el: HTMLElement): HTMLElement | null {
+      if (el.tagName === 'UL' || el.tagName === 'OL') return el
+      return el.querySelector<HTMLElement>(':scope > ul, :scope > ol')
+    }
+
+    function somenteInline(el: HTMLElement): boolean {
+      return Array.from(el.childNodes).every(
+        (n) =>
+          n.nodeType === 3 || (n.nodeType === 1 && TAGS_INLINE.includes((n as Element).tagName))
+      )
+    }
+
+    function podeDividir(el: HTMLElement): boolean {
+      const lista = listaDoBloco(el)
+      return lista ? lista.children.length > 0 : somenteInline(el)
+    }
+
+    /**
+     * Divide um bloco alto em partes que cabem nas folhas: por item quando há
+     * lista, ou por palavras quando é texto corrido (mantendo `<br>` e destaques).
+     * Se nem o primeiro pedaço couber numa folha vazia, ele entra mesmo assim
+     * (comportamento anterior: transborda em vez de perder conteúdo).
+     */
+    function dividirBloco(
+      unidade: HTMLElement,
+      mioloAtual: HTMLElement,
+      usadoAtual: number,
+      tipo: 'proposta' | 'anexos'
+    ): { miolo: HTMLElement; usadoPx: number } {
+      let miolo = mioloAtual
+      let usadoPx = usadoAtual
+      const lista = listaDoBloco(unidade)
+      const tokens: Node[] = lista
+        ? Array.from(lista.children)
+        : Array.from(unidade.childNodes).flatMap((n) =>
+            n.nodeType === 3
+              ? ((n.textContent ?? '').match(/\s*\S+\s*|\s+/g)?.map((p) => doc.createTextNode(p)) ??
+                [])
+              : [n]
+          )
+      const montar = (primeira: boolean): { parte: HTMLElement; alvo: HTMLElement } => {
+        if (primeira) {
+          const parte = unidade.cloneNode(true) as HTMLElement
+          const alvo = !lista
+            ? parte
+            : lista === unidade
+              ? parte
+              : parte.querySelector<HTMLElement>(':scope > ul, :scope > ol')!
+          alvo.replaceChildren()
+          return { parte, alvo }
+        }
+        const parte = unidade.cloneNode(false) as HTMLElement
+        if (!lista || lista === unidade) return { parte, alvo: parte }
+        const alvo = lista.cloneNode(false) as HTMLElement
+        parte.appendChild(alvo)
+        return { parte, alvo }
+      }
+      let inicio = 0
+      let primeira = true
+      while (inicio < tokens.length) {
+        const { parte, alvo } = montar(primeira)
+        miolo.appendChild(parte)
+        const colocar = (fim: number): number => {
+          alvo.replaceChildren(...tokens.slice(inicio, fim).map((t) => t.cloneNode(true)))
+          return alturaComMargens(parte)
+        }
+        const disponivel = alturaPaginaPx - usadoPx
+        let lo = inicio
+        let hi = tokens.length
+        while (lo < hi) {
+          const meio = Math.ceil((lo + hi) / 2)
+          if (colocar(meio) <= disponivel) lo = meio
+          else hi = meio - 1
+        }
+        if (lo === inicio) {
+          if (usadoPx > 0) {
+            parte.remove()
+            miolo = criarPagina(tipo)
+            usadoPx = 0
+            continue
+          }
+          lo = inicio + 1
+        }
+        usadoPx += colocar(lo)
+        inicio = lo
+        primeira = false
+        if (inicio < tokens.length) {
+          miolo = criarPagina(tipo)
+          usadoPx = 0
+        }
+      }
+      unidade.remove()
+      return { miolo, usadoPx }
+    }
+
     /** Acumula unidades numa página; abre uma nova sempre que a próxima não coube. */
     function distribuir(
       unidades: HTMLElement[],
@@ -243,6 +355,10 @@ export function paginarDocumento(doc: Document): void {
           continue
         }
         const h = alturas[i]
+        if (h > alturaPaginaPx && podeDividir(unidade)) {
+          ;({ miolo, usadoPx } = dividirBloco(unidade, miolo, usadoPx, tipo))
+          continue
+        }
         // Só abre página nova se já houver algo na atual — uma unidade maior
         // que a página inteira não pode gerar uma página vazia antes dela.
         if (usadoPx > 0 && usadoPx + h > alturaPaginaPx) {

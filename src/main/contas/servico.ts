@@ -65,6 +65,13 @@ function emitir(): EstadoConta {
   avisarDados({ origem: 'nuvem', entidades: [], status: true })
   return structuredClone(estado)
 }
+function lerConfiguracaoServico(caminho: string): ConfigNuvem {
+  try {
+    return JSON.parse(readFileSync(caminho, 'utf8'))
+  } catch {
+    throw new Error('A configuração do serviço não é válida. Solicite o instalador atualizado.')
+  }
+}
 function servico(): ConfigNuvem | null {
   const caminho = join(process.resourcesPath, 'servico.json')
   const url = process.env.GERADOR_SERVICO_URL
@@ -73,7 +80,7 @@ function servico(): ConfigNuvem | null {
     url && chavePublica
       ? { url, chavePublica, email: '' }
       : existsSync(caminho)
-        ? JSON.parse(readFileSync(caminho, 'utf8'))
+        ? lerConfiguracaoServico(caminho)
         : null
   if (
     dados &&

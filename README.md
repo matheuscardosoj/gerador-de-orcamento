@@ -87,17 +87,30 @@ própria máquina (a URL é restrita a loopback) ou
 desativar a sugestão. Sem os arquivos (ex.: `npm run dev` sem ter rodado `npm run ia`),
 o app tenta o Ollama automaticamente.
 
+O botão “Revisar com IA” (descrições, introdução, observações, pagamentos e recibos) não
+aplica a resposta do modelo às cegas. A sugestão passa por uma camada determinística
+(`src/shared/revisao-ia-texto.ts`) que remove rótulos e instruções repetidos, corrige
+espaços, acentos de palavras comuns, maiúsculas e ponto final e **recusa** respostas que
+trocam a contratante/cliente/empresa, mudam a forma de pagamento, trocam ou inventam
+palavras do texto, alteram números ou vêm em maiúsculas. Se o modelo não melhora nada, há uma
+segunda tentativa e, se ainda assim não há o que mudar, a tela mostra “Nenhuma alteração
+sugerida”. Em comparação com Qwen3 1,7B, Qwen3.5 2B, Gemma 3 1B, Qwen2.5 3B e modelos em
+português (Amadeus-Verbo, Tucano2), o Qwen2.5 1,5B com essa camada deu o melhor equilíbrio de
+fidelidade, tamanho do instalador (limite de ~2 GB do NSIS) e memória.
+
 ## Status
 
-**Candidato 1.5.0-rc.16 em validação**, SQLite esquema 13 e protocolo central de nuvem 4.
-O aplicativo usa somente Nº do documento e mantém chaves técnicas ocultas. Inclui
-usuários vinculados, Broadcast privado, controle de edição, rascunhos offline e
-preservação de operações pendentes em backups. Código e testes isolados não
-comprovam, por si, a adoção correta de uma atualização em todos os computadores.
+**Versão 1.6.0**, SQLite esquema 14 e protocolo central de nuvem 4. O aplicativo usa
+somente Nº do documento e mantém chaves técnicas ocultas. Inclui usuários vinculados,
+Broadcast privado (WebSocket do Supabase Realtime, com sincronização de segurança a cada
+30 s), controle de edição, rascunhos offline, preservação de operações pendentes em
+backups, **tema escuro** (Configurações → Minha conta → Aparência) e a revisão de textos
+com IA descrita acima. Código e testes isolados não comprovam, por si, a adoção correta de
+uma atualização em todos os computadores: atualize todos os PCs para a mesma versão.
 
-**Em validação:** acesso central para múltiplas empresas. A migração central e a
-função de convites já foram publicadas no projeto existente; os fluxos de convite,
-isolamento e recuperação ainda precisam de validação no executável e nos dois PCs.
+A migração `supabase/migrations/013_realtime_sem_renovacao.sql` reduz o tráfego com
+documentos em edição e é recomendada (veja `supabase/CONFIGURACAO.md`); o app funciona sem
+ela, apenas com mais requisições.
 A chave de `codigos_cadastros` no projeto remoto observado foi corrigida pela
 [migração 006](supabase/migrations/006_corrigir_fk_codigos_cadastros.sql) após o
 [ensaio de recuperação](docs/VALIDACAO-MIGRACAO-006.md). A validação da versão

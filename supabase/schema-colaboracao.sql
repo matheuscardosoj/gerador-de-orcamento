@@ -1181,6 +1181,10 @@ CREATE OR REPLACE FUNCTION sincronizacao.avisar_realtime() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
 DECLARE aviso jsonb:=jsonb_build_object('alterado',true);
 BEGIN
+ IF TG_TABLE_NAME='edicoes_documento' AND TG_OP='UPDATE'
+    AND to_jsonb(NEW)-'expira_em' = to_jsonb(OLD)-'expira_em' THEN
+  RETURN NEW;
+ END IF;
  IF TG_TABLE_NAME='auditoria_colaboracao' THEN
   IF NEW.acao='numeracao' THEN aviso:=aviso||jsonb_build_object('entidade',NEW.entidade); END IF;
  END IF;

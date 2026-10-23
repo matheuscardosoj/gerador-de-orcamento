@@ -93,3 +93,88 @@ it('encerra geração após 120 segundos', async () => {
   await vi.advanceTimersByTimeAsync(120000)
   await verificar
 })
+
+/** Simula o Ollama devolvendo, em ordem, as respostas dadas (a última se repete). */
+function ollamaResponde(...respostas: string[]): ReturnType<typeof vi.fn> {
+  let i = 0
+  const fetch = vi.fn(async () => ({
+    ok: true,
+    json: async () => ({ message: { content: respostas[Math.min(i++, respostas.length - 1)] } })
+  }))
+  vi.stubGlobal('fetch', fetch)
+  return fetch
+}
+const temperaturas = (fetch: ReturnType<typeof vi.fn>): number[] =>
+  fetch.mock.calls.map(
+    (c) => JSON.parse((c as unknown as [string, { body: string }])[1].body).options.temperature
+  )
+
+it('remove o rótulo que o modelo cola na resposta e corrige o texto', async () => {
+  repos.configIARepo.save({ modo: 'ollama', urlOllama: 'http://127.0.0.1:11434' })
+  ollamaResponde('Descr. Recibo: servico de rocada terreno')
+  expect(
+    await ia.revisarTexto({
+      id: 'r1',
+      campo: 'descricaoRecibo',
+      texto: 'ref. servico de rocada terreno'
+    })
+  ).toBe('Serviço de roçada terreno.')
+})
+
+it('não deixa o modelo trocar a contratante pela empresa', async () => {
+  repos.configIARepo.save({ modo: 'ollama', urlOllama: 'http://127.0.0.1:11434' })
+  ollamaResponde('materiais por conta da empresa')
+  expect(
+    await ia.revisarTexto({
+      id: 'r2',
+      campo: 'observacao',
+      texto: 'materiais por conta da contratante'
+    })
+  ).toBe('Materiais por conta da contratante.')
+})
+
+it('com o texto já correto e uma troca de papéis, pede nova tentativa em vez de aplicar', async () => {
+  repos.configIARepo.save({ modo: 'ollama', urlOllama: 'http://127.0.0.1:11434' })
+  ollamaResponde('Materiais por conta da empresa.')
+  await expect(
+    ia.revisarTexto({
+      id: 'r3',
+      campo: 'observacao',
+      texto: 'Materiais por conta da contratante.'
+    })
+  ).rejects.toThrow('trocou quem é a contratante')
+})
+
+it('se o modelo devolve o mesmo texto, tenta de novo com mais variação e usa a melhor resposta', async () => {
+  repos.configIARepo.save({ modo: 'ollama', urlOllama: 'http://127.0.0.1:11434' })
+  const original = 'Conforme conversamos, segue o orçamento para o serviço de cerca.'
+  const fetch = ollamaResponde(
+    original,
+    'Conforme conversado, segue o orçamento para o serviço de cerca.'
+  )
+  expect(await ia.revisarTexto({ id: 'r4', campo: 'introducao', texto: original })).toBe(
+    'Conforme conversado, segue o orçamento para o serviço de cerca.'
+  )
+  expect(temperaturas(fetch)).toEqual([0.2, 0.7])
+})
+
+it('texto correto e resposta igual nas duas tentativas devolve o original, sem erro', async () => {
+  repos.configIARepo.save({ modo: 'ollama', urlOllama: 'http://127.0.0.1:11434' })
+  const original = 'Pagamento à vista, via Pix.'
+  const fetch = ollamaResponde(original)
+  expect(await ia.revisarTexto({ id: 'r5', campo: 'pagamento', texto: original })).toBe(original)
+  expect(fetch).toHaveBeenCalledTimes(2)
+})
+
+it('quando a primeira resposta já melhora o texto, não faz segunda chamada', async () => {
+  repos.configIARepo.save({ modo: 'ollama', urlOllama: 'http://127.0.0.1:11434' })
+  const fetch = ollamaResponde('Poda de 3 árvores de grande porte, com remoção dos resíduos.')
+  expect(
+    await ia.revisarTexto({
+      id: 'r6',
+      campo: 'descricaoServico',
+      texto: 'poda de 3 arvores de grande porte'
+    })
+  ).toBe('Poda de 3 árvores de grande porte, com remoção dos resíduos.')
+  expect(fetch).toHaveBeenCalledTimes(1)
+})

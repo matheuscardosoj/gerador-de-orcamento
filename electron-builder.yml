@@ -36,6 +36,11 @@ extraResources:
       - 010_operador_protegido_e_excluir_empresa.sql
       - 011_sessao_edicao_e_isolamento.sql
       - 012_geracao_manutencao_empresa.sql
+      - 013_realtime_sem_renovacao.sql
+  - from: supabase/rollbacks
+    to: supabase/rollbacks
+    filter:
+      - 013_desfazer_realtime_sem_renovacao.sql
   # Runtime de IA (llama-server.exe + modelo GGUF), baixado por `npm run ia`.
   - from: resources/ia
     to: ia

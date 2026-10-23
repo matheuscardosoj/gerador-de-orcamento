@@ -73,6 +73,23 @@ export function lerMeta(tipo: TipoDocumento, id: string): DocumentoMetadados {
     }
   return meta
 }
+/**
+ * Verificação barata de que o documento já tem versão registrada, sem montar o
+ * documento completo (anexos e imagens). Só responde `true` quando `get()` do
+ * repositório também traria `versao` preenchida; na dúvida responde `false`.
+ */
+export function documentoJaVersionado(tipo: TipoDocumento, id: string): boolean {
+  const l = get('SELECT dados FROM documento_meta WHERE tipo=? AND documento_id=?', [tipo, id])
+  const meta = l ? (JSON.parse(texto(l.dados)) as { versao?: number }) : {}
+  if (Object.hasOwn(meta, 'versao')) return Boolean(meta.versao)
+  if (tipo === 'recibo') return false
+  return Boolean(
+    Number(
+      get('SELECT MAX(numero) AS v FROM versoes WHERE tipo=? AND documento_id=?', [tipo, id])?.v ??
+        0
+    )
+  )
+}
 export function exigirResponsavel(tipo: TipoDocumento, id: string): void {
   const contextoLinha = get("SELECT valor FROM configuracoes WHERE chave='contextoNuvem'")
   const contexto = contextoLinha ? JSON.parse(texto(contextoLinha.valor)) : null

@@ -1,4 +1,5 @@
 // Valor monetário por extenso em português (reais e centavos).
+import { round2 } from './format'
 
 const unidades = [
   '',
@@ -75,8 +76,8 @@ function inteiroPorExtenso(n: number): string {
     grupos.push(resto % 1000)
     resto = Math.floor(resto / 1000)
   }
-  const escalasSing = ['', 'mil', 'milhão', 'bilhão', 'trilhão']
-  const escalasPlur = ['', 'mil', 'milhões', 'bilhões', 'trilhões']
+  const escalasSing = ['', 'mil', 'milhão', 'bilhão', 'trilhão', 'quatrilhão']
+  const escalasPlur = ['', 'mil', 'milhões', 'bilhões', 'trilhões', 'quatrilhões']
   const partes: string[] = []
   for (let i = grupos.length - 1; i >= 0; i--) {
     const g = grupos[i]
@@ -90,20 +91,22 @@ function inteiroPorExtenso(n: number): string {
   if (partes.length === 1) return partes[0]
   const ultimo = partes[partes.length - 1]
   const inicio = partes.slice(0, -1).join(', ')
-  // "e" antes do último se for < 100 ou múltiplo de 100
-  const ultimoGrupo = grupos[0]
+  // "e" antes do último grupo não nulo se ele for < 100 ou múltiplo de 100
+  const ultimoGrupo = grupos.find((g) => g > 0) ?? 0
   const usaE = ultimoGrupo > 0 && (ultimoGrupo < 100 || ultimoGrupo % 100 === 0)
   return usaE ? `${inicio} e ${ultimo}` : `${inicio}, ${ultimo}`
 }
 
 /** Valor em reais por extenso: 1234.5 -> "mil, duzentos e trinta e quatro reais e cinquenta centavos". */
 export function valorPorExtenso(valor: number): string {
-  const v = Math.max(0, Math.round(valor * 100) / 100)
-  const reais = Math.floor(v)
-  const centavos = Math.round((v - reais) * 100)
+  const total = Math.round(Math.max(0, round2(valor)) * 100)
+  const reais = Math.floor(total / 100)
+  const centavos = total % 100
 
-  const parteReais =
-    reais === 0 ? '' : `${inteiroPorExtenso(reais)} ${reais === 1 ? 'real' : 'reais'}`
+  // Milhões, bilhões... exatos pedem "de reais" ("um milhão de reais").
+  const palavraReais =
+    reais === 1 ? 'real' : reais >= 1000000 && reais % 1000000 === 0 ? 'de reais' : 'reais'
+  const parteReais = reais === 0 ? '' : `${inteiroPorExtenso(reais)} ${palavraReais}`
   const parteCent =
     centavos === 0
       ? ''

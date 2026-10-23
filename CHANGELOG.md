@@ -2,6 +2,37 @@
 
 Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
+## 1.6.0 — tema escuro, revisão de textos com IA mais segura e menos tráfego
+
+- Tema escuro (preto e cinza neutros) com três opções em Configurações → Minha conta →
+  Aparência: Claro, Escuro e Automático (segue o Windows). Um botão na barra lateral alterna
+  entre claro e escuro. A escolha fica salva neste computador e volta ao abrir o aplicativo;
+  quem não escolher continua com o tema claro. PDF, Word e a prévia dos documentos mantêm o
+  fundo branco. As cores dos dois temas vêm de `tailwind.tema.mjs`, com testes de contraste
+  WCAG AA para o tema escuro.
+- Desempenho: salvar não relê mais todos os cadastros e imagens; a abertura do app faz uma
+  verificação de integridade em vez de três e não monta cada documento só para conferir a
+  versão; o servidor deixa de avisar todos os computadores a cada renovação de prazo da
+  sessão de edição (migração `013_realtime_sem_renovacao.sql`, já aplicada ao projeto em 23/10/2026; o script `supabase/rollbacks/013_desfazer_realtime_sem_renovacao.sql` a desfaz); controles de documentos excluídos deixam de ser renovados e a verificação de pedidos de edição não repete a cada resposta da nuvem.
+  Alterações reais continuam chegando em tempo real aos outros computadores.
+- Segurança: a janela principal usa sandbox e não navega para fora do aplicativo; o IPC só
+  aceita chamadas do próprio aplicativo; documentos gerados têm política de conteúdo
+  restritiva; imagens recebidas da nuvem ou de backups são validadas antes de gravar.
+- Correções: arredondamento de valores negativos e "-R$ 0,00"; valor por extenso de milhões;
+  total do orçamento calculado a partir dos itens; textos longos e listas passam a ser
+  divididos entre páginas no PDF.
+- Revisão de texto com IA: a resposta do modelo passa por uma camada determinística
+  (`src/shared/revisao-ia-texto.ts`) que remove rótulos e a instrução do prompt repetidos,
+  recusa trocar quem é a contratante, o cliente ou a empresa (e passar o texto para a primeira
+  pessoa), e corrige espaços, acentos de palavras comuns, maiúsculas e ponto final. Se o modelo
+  devolver o mesmo texto, há uma segunda tentativa com mais variação; se ainda não houver nada
+  a mudar, a tela avisa "Nenhuma alteração sugerida". O prompt descreve o campo em linguagem
+  natural (o nome interno vazava para a resposta).
+  A sugestão também é recusada quando troca ou apaga mais de um terço das palavras de conteúdo
+  do original ("roçada" virando "Remoção"), acrescenta informações novas ou altera a forma de
+  pagamento (dinheiro, Pix, cartão…).
+- CI no GitHub Actions (`npm run check`).
+
 ## 1.5.4 — conclusão da recuperação sem avisos reaparecendo
 
 - Revisão após auditoria: uma confirmação por recuperação, Retry-After sem prorrogação

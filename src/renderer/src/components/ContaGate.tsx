@@ -178,7 +178,7 @@ export function ContaGate({ children }: { children: ReactNode }): JSX.Element {
 }
 function TelaAcesso({ children }: { children: ReactNode }): JSX.Element {
   return (
-    <main className="flex min-h-full items-center justify-center overflow-y-auto bg-slate-100 px-6 py-10">
+    <main className="flex min-h-full items-center justify-center overflow-y-auto bg-app px-6 py-10">
       <Card className="w-full max-w-lg space-y-5 p-8">{children}</Card>
     </main>
   )

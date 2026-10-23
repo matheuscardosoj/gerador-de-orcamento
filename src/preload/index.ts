@@ -1,6 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { AppApi, CrudApi } from '@shared/api'
 
+type EventoDados = import('../shared/evolucao').EventoDados
+const ouvintesDados = new Set<(dados: EventoDados) => void>()
+let escutandoDados = false
+
 const invoke = (canal: string, ...args: unknown[]): Promise<unknown> =>
   ipcRenderer.invoke(canal, ...args)
 
@@ -69,11 +73,23 @@ const api: AppApi = {
   },
   eventos: {
     observarDados: (callback) => {
-      const listener = (_evento: unknown, dados: import('../shared/evolucao').EventoDados): void =>
-        callback(dados)
-      ipcRenderer.on('dados.alterados', listener)
+      // Um único listener do IPC atende todos os componentes: evita o aviso de
+      // vazamento do EventEmitter e isola falhas de um observador dos demais.
+      if (!escutandoDados) {
+        escutandoDados = true
+        ipcRenderer.on('dados.alterados', (_evento, dados: EventoDados) => {
+          for (const ouvinte of [...ouvintesDados]) {
+            try {
+              ouvinte(dados)
+            } catch (erro) {
+              console.error(erro)
+            }
+          }
+        })
+      }
+      ouvintesDados.add(callback)
       return () => {
-        ipcRenderer.removeListener('dados.alterados', listener)
+        ouvintesDados.delete(callback)
       }
     }
   },
@@ -118,7 +134,8 @@ const api: AppApi = {
   },
   aplicativo: {
     versao: () => invoke('aplicativo.versao') as never,
-    alteracoesPendentes: (ativo) => invoke('aplicativo.alteracoesPendentes', ativo) as never
+    alteracoesPendentes: (ativo) => invoke('aplicativo.alteracoesPendentes', ativo) as never,
+    definirTema: (modo) => invoke('aplicativo.definirTema', modo) as never
   },
   empresa: {
     get: () => invoke('empresa.get') as never,

@@ -1,4 +1,5 @@
 import { classificarFalhaNuvem } from '@shared/falha-nuvem'
+import { linhaImagemValida } from '@shared/imagem-segura'
 import { confirmarAplicacoesRascunhos, atualizarAplicacoesRascunhos } from './rascunhos-envio'
 import { safeStorage } from 'electron'
 import { hostname } from 'os'
@@ -154,7 +155,13 @@ export function configurarSessaoConta(
 function sessao(): Sessao | null {
   if (sessaoVolatil) return sessaoVolatil
   const s = config<string>('sessaoNuvem')
-  return s ? JSON.parse(safeStorage.decryptString(Buffer.from(s, 'base64'))) : null
+  if (!s) return null
+  try {
+    return JSON.parse(safeStorage.decryptString(Buffer.from(s, 'base64')))
+  } catch {
+    // Perfil aberto por outro usuário do Windows ou credencial corrompida: pede novo login.
+    return null
+  }
 }
 function gravarSessao(s: Sessao): void {
   sessaoVolatil = lembrarSessao ? null : s
@@ -948,9 +955,18 @@ function aplicar(e: Remoto): void {
     )
       throw new Error('Configuração não compartilhável.')
     if (p.row) {
-      upsert(p.tabela, p.row)
+      // Imagem malformada vinda da nuvem é ignorada (não grava nem trava a sincronização
+      // dos demais): o conteúdo vai parar em atributos `src` dos documentos.
+      if (p.tabela === 'imagens' && !linhaImagemValida(p.row))
+        console.warn(`[nuvem] imagem remota inválida ignorada: ${String(p.id).slice(0, 16)}`)
+      else upsert(p.tabela, p.row)
       if (p.tabela === 'clientes') {
-        const dados = JSON.parse(texto(p.row.dados_json) || '{}') as { codigo?: number }
+        let dados: { codigo?: number } = {}
+        try {
+          dados = JSON.parse(texto(p.row.dados_json) || '{}')
+        } catch {
+          // Dados do cliente malformados não impedem a sincronização dos demais registros.
+        }
         registrarCodigoRemoto('cliente', dados.codigo, p.id)
       } else if (p.tabela === 'servicos') registrarCodigoRemoto('servico', p.row.codigo, p.id)
     } else
@@ -1006,7 +1022,12 @@ function aplicar(e: Remoto): void {
         upsert(nome, row)
         if (nome === 'versoes') {
           // Uma exclusão pode chegar antes de o outro PC ter recebido o documento.
-          const numero = Number(JSON.parse(String(row.documento)).numero)
+          let numero = Number.NaN
+          try {
+            numero = Number(JSON.parse(String(row.documento)).numero)
+          } catch {
+            // Versão ilegível: o número fica sem reserva, mas o lote continua.
+          }
           if (protocoloNuvem() < 3 && Number.isSafeInteger(numero) && numero > 0)
             run(`INSERT OR IGNORE INTO ${tabelaNumerosUsados()} VALUES (?,?)`, [p.tipo, numero])
         }
@@ -1905,13 +1926,27 @@ export async function aplicarConflito(id: string): Promise<void> {
 }
 export function capturarCadastros(): void {
   if (!config<ConfigNuvem>('nuvem')) return
-  for (const t of tabelas)
-    for (const l of all(`SELECT * FROM ${t}`)) {
-      if (
-        t === 'configuracoes' &&
-        !['empresa', 'parametros', 'camposClientePadrao'].includes(texto(l.chave))
-      )
-        continue
+  const inicio = performance.now()
+  // Imagens são endereçadas por hash e nunca alteradas: as que já têm estado
+  // conhecido não precisam ser relidas (o base64 completo é pesado).
+  const imagensConhecidas = new Set(
+    all(`SELECT chave FROM configuracoes WHERE chave LIKE 'estado:imagens:%'`).map((l) =>
+      texto(l.chave)
+    )
+  )
+  for (const t of tabelas) {
+    const linhas =
+      t === 'configuracoes'
+        ? // Só estas chaves são sincronizadas; evita carregar os caches `estado:*`.
+          all(
+            `SELECT * FROM configuracoes WHERE chave IN ('empresa','parametros','camposClientePadrao')`
+          )
+        : t === 'imagens'
+          ? all(`SELECT hash FROM imagens`)
+              .filter((l) => !imagensConhecidas.has(`estado:imagens:${texto(l.hash)}`))
+              .map((l) => get(`SELECT * FROM imagens WHERE hash=?`, [texto(l.hash)]) ?? l)
+          : all(`SELECT * FROM ${t}`)
+    for (const l of linhas) {
       const id = texto(l.id ?? l.hash ?? l.chave)
       // Apenas captura quando o estado difere do último envio conhecido.
       const chave = `estado:${t}:${id}`
@@ -1936,6 +1971,9 @@ export function capturarCadastros(): void {
         salvar(chave, estado)
       }
     }
+  }
+  const ms = performance.now() - inicio
+  if (ms > 200) console.warn(`[desempenho] capturarCadastros levou ${Math.round(ms)} ms`)
 }
 export function verificarIntegridadeLocal(): void {
   if (texto(db().get('PRAGMA integrity_check')?.integrity_check) !== 'ok')

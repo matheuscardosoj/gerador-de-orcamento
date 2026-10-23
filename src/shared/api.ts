@@ -219,6 +219,8 @@ export interface AppApi {
   aplicativo: {
     versao(): Promise<string>
     alteracoesPendentes(ativo: boolean): Promise<void>
+    /** Alinha menus, diálogos e a moldura da janela ao tema escolhido. */
+    definirTema(modo: import('./tema').PreferenciaTema): Promise<void>
   }
   empresa: {
     get(): Promise<EmpresaConfig>

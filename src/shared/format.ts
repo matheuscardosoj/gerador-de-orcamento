@@ -1,8 +1,17 @@
 // Utilitários de formatação (pt-BR) compartilhados entre renderer, motor e documentos.
 
-/** Arredonda para 2 casas decimais evitando erros de ponto flutuante. */
+/**
+ * Arredonda para 2 casas decimais evitando erros de ponto flutuante. A metade
+ * arredonda para longe do zero (simétrico para negativos) e nunca devolve -0.
+ */
 export function round2(n: number): number {
-  return Math.round((n + Number.EPSILON) * 100) / 100
+  const r = (Math.sign(n) * Math.round((Math.abs(n) + Number.EPSILON) * 100)) / 100
+  return r === 0 ? 0 : r
+}
+
+/** Total do documento: soma dos valores dos itens, arredondada a centavos. */
+export function totalDosItens(itens: ReadonlyArray<{ valorTotal: number }>): number {
+  return round2(itens.reduce((soma, item) => soma + (item.valorTotal || 0), 0))
 }
 
 const moedaFmt = new Intl.NumberFormat('pt-BR', {

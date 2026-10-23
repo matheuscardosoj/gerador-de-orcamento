@@ -1,5 +1,6 @@
 import type { EmpresaConfig, Recibo } from '../types'
 import { modeloRecibo, PAPEL_RECIBO } from './recibo'
+import { META_CSP_DOCUMENTO } from './csp'
 
 const esc = (s: string): string =>
   String(s ?? '')
@@ -11,7 +12,7 @@ const esc = (s: string): string =>
 export function gerarHtmlRecibo(r: Recibo, empresa: EmpresaConfig): string {
   const m = modeloRecibo(r, empresa)
   const p = PAPEL_RECIBO
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(m.titulo)} ${esc(m.numero)}</title><style>
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">${META_CSP_DOCUMENTO}<title>${esc(m.titulo)} ${esc(m.numero)}</title><style>
     * { box-sizing: border-box; }
     body { margin: 0; visibility: hidden; color: #000; font: 10.5pt/1.35 Calibri, 'Segoe UI', Arial, sans-serif; }
     .recibo-pagina { width: ${p.largura}mm; height: ${p.altura}mm; padding: ${p.margemVertical}mm ${p.margemHorizontal}mm; background: white; }

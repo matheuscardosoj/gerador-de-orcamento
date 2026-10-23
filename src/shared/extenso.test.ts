@@ -23,7 +23,28 @@ describe('valorPorExtenso', () => {
     )
   })
 
-  it('milhão', () => {
-    expect(valorPorExtenso(1000000)).toBe('um milhão reais')
+  it('milhões exatos usam "de reais"', () => {
+    expect(valorPorExtenso(1000000)).toBe('um milhão de reais')
+    expect(valorPorExtenso(2000000)).toBe('dois milhões de reais')
+    expect(valorPorExtenso(1000000000)).toBe('um bilhão de reais')
+    expect(valorPorExtenso(1000000.5)).toBe('um milhão de reais e cinquenta centavos')
+  })
+
+  it('usa "e" antes do último grupo não nulo', () => {
+    expect(valorPorExtenso(1500000)).toBe('um milhão e quinhentos mil reais')
+    expect(valorPorExtenso(2500000)).toBe('dois milhões e quinhentos mil reais')
+    expect(valorPorExtenso(1000100)).toBe('um milhão e cem reais')
+    expect(valorPorExtenso(1234567)).toBe(
+      'um milhão, duzentos e trinta e quatro mil, quinhentos e sessenta e sete reais'
+    )
+  })
+
+  it('usa o mesmo arredondamento do valor exibido', () => {
+    expect(valorPorExtenso(1.005)).toBe('um real e um centavo')
+    expect(valorPorExtenso(-5)).toBe('zero reais')
+  })
+
+  it('suporta escalas acima de trilhões sem texto indefinido', () => {
+    expect(valorPorExtenso(1000000000000000)).toBe('um quatrilhão de reais')
   })
 })

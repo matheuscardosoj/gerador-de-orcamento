@@ -1,9 +1,18 @@
-# Nuvem da empresa — esquema local 13
+# Nuvem da empresa — esquema local 14
 
 > O acesso central por convite e perfis separados já está integrado. Para uma
 > empresa que já usa o Supabase, aplique apenas as migrações incrementais da
 > atualização; não execute novamente o esquema inicial nem restaure um backup
 > antigo sobre a base ativa.
+
+## Atualização 1.6.0: migração 013 (recomendada)
+
+Execute `migrations/013_realtime_sem_renovacao.sql` uma vez no SQL Editor. Ela faz o aviso em
+tempo real ignorar apenas a renovação automática do prazo da sessão de edição (a cada 30 s por
+documento), que antes acordava todos os computadores para uma sincronização completa. Trocas de
+posse, geração, modo offline e dados continuam avisando em tempo real. É idempotente e não altera
+dados. Para desfazer, execute `rollbacks/013_desfazer_realtime_sem_renovacao.sql` (restaura a função
+como estava antes). Sem a migração o aplicativo funciona, com mais requisições ao Supabase.
 
 O serviço central pode conter várias empresas. Cada pessoa usa seu próprio login, vinculado às empresas autorizadas. Preferências dos históricos e configuração da IA permanecem locais.
 
@@ -15,7 +24,7 @@ O serviço central pode conter várias empresas. Cada pessoa usa seu próprio lo
 2. Guarde uma exportação remota verificada. O ensaio `scripts/verificar-migracao-colaboracao.mjs` compara essa cópia em PostgreSQL isolado, incluindo documentos, valores, imagens, versões e reservas.
 3. Para uma instalação sem códigos, execute `migrations/004_codigos_cadastros.sql`. Para uma instalação que já executou a versão antiga de 004, execute `migrations/006_corrigir_fk_codigos_cadastros.sql` após verificar o dump remoto. A 006 troca apenas a chave estrangeira de códigos para `empresas(id)` e aborta diante de empresas órfãs; é idempotente. Não execute novamente o esquema inicial.
 4. Na passagem de um protocolo anterior para o protocolo 3, a migração autorizada organiza a numeração dos documentos atuais de 1 em diante por tipo, registrando mapa e novas versões. Preserva chaves técnicas, pagamentos, imagens e versões antigas com os números anteriores. A conta atual torna-se o primeiro membro. Reexecutar o script não repete a renumeração.
-5. Atualize **todos os computadores para a mesma versão** antes de editar. O SQLite local migra automaticamente para o esquema 13, com backup verificado anterior à mudança.
+5. Atualize **todos os computadores para a mesma versão** antes de editar. O SQLite local migra automaticamente para o esquema 14, com backup verificado anterior à mudança.
 6. Abra a versão atualizada com o mesmo usuário do Windows. A base e a sessão existentes continuam na pasta de dados. Confira **0 alterações aguardando envio**, ausência de conflitos e **Tempo real conectado**. Confira documentos e números nos históricos. Se houver operações antigas preservadas, revise a atualização antes de adotar a base; não serão enviadas automaticamente.
 
 Um erro no SQL deve reverter a transação. Não execute novamente o esquema antigo após concluir a migração. Restauração local e restauração da nuvem são operações distintas: preserve os backups e investigue o erro antes de publicar dados.

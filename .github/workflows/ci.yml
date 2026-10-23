@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main, claude]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    # O aplicativo é só para Windows; os testes e o build rodam no mesmo sistema.
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      # lint, formatação, typecheck, testes e build (mesmo comando usado localmente).
+      - name: Verificar
+        run: npm run check
+
+      # `pretest` e `prebuild` regeneram o SQL da nuvem. Se isso alterar arquivos
+      # versionados, o esquema commitado ficou desatualizado em relação ao código.
+      - name: Conferir que o SQL gerado está em dia
+        shell: bash
+        run: git diff --exit-code -- supabase

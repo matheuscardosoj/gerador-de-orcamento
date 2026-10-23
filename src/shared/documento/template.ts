@@ -4,6 +4,8 @@ import { linhasCliente } from '../clientes'
 import type { AnexoOrcamento, AnexoRelatorio, EmpresaConfig, Orcamento, Relatorio } from '../types'
 import { formatMoeda } from '../format'
 import { valorPorExtenso } from '../extenso'
+import { PADRAO_DATA_URL_IMAGEM } from '../imagem-segura'
+import { META_CSP_DOCUMENTO } from './csp'
 import { destinatarioNoDocumento, LIMITE_ANEXO_MM, localEData } from './comum'
 
 function esc(s: string): string {
@@ -12,6 +14,15 @@ function esc(s: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
+}
+
+/**
+ * Valor seguro para `src` de imagem: só data URL de imagem com base64 válido.
+ * Qualquer outra coisa (inclusive aspas ou `>` vindos de dados sincronizados)
+ * é descartada em vez de entrar no atributo.
+ */
+function srcSeguro(src: string | null | undefined): string {
+  return src && PADRAO_DATA_URL_IMAGEM.test(src) ? src : ''
 }
 
 function nl2br(s: string): string {
@@ -92,7 +103,8 @@ interface FiguraAnexo {
 }
 
 /** Estrutura única de figura, compartilhada por orçamento e relatório. */
-function figuraAnexo({ titulo, referencia, imagem, descricao }: FiguraAnexo): string {
+function figuraAnexo({ titulo, referencia, imagem: imagemBruta, descricao }: FiguraAnexo): string {
+  const imagem = srcSeguro(imagemBruta)
   return `<figure class="anexo">
     ${titulo ? `<p class="anexo-titulo">${esc(titulo)}</p>` : ''}
     ${referencia ? `<p class="anexo-ref">${esc(referencia)}</p>` : ''}
@@ -134,8 +146,9 @@ const ALTURA_UTIL_MM = 297 - 15 * 2
 export function gerarHtmlOrcamento(orc: Orcamento, empresa: EmpresaConfig): string {
   empresa = orc.empresaSnapshot ?? empresa
   const total = orc.itensServico.reduce((s, i) => s + (i.valorTotal || 0), 0)
-  const logo = empresa.logoDataUrl
-    ? `<img class="logo" src="${empresa.logoDataUrl}" alt="logo">`
+  const logoSrc = srcSeguro(empresa.logoDataUrl)
+  const logo = logoSrc
+    ? `<img class="logo" src="${logoSrc}" alt="logo">`
     : `<div class="logo logo-vazia">${esc(empresa.nome.slice(0, 2).toUpperCase())}</div>`
 
   const servicosHtml = orc.formato === 'tabela' ? servicosTabela(orc) : servicosCarta(orc)
@@ -272,7 +285,7 @@ export function gerarHtmlOrcamento(orc: Orcamento, empresa: EmpresaConfig): stri
   // A paginação em folhas A4 (motor único em `paginar.ts`) é sempre feita por
   // quem consome este HTML — a prévia chama `paginarDocumento` sobre o
   // `contentDocument` do iframe; o PDF injeta a mesma função na janela oculta.
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Proposta ${esc(
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">${META_CSP_DOCUMENTO}<title>Proposta ${esc(
     String(orc.numero)
   )}</title><style>${estilo}</style></head><body><div class="pagina">${corpo}</div></body></html>`
 }
@@ -350,8 +363,14 @@ export function gerarHtmlRelatorio(rel: Relatorio, empresa: EmpresaConfig): stri
     apendiceRelatorio(rel, 'Comprovantes de adiantamentos', adiantamentos),
     apendiceRelatorio(rel, 'Comprovantes de reembolsos', reembolsos)
   ].join('')
-  return gerarHtmlOrcamento(orcBase, empresa)
-    .replace(/<!--RESUMO_INICIO-->[\s\S]*?<!--RESUMO_FIM-->/, resumo)
-    .replace('<!--APENDICES-->', `${apendices}<!--APENDICES-->`)
-    .replace(`<title>Proposta ${rel.numero}</title>`, `<title>Relatório ${rel.numero}</title>`)
+  return (
+    gerarHtmlOrcamento(orcBase, empresa)
+      // Funções evitam que `$&`, `$$` etc. em textos do usuário sejam interpretados como padrões.
+      .replace(/<!--RESUMO_INICIO-->[\s\S]*?<!--RESUMO_FIM-->/, () => resumo)
+      .replace('<!--APENDICES-->', () => `${apendices}<!--APENDICES-->`)
+      .replace(
+        `<title>Proposta ${rel.numero}</title>`,
+        () => `<title>Relatório ${rel.numero}</title>`
+      )
+  )
 }
