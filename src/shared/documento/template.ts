@@ -14,6 +14,17 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
+const IMAGEM_SEGURA = /^data:image\/(?:png|jpe?g|gif|bmp|webp);base64,[A-Za-z0-9+/=]+$/i
+
+/**
+ * Valor seguro para `src` de imagem: só data URL de imagem com base64 válido.
+ * Qualquer outra coisa (inclusive aspas ou `>` vindos de dados sincronizados)
+ * é descartada em vez de entrar no atributo.
+ */
+function srcSeguro(src: string | null | undefined): string {
+  return src && IMAGEM_SEGURA.test(src) ? src : ''
+}
+
 function nl2br(s: string): string {
   return esc(s).replace(/\n/g, '<br>')
 }
@@ -92,7 +103,8 @@ interface FiguraAnexo {
 }
 
 /** Estrutura única de figura, compartilhada por orçamento e relatório. */
-function figuraAnexo({ titulo, referencia, imagem, descricao }: FiguraAnexo): string {
+function figuraAnexo({ titulo, referencia, imagem: imagemBruta, descricao }: FiguraAnexo): string {
+  const imagem = srcSeguro(imagemBruta)
   return `<figure class="anexo">
     ${titulo ? `<p class="anexo-titulo">${esc(titulo)}</p>` : ''}
     ${referencia ? `<p class="anexo-ref">${esc(referencia)}</p>` : ''}
@@ -134,8 +146,9 @@ const ALTURA_UTIL_MM = 297 - 15 * 2
 export function gerarHtmlOrcamento(orc: Orcamento, empresa: EmpresaConfig): string {
   empresa = orc.empresaSnapshot ?? empresa
   const total = orc.itensServico.reduce((s, i) => s + (i.valorTotal || 0), 0)
-  const logo = empresa.logoDataUrl
-    ? `<img class="logo" src="${empresa.logoDataUrl}" alt="logo">`
+  const logoSrc = srcSeguro(empresa.logoDataUrl)
+  const logo = logoSrc
+    ? `<img class="logo" src="${logoSrc}" alt="logo">`
     : `<div class="logo logo-vazia">${esc(empresa.nome.slice(0, 2).toUpperCase())}</div>`
 
   const servicosHtml = orc.formato === 'tabela' ? servicosTabela(orc) : servicosCarta(orc)
@@ -350,8 +363,14 @@ export function gerarHtmlRelatorio(rel: Relatorio, empresa: EmpresaConfig): stri
     apendiceRelatorio(rel, 'Comprovantes de adiantamentos', adiantamentos),
     apendiceRelatorio(rel, 'Comprovantes de reembolsos', reembolsos)
   ].join('')
-  return gerarHtmlOrcamento(orcBase, empresa)
-    .replace(/<!--RESUMO_INICIO-->[\s\S]*?<!--RESUMO_FIM-->/, resumo)
-    .replace('<!--APENDICES-->', `${apendices}<!--APENDICES-->`)
-    .replace(`<title>Proposta ${rel.numero}</title>`, `<title>Relatório ${rel.numero}</title>`)
+  return (
+    gerarHtmlOrcamento(orcBase, empresa)
+      // Funções evitam que `$&`, `$$` etc. em textos do usuário sejam interpretados como padrões.
+      .replace(/<!--RESUMO_INICIO-->[\s\S]*?<!--RESUMO_FIM-->/, () => resumo)
+      .replace('<!--APENDICES-->', () => `${apendices}<!--APENDICES-->`)
+      .replace(
+        `<title>Proposta ${rel.numero}</title>`,
+        () => `<title>Relatório ${rel.numero}</title>`
+      )
+  )
 }
