@@ -296,22 +296,24 @@ export function registrarIpc(): void {
         if (canal === 'nuvem.sair') return await contaApi.sair()
         finalizar = iniciarOperacao()
         const dominio = canal.split('.')[0]
+        // As condições do canal vêm primeiro: statusNuvem() faz dezenas de consultas
+        // e só importa para os canais que gravam.
         if (
-          statusNuvem().atualizacaoBasePendente &&
           (exigeNumeracaoAtualizada(canal) ||
             /^(clientes|servicos|empresa|parametros|observacoes|pagamentos)\.(create|update|save|remove)$/.test(
               canal
             ) ||
             canal.startsWith('documentos.gerar') ||
             canal === 'rascunhos.aplicar' ||
-            canal === 'cadastros.reordenar')
+            canal === 'cadastros.reordenar') &&
+          statusNuvem().atualizacaoBasePendente
         )
           throw new Error(
             'A base da empresa foi reorganizada ou está em manutenção. Confira Nuvem / Sincronização antes de gravar. Suas alterações locais foram preservadas.'
           )
         if (
-          (statusNuvem().atualizandoNumeracao || statusNuvem().atualizacaoPendente) &&
-          exigeNumeracaoAtualizada(canal)
+          exigeNumeracaoAtualizada(canal) &&
+          (statusNuvem().atualizandoNumeracao || statusNuvem().atualizacaoPendente)
         )
           throw new Error(
             'Aguarde a atualização da numeração da base antes de salvar. Suas alterações no formulário continuam preservadas.'
