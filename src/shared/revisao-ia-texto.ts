@@ -207,11 +207,32 @@ const palavrasDeConteudo = (texto: string): string[] => [
   ...new Set((forma(texto).match(/[a-z]{4,}/g) ?? []).filter((p) => !PALAVRAS_DE_LIGACAO.has(p)))
 ]
 
-/** Raiz grosseira (5 letras): "árvore/árvores", "roçada/roçadas", "remoção/remoções". */
-const mesmaRaiz = (a: string, b: string): boolean => {
+/** Distância de edição (Levenshtein) entre duas palavras. */
+function distancia(a: string, b: string): number {
+  let anterior = Array.from({ length: b.length + 1 }, (_, j) => j)
+  for (let i = 1; i <= a.length; i++) {
+    const atual = [i]
+    for (let j = 1; j <= b.length; j++)
+      atual[j] = Math.min(
+        anterior[j] + 1,
+        atual[j - 1] + 1,
+        anterior[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+      )
+    anterior = atual
+  }
+  return anterior[b.length]
+}
+
+/**
+ * Mesma palavra, ainda que flexionada: raiz de 5 letras igual ("árvore/árvores",
+ * "remoção/remoções") ou grafia parecida ("cortar/corte", "pintura/pintar"). "roçada" e
+ * "rotação" não passam: a semelhança fica abaixo de 65%.
+ */
+const mesmaPalavra = (a: string, b: string): boolean => {
   const x = a.slice(0, 5)
   const y = b.slice(0, 5)
-  return x.startsWith(y) || y.startsWith(x)
+  if (x.startsWith(y) || y.startsWith(x)) return true
+  return 1 - distancia(a, b) / Math.max(a.length, b.length) >= 0.65
 }
 
 /**
@@ -224,10 +245,12 @@ export function trocaDeConteudo(original: string, sugestao: string): string | nu
   const antes = palavrasDeConteudo(original)
   const depois = palavrasDeConteudo(sugestao)
   if (!antes.length) return null
-  const perdidas = antes.filter((p) => !depois.some((q) => mesmaRaiz(p, q)))
-  const novas = depois.filter((q) => !antes.some((p) => mesmaRaiz(p, q)))
-  // Até um terço das palavras pode mudar (e 1 em textos de 2 palavras: "cortar" por "corte").
-  const permitidas = antes.length <= 1 ? 0 : Math.max(1, Math.floor(antes.length * 0.34))
+  const perdidas = antes.filter((p) => !depois.some((q) => mesmaPalavra(p, q)))
+  const novas = depois.filter((q) => !antes.some((p) => mesmaPalavra(p, q)))
+  // Textos de até 3 palavras de conteúdo não toleram troca ("roçada" por "rotação"); depois,
+  // até um terço (1 em textos de 4 e 5 palavras).
+  const n = antes.length
+  const permitidas = n <= 3 ? 0 : Math.max(1, Math.floor(n * 0.34))
   if (perdidas.length > permitidas)
     return 'A sugestão trocou ou removeu palavras importantes do texto original e foi recusada.'
   if (novas.length >= 3 && novas.length / depois.length > 0.5)

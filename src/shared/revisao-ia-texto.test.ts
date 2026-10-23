@@ -222,6 +222,21 @@ describe('trocaDeConteudo', () => {
     expect(trocaDeConteudo('pago em dinheiro no ato', 'Pago em dinheiro no ato.')).toBeNull()
   })
 
+  it('recusa trocar uma única palavra de conteúdo em textos curtos (caso real do Gemma 3 1B)', () => {
+    expect(
+      trocaDeConteudo('ref. serviço de roçada terreno', 'Ref. Serviço de Rotação do Terreno.')
+    ).toMatch(/trocou ou removeu/)
+    expect(
+      trocaDeConteudo('materiais por conta da contratante', 'Materiais a pagar à contratante')
+    ).toMatch(/trocou ou removeu/)
+  })
+
+  it('reconhece a mesma palavra em outra forma (verbo, substantivo, plural)', () => {
+    expect(trocaDeConteudo('Cortar 3 árvores', 'Corte de 3 árvores')).toBeNull()
+    expect(trocaDeConteudo('pintura do muro', 'Pintar o muro')).toBeNull()
+    expect(trocaDeConteudo('Executar o serviço', 'Execução do serviço')).toBeNull()
+  })
+
   it('aceita pequenas expansões que detalham o que já estava no texto', () => {
     expect(trocaDeConteudo('Poda de árvores', 'Poda de árvores de grande porte')).toBeNull()
   })
