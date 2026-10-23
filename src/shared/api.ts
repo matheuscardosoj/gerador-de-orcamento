@@ -221,6 +221,8 @@ export interface AppApi {
     alteracoesPendentes(ativo: boolean): Promise<void>
     /** Alinha menus, diálogos e a moldura da janela ao tema escolhido. */
     definirTema(modo: import('./tema').PreferenciaTema): Promise<void>
+    /** Grava um relatório para o suporte (sem senhas nem e-mails); null se o usuário cancelar. */
+    exportarDiagnostico(): Promise<string | null>
   }
   empresa: {
     get(): Promise<EmpresaConfig>

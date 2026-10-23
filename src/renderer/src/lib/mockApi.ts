@@ -402,7 +402,8 @@ export function criarMockApi(): AppApi {
     aplicativo: {
       versao: async () => 'prévia de desenvolvimento',
       alteracoesPendentes: async () => undefined,
-      definirTema: async () => undefined
+      definirTema: async () => undefined,
+      exportarDiagnostico: async () => null
     },
     empresa: {
       get: async () => clone(db.empresa),

@@ -8,6 +8,8 @@ import {
 } from './rascunhos-cadastros'
 import { exigeNumeracaoAtualizada } from './bloqueio-numeracao'
 import { urlDoAplicativo } from './origem-janela'
+import { exportarDiagnostico } from './diagnostico-exportar'
+import { registrarDiagnostico } from './diagnostico'
 import { contaApi } from './contas/servico'
 import { exigirAcesso, iniciarOperacao } from './contas/acesso'
 import { mensagemErro } from '../shared/erros'
@@ -206,6 +208,7 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
   'aplicativo.alteracoesPendentes': (ativo) => {
     alteracoesPendentes = Boolean(ativo)
   },
+  'aplicativo.exportarDiagnostico': () => exportarDiagnostico(),
   'aplicativo.definirTema': (modo) => {
     if (!(PREFERENCIAS_TEMA as readonly unknown[]).includes(modo)) throw new Error('Tema inválido.')
     nativeTheme.themeSource = modoNativoTema(modo as PreferenciaTema)
@@ -289,7 +292,9 @@ export function registrarIpc(): void {
           throw new Error('Aguarde o encerramento do acesso a esta empresa.')
         return await (fn as (...valores: unknown[]) => Promise<unknown>)(...args)
       } catch (erro) {
-        throw new Error(mensagemErro(erro))
+        const mensagem = mensagemErro(erro)
+        if (mensagem === mensagemErro('')) registrarDiagnostico(`ipc:conta.${acao}`, erro)
+        throw new Error(mensagem, { cause: erro })
       }
     })
   }
@@ -394,8 +399,11 @@ export function registrarIpc(): void {
         return await fn(...args)
       } catch (erro) {
         // Não serializar argumentos, sessão ou SQL para o renderer.
-        // A causa original permanece no processo principal para diagnóstico.
-        throw new Error(mensagemErro(erro), { cause: erro })
+        // A causa original permanece no processo principal e no registro local.
+        const mensagem = mensagemErro(erro)
+        // Só as falhas que viram a mensagem genérica precisam de registro: as demais já dizem a causa.
+        if (mensagem === mensagemErro('')) registrarDiagnostico(`ipc:${canal}`, erro)
+        throw new Error(mensagem, { cause: erro })
       } finally {
         finalizar?.()
         const ms = performance.now() - inicio
