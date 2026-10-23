@@ -350,6 +350,18 @@ function RecepcaoPedidosEdicao(): null {
         })
     }
     executar()
+    let ultimaConexao = ''
+    const verificarConexao = (): void => {
+      void api.nuvem
+        .status()
+        .then((s) => {
+          const atual = `${s.autenticada}|${s.conexao}|${s.tempoReal}`
+          if (atual === ultimaConexao) return
+          ultimaConexao = atual
+          executar()
+        })
+        .catch(() => undefined)
+    }
     const remover = api.eventos.observarDados((evento) => {
       if (evento.controleEdicao) {
         const estado = aceitarEstadoEdicao(evento.controleEdicao)
@@ -368,9 +380,12 @@ function RecepcaoPedidosEdicao(): null {
         return
       }
       const controle = evento.entidades.some((e) => e.startsWith('controle:'))
-      // Um `status` sem entidades durante a varredura é eco das próprias consultas
-      // (cada resposta da nuvem o emite); reagir a ele manteria o laço de requisições.
-      if (controle || (evento.status && !executando)) executar()
+      // Pedidos e mudanças de posse chegam por eventos `controle:`. Cada resposta da nuvem
+      // também emite `status`; reagir a todas repetiria a verificação (uma requisição por
+      // documento) a cada sincronização. Por isso o `status` só dispara a varredura quando a
+      // conexão muda (por exemplo, ao reconectar).
+      if (controle) executar()
+      else if (evento.status && !executando) verificarConexao()
     })
     const timer = window.setInterval(executar, 15000)
     return () => {

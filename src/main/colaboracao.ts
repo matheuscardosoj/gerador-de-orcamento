@@ -379,9 +379,29 @@ export async function autorizarEmissao(tipo: TipoDocumento, id: string): Promise
       'Sincronize o documento antes de emitir online. Para emissão sem internet, prepare o documento offline enquanto conectado.'
     )
 }
+/**
+ * Descarta os controles próprios de documentos que já não existem neste computador
+ * (por exemplo, excluídos enquanto estavam sob acompanhamento). Sem isso, a renovação
+ * os manteria vivos e cada um custaria requisições a cada ciclo; no servidor o prazo
+ * expira sozinho.
+ */
+function descartarControlesDeDocumentosAusentes(uid: string | null | undefined): void {
+  run(
+    `DELETE FROM edicoes_documento
+      WHERE usuario=? AND computador=?
+        AND NOT (
+          (tipo='orcamento' AND EXISTS (SELECT 1 FROM orcamentos WHERE id=edicoes_documento.documento_id))
+          OR (tipo='relatorio' AND EXISTS (SELECT 1 FROM relatorios WHERE id=edicoes_documento.documento_id))
+          OR (tipo='recibo' AND EXISTS (SELECT 1 FROM recibos WHERE id=edicoes_documento.documento_id))
+        )`,
+    [uid ?? null, computadorId()]
+  )
+}
+
 export async function renovarEdicoes(): Promise<void> {
   if (protocoloNuvem() < 2) return
   const uid = statusNuvem().usuarioId
+  descartarControlesDeDocumentosAusentes(uid)
   for (const controle of all(
     'SELECT tipo,documento_id,expira_em FROM edicoes_documento WHERE usuario=? AND computador=? AND offline=0',
     [uid, computadorId()]

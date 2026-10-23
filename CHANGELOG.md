@@ -13,7 +13,7 @@ Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 - Desempenho: salvar não relê mais todos os cadastros e imagens; a abertura do app faz uma
   verificação de integridade em vez de três e não monta cada documento só para conferir a
   versão; o servidor deixa de avisar todos os computadores a cada renovação de prazo da
-  sessão de edição (migração `013_realtime_sem_renovacao.sql`, a executar no SQL Editor).
+  sessão de edição (migração `013_realtime_sem_renovacao.sql`, já aplicada ao projeto em 23/10/2026; o script `supabase/rollbacks/013_desfazer_realtime_sem_renovacao.sql` a desfaz); controles de documentos excluídos deixam de ser renovados e a verificação de pedidos de edição não repete a cada resposta da nuvem.
   Alterações reais continuam chegando em tempo real aos outros computadores.
 - Segurança: a janela principal usa sandbox e não navega para fora do aplicativo; o IPC só
   aceita chamadas do próprio aplicativo; documentos gerados têm política de conteúdo

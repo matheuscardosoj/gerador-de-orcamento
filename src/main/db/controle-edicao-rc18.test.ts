@@ -138,3 +138,24 @@ it('recepção global consulta somente o responsável atual, incluindo preparaç
   const { documentosAcompanhados } = await import('../colaboracao')
   expect(documentosAcompanhados(true).map((d) => d.id)).toEqual(['offline', 'online'])
 })
+
+it('a renovação descarta controles de documentos excluídos e renova só os existentes', async () => {
+  controle('presente')
+  controle('ausente')
+  controle('de-outro-pc', false, false, 'outro-pc')
+  sql.run(
+    `INSERT INTO orcamentos (id, numero, data, destinatario, formato, titulo, valor_total, status, criado_em, atualizado_em)
+     VALUES ('presente', 1, '2026-01-01', 'A Teste,', 'carta', 'T', 0, 'rascunho', '2026-01-01', '2026-01-01')`
+  )
+  contexto.pedido.mockResolvedValue(resposta(7))
+  const { renovarEdicoes } = await import('../colaboracao')
+  await renovarEdicoes()
+  const renovados = contexto.pedido.mock.calls.map((c) => c[1].p_id)
+  expect(renovados).toEqual(['presente'])
+  const restantes = sql
+    .all('SELECT documento_id FROM edicoes_documento ORDER BY documento_id')
+    .map((l) => l.documento_id)
+  // O controle de outro computador não é nosso para descartar.
+  expect(restantes).toEqual(['de-outro-pc', 'presente'])
+  sql.run("DELETE FROM orcamentos WHERE id='presente'")
+})
