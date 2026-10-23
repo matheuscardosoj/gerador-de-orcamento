@@ -308,7 +308,7 @@ export function LinhaTempo({
                   const d = e.currentTarget.contentDocument
                   if (d) void d.fonts.ready.then(() => paginarDocumento(d))
                 }}
-                className="h-[430px] w-full rounded-lg border border-slate-200 bg-white"
+                className="h-[430px] w-full rounded-lg border border-slate-200 bg-surface"
               />
             </>
           )}

@@ -2,6 +2,7 @@ import { MonitorConexao } from './components/MonitorConexao'
 import { consultarEdicao, aceitarEstadoEdicao } from './lib/controle-edicao'
 import { RecibosPage } from './pages/RecibosPage'
 import { ContaGate, useConta } from './components/ContaGate'
+import { BotaoAlternarTema } from './components/SeletorTema'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { StatusNuvem } from '@shared/types'
 import { resumirSincronizacao } from '@shared/status-sincronizacao'
@@ -73,16 +74,19 @@ function Sidebar(): JSX.Element {
       : empresa.nome
     : ''
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white">
+    <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-surface">
       <div className="border-b border-slate-200 px-5 py-5">
         {nomeEmpresa && (
           <div className="inline-flex max-w-full items-center truncate rounded-full bg-brand-teal px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
             {nomeEmpresa}
           </div>
         )}
-        <h1 className="mt-2 text-sm font-semibold leading-tight text-slate-700">
-          Gerador de Orçamentos
-        </h1>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <h1 className="text-sm font-semibold leading-tight text-slate-700">
+            Gerador de Orçamentos
+          </h1>
+          <BotaoAlternarTema />
+        </div>
       </div>
       <nav className="flex-1 space-y-1 p-3">
         {itens.map((item) => {
@@ -389,7 +393,7 @@ function App(): JSX.Element {
           <MonitorConexao />
           <RecepcaoPedidosEdicao />
           <Sidebar />
-          <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-slate-100">
+          <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-app">
             <Conteudo />
           </main>
         </div>

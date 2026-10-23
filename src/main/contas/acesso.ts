@@ -15,7 +15,13 @@ export function acessoAtivo(): boolean {
 }
 
 export function exigirAcesso(canal: string, args: unknown[] = []): void {
-  if (['aplicativo.versao', 'aplicativo.alteracoesPendentes'].includes(canal)) return
+  // Canais sem dados da empresa: valem também na tela de login.
+  if (
+    ['aplicativo.versao', 'aplicativo.alteracoesPendentes', 'aplicativo.definirTema'].includes(
+      canal
+    )
+  )
+    return
   if (!autorizado) throw new Error('Entre na sua conta para acessar os dados da empresa.')
   const administrativo =
     /^(empresa\.save|parametros\.save|dados\.importar|observacoes\.(create|update|remove)|pagamentos\.(create|update|remove)|colaboracao\.(vincularMembro|ativarMembro)|nuvem\.(conectar|finalizarAtualizacao|copiarInstalacao))$/.test(

@@ -64,7 +64,8 @@ import {
   capturarCadastros,
   protocoloNuvem
 } from './nuvem'
-import { app, ipcMain, dialog, nativeImage } from 'electron'
+import { app, ipcMain, dialog, nativeImage, nativeTheme } from 'electron'
+import { PREFERENCIAS_TEMA, modoNativoTema, type PreferenciaTema } from '@shared/tema'
 import { readFileSync } from 'fs'
 import {
   empresaRepo,
@@ -204,6 +205,10 @@ const handlers: Record<string, (...args: unknown[]) => unknown> = {
   'aplicativo.versao': () => app.getVersion(),
   'aplicativo.alteracoesPendentes': (ativo) => {
     alteracoesPendentes = Boolean(ativo)
+  },
+  'aplicativo.definirTema': (modo) => {
+    if (!(PREFERENCIAS_TEMA as readonly unknown[]).includes(modo)) throw new Error('Tema inválido.')
+    nativeTheme.themeSource = modoNativoTema(modo as PreferenciaTema)
   },
   'empresa.get': () => empresaRepo.get(),
   'empresa.save': (patch) => empresaRepo.save(patch as never),

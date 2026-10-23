@@ -134,7 +134,8 @@ const api: AppApi = {
   },
   aplicativo: {
     versao: () => invoke('aplicativo.versao') as never,
-    alteracoesPendentes: (ativo) => invoke('aplicativo.alteracoesPendentes', ativo) as never
+    alteracoesPendentes: (ativo) => invoke('aplicativo.alteracoesPendentes', ativo) as never,
+    definirTema: (modo) => invoke('aplicativo.definirTema', modo) as never
   },
   empresa: {
     get: () => invoke('empresa.get') as never,

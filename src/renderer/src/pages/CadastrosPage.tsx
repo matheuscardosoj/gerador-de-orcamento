@@ -321,7 +321,7 @@ function SecaoClientes({
                 <td className="px-4 py-3">
                   <Badge color={c.ativo ? 'green' : 'slate'}>{c.ativo ? 'Ativo' : 'Inativo'}</Badge>
                 </td>
-                <td className="sticky right-0 z-[1] bg-white px-4 py-3 shadow-[-1px_0_0_0_#e2e8f0] group-hover/linha-historico:bg-slate-50">
+                <td className="sticky right-0 z-[1] bg-surface px-4 py-3 shadow-[-1px_0_0_0_#e2e8f0] group-hover/linha-historico:bg-slate-50">
                   <TableActions>
                     <IconButton
                       icon={Pencil}
@@ -798,7 +798,7 @@ function SecaoServicos({
                 <td className="px-4 py-3 text-right font-medium text-slate-600">
                   {s.precoReferencia != null ? formatMoeda(s.precoReferencia) : '—'}
                 </td>
-                <td className="sticky right-0 z-[1] bg-white px-4 py-3 shadow-[-1px_0_0_0_#e2e8f0] group-hover/linha-historico:bg-slate-50">
+                <td className="sticky right-0 z-[1] bg-surface px-4 py-3 shadow-[-1px_0_0_0_#e2e8f0] group-hover/linha-historico:bg-slate-50">
                   <TableActions>
                     <IconButton
                       icon={Pencil}

@@ -2,6 +2,27 @@
 
 Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
+## Não lançado
+
+- Tema escuro (preto e cinza neutros) com três opções em Configurações → Minha conta →
+  Aparência: Claro, Escuro e Automático (segue o Windows). Um botão na barra lateral alterna
+  entre claro e escuro. A escolha fica salva neste computador e volta ao abrir o aplicativo;
+  quem não escolher continua com o tema claro. PDF, Word e a prévia dos documentos mantêm o
+  fundo branco. As cores dos dois temas vêm de `tailwind.tema.mjs`, com testes de contraste
+  WCAG AA para o tema escuro.
+- Desempenho: salvar não relê mais todos os cadastros e imagens; a abertura do app faz uma
+  verificação de integridade em vez de três e não monta cada documento só para conferir a
+  versão; o servidor deixa de avisar todos os computadores a cada renovação de prazo da
+  sessão de edição (migração `013_realtime_sem_renovacao.sql`, a executar no SQL Editor).
+  Alterações reais continuam chegando em tempo real aos outros computadores.
+- Segurança: a janela principal usa sandbox e não navega para fora do aplicativo; o IPC só
+  aceita chamadas do próprio aplicativo; documentos gerados têm política de conteúdo
+  restritiva; imagens recebidas da nuvem ou de backups são validadas antes de gravar.
+- Correções: arredondamento de valores negativos e "-R$ 0,00"; valor por extenso de milhões;
+  total do orçamento calculado a partir dos itens; textos longos e listas passam a ser
+  divididos entre páginas no PDF.
+- CI no GitHub Actions (`npm run check`).
+
 ## 1.5.4 — conclusão da recuperação sem avisos reaparecendo
 
 - Revisão após auditoria: uma confirmação por recuperação, Retry-After sem prorrogação

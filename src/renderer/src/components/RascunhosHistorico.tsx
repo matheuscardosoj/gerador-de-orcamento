@@ -55,7 +55,7 @@ export function RascunhosHistorico({
       {orfaos.map((r) => (
         <div
           key={r.id}
-          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-surface p-3"
         >
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-slate-800">

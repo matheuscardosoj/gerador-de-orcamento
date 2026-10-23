@@ -82,11 +82,11 @@ type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline'
 type ButtonSize = 'sm' | 'md'
 
 const buttonVariants: Record<ButtonVariant, string> = {
-  primary: 'bg-brand-teal text-white hover:bg-brand-tealDark shadow-sm',
+  primary: 'bg-brand-teal text-white hover:bg-brand-tealHover shadow-sm',
   secondary: 'bg-slate-200 text-slate-800 hover:bg-slate-300',
   ghost: 'text-slate-600 hover:bg-slate-100',
-  danger: 'bg-red-600 text-white hover:bg-red-700 shadow-sm',
-  outline: 'border border-slate-300 text-slate-700 hover:bg-slate-50 bg-white'
+  danger: 'bg-perigo text-white hover:bg-perigo-forte shadow-sm',
+  outline: 'border border-slate-300 text-slate-700 hover:bg-slate-50 bg-surface'
 }
 
 export const Button = forwardRef<
@@ -211,7 +211,7 @@ function DicaIconButton({
       ref={dica}
       id={id}
       role="tooltip"
-      className="pointer-events-none fixed z-[100] w-max max-w-[min(20rem,calc(100vw-16px))] whitespace-normal rounded-md bg-slate-800 px-2 py-1 text-xs font-medium text-white shadow-md"
+      className="pointer-events-none fixed z-[100] w-max max-w-[min(20rem,calc(100vw-16px))] whitespace-normal rounded-md bg-inverso px-2 py-1 text-xs font-medium text-white shadow-md"
       style={{
         top: posicao?.top ?? 0,
         left: posicao?.left ?? 0,
@@ -226,7 +226,7 @@ function DicaIconButton({
 
 // ------------------------------------------------------------------- Inputs
 const fieldBase =
-  'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/30 disabled:bg-slate-100'
+  'w-full rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/30 disabled:bg-slate-100'
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   function Input({ className, ...props }, ref) {
@@ -578,7 +578,7 @@ export function Card({
   className?: string
 }): JSX.Element {
   return (
-    <div className={cn('rounded-xl border border-slate-200 bg-white shadow-sm', className)}>
+    <div className={cn('rounded-xl border border-slate-200 bg-surface shadow-sm', className)}>
       {children}
     </div>
   )
@@ -794,7 +794,7 @@ export function Modal({
             : 'max-w-7xl'
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 sm:p-8"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/50 p-4 sm:p-8"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !busy) onClose()
       }}
@@ -805,7 +805,7 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={title ? tituloId : undefined}
         className={cn(
-          'flex max-h-[90vh] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-2xl',
+          'flex max-h-[90vh] w-full flex-col overflow-hidden rounded-2xl bg-surface shadow-2xl',
           width
         )}
         onClick={(e) => e.stopPropagation()}

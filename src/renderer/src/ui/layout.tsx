@@ -25,7 +25,7 @@ export function PageShell({
           : ''
   return (
     <div className="min-h-full">
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100/80 px-8 py-5 backdrop-blur">
+      <header className="sticky top-0 z-10 border-b border-slate-200 bg-app/80 px-8 py-5 backdrop-blur">
         <div className={cn('mx-auto flex flex-wrap items-center justify-between gap-4', max)}>
           <div>
             <h1 className="text-xl font-bold text-slate-800">{titulo}</h1>

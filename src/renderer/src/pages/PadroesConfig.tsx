@@ -246,7 +246,7 @@ export function PadroesConfig({
                       }
                     />
                   </td>
-                  <td className="sticky right-0 z-[1] bg-white px-4 py-3 shadow-[-1px_0_0_0_#e2e8f0] group-hover/linha-historico:bg-slate-50">
+                  <td className="sticky right-0 z-[1] bg-surface px-4 py-3 shadow-[-1px_0_0_0_#e2e8f0] group-hover/linha-historico:bg-slate-50">
                     <TableActions>
                       <IconButton
                         icon={Pencil}
