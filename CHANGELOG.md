@@ -2,6 +2,23 @@
 
 Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
+## 1.6.1 — acesso que não travava mais e diagnóstico para o suporte
+
+- Correção: quando o banco local do perfil salvo não abria (por exemplo em um computador com
+  perfil antigo ou danificado), o aplicativo mostrava "Não foi possível recuperar seu acesso" e
+  continuava preso a esse perfil: escolher qualquer empresa, até uma recém-criada, falhava com
+  "Não foi possível concluir". Agora o aplicativo volta ao banco padrão, permite escolher outra
+  empresa e mostra o motivo.
+- Um `contas.json` truncado ou ilegível é guardado ao lado (`contas.json.corrompido-<data>`) e o
+  aplicativo segue sem perfis salvos; antes, travava na abertura.
+- Registro de falhas em `logs/app.jsonl` (pasta de dados do aplicativo), com rotação em 1 MB, sem
+  senhas, tokens nem e-mails. Falhas ao abrir o banco, ao reservá-lo e as exceções não tratadas
+  são gravadas com um código de 6 caracteres que aparece na mensagem da tela.
+- "Exportar diagnóstico" no aviso de falha da abertura e na tela de escolha de empresa: grava um
+  JSON com versões, espaço livre, estado dos perfis, travas, backups e os últimos registros,
+  para enviar ao suporte.
+- Mensagens de erro de abertura do banco deixam de virar o texto genérico.
+
 ## 1.6.0 — tema escuro, revisão de textos com IA mais segura e menos tráfego
 
 - Tema escuro (preto e cinza neutros) com três opções em Configurações → Minha conta →
