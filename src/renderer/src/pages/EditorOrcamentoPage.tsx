@@ -170,7 +170,11 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
   }, [orcamentoId])
 
   const total = useMemo(() => (orc ? totalDosItens(orc.itensServico) : 0), [orc])
-  const sujo = orc !== null && snapshotSalvo !== null && JSON.stringify(orc) !== snapshotSalvo
+  // Serializar o documento (com miniaturas) é caro: só quando ele ou o snapshot mudam.
+  const sujo = useMemo(
+    () => orc !== null && snapshotSalvo !== null && JSON.stringify(orc) !== snapshotSalvo,
+    [orc, snapshotSalvo]
+  )
   useBloqueioEdicao(sujo)
   const atualizacao = useDocumentoRemoto(
     'orcamento',

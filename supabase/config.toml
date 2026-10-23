@@ -1,2 +1,7 @@
 [functions.central-contas]
+# O gateway não valida o JWT porque a ação pública `enviarCodigo` precisa funcionar
+# sem sessão e as chaves `sb_publishable_` não são JWT. Todas as demais ações exigem
+# sessão: o código da função chama `auth.getUser(token)` e responde 401 sem ela.
+# Ao publicar, confira se o painel do Supabase não reativou "Verify JWT" (o diagnóstico
+# RC17 registrou a versão 3 publicada com verify_jwt=true; este arquivo é a referência).
 verify_jwt = false

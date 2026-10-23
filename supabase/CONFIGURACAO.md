@@ -1,4 +1,4 @@
-# Nuvem da empresa — esquema local 13
+# Nuvem da empresa — esquema local 14
 
 > O acesso central por convite e perfis separados já está integrado. Para uma
 > empresa que já usa o Supabase, aplique apenas as migrações incrementais da
