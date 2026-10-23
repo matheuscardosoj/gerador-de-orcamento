@@ -68,6 +68,23 @@ export function limparRotulos(resposta: string, original: string): string {
   return texto.replace(/^["“”']+|["“”']+$/g, '').trim()
 }
 
+// ------------------------------------------------------------------ Trava de caixa alta
+
+/** Texto (de 6+ letras) quase todo em maiúsculas. */
+const emMaiusculas = (texto: string): boolean => {
+  const letras = texto.match(/\p{L}/gu) ?? []
+  if (letras.length < 6) return false
+  const altas = letras.filter((c) => c === c.toUpperCase() && c !== c.toLowerCase()).length
+  return altas / letras.length > 0.9
+}
+
+/** Alguns modelos "gritam" a resposta ("PAGO EM DINHEIRO NO ATO"): só vale se o original já era assim. */
+export function violacaoDeCaixa(original: string, sugestao: string): string | null {
+  return emMaiusculas(sugestao) && !emMaiusculas(original)
+    ? 'A sugestão converteu o texto para maiúsculas e foi recusada.'
+    : null
+}
+
 // ------------------------------------------------------------------ Trava de papéis
 
 const PAPEIS: Array<[chave: string, padrao: RegExp]> = [
@@ -339,6 +356,8 @@ const ACENTOS: Record<string, string> = {
   veiculo: 'veículo',
   veiculos: 'veículos',
   caminhao: 'caminhão',
+  demao: 'demão',
+  demaos: 'demãos',
   pix: 'Pix'
 }
 
@@ -461,7 +480,11 @@ export function prepararSugestao(
   const base = original.trim()
   const automatica = corrigirTexto(base, campo)
   const limpa = limparRotulos(resposta, base)
-  const motivo = limpa ? (violacaoDePapeis(base, limpa) ?? trocaDeConteudo(base, limpa)) : null
+  const motivo = limpa
+    ? (violacaoDeCaixa(base, limpa) ??
+      violacaoDePapeis(base, limpa) ??
+      trocaDeConteudo(base, limpa))
+    : null
   if (!limpa || motivo) {
     if (automatica !== base) return { texto: automatica, origem: 'automatica' }
     if (motivo) throw new Error(`${motivo} Tente novamente ou edite o texto manualmente.`)

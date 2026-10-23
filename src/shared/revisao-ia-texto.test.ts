@@ -5,6 +5,7 @@ import {
   limparRotulos,
   prepararSugestao,
   trocaDeConteudo,
+  violacaoDeCaixa,
   violacaoDePapeis
 } from './revisao-ia-texto'
 import { numerosTexto } from './revisao-ia'
@@ -87,6 +88,12 @@ describe('corrigirTexto: acentos de palavras comuns', () => {
     )
   })
 
+  it('acentua demão/demãos (o modelo costuma trocar por "demais")', () => {
+    expect(corrigirTexto('pintura com 2 demaos de tinta', 'descricaoServico')).toBe(
+      'Pintura com 2 demãos de tinta.'
+    )
+  })
+
   it('escreve Pix e "à vista"', () => {
     expect(corrigirTexto('pagamento via pix', 'pagamento')).toBe('Pagamento via Pix.')
     expect(corrigirTexto('pagamento a vista', 'pagamento')).toBe('Pagamento à vista.')
@@ -154,6 +161,30 @@ describe('limparRotulos', () => {
       'Entrega às 10:30 do dia 12.'
     )
     expect(limparRotulos('Parcela 2: R$ 500', 'parcela 2 500')).toBe('Parcela 2: R$ 500')
+  })
+})
+
+describe('violacaoDeCaixa', () => {
+  it('recusa a resposta em maiúsculas quando o original não era (caso real do Amadeus-Verbo)', () => {
+    expect(violacaoDeCaixa('pago em dinheiro no ato', 'PAGO EM DINHEIRO NO ATÉ.')).toMatch(
+      /maiúsculas/
+    )
+  })
+
+  it('aceita quando o original já estava em maiúsculas, e textos curtos ou normais', () => {
+    expect(violacaoDeCaixa('SERVIÇO DE ROÇADA', 'SERVIÇO DE ROÇADA.')).toBeNull()
+    expect(violacaoDeCaixa('pago no ato', 'Pago no ato.')).toBeNull()
+    expect(violacaoDeCaixa('pix', 'PIX')).toBeNull()
+    expect(violacaoDeCaixa('Entrega em 10 dias', 'Entrega em 10 DIAS.')).toBeNull()
+  })
+
+  it('prepararSugestao cai para as correções automáticas', () => {
+    expect(
+      prepararSugestao('pago em dinheiro no ato', 'PAGO EM DINHEIRO NO ATÉ.', 'observacaoRecibo')
+    ).toEqual({
+      texto: 'Pago em dinheiro no ato.',
+      origem: 'automatica'
+    })
   })
 })
 
