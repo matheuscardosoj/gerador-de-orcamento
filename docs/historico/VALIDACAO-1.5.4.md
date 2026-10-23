@@ -33,7 +33,7 @@ perfis sintéticos; nenhuma alteração no Supabase nem nos dados da VS.
   novo ciclo após nova queda; falha permanente sem sucesso.
 - Ensaio Electron/Playwright: cartão de retomada fechado, oito atualizações sem retorno;
   conclusão seguida de sincronizações alternadas sem regressão; estilos, modal, teclado
-  e larguras compacta/ampla preservados. Script `scripts/verificar-1-5-4-interface.mjs`.
+  e larguras compacta/ampla preservados. Script `scripts/legado/verificar-1-5-4-interface.mjs`.
 - `npm run check` aprovado: lint, formatação, TypeScript, **388 testes em 70 arquivos**
   e build.
 - Ensaio de interface aprovado sem erros JavaScript. Evidências em

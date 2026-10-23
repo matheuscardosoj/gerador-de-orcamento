@@ -17,9 +17,9 @@ Versão: `1.5.0-rc.19`
 ## Verificações
 
 - `npm run check`: lint, formatação, TypeScript, build e 354 testes em 66 arquivos aprovados.
-- `node scripts/verificar-rc19-calculo.mjs`: interface exercitada em orçamento e relatório, em larguras de 1024 e 1600 px. Verificados lucro próprio e geral, imposto de 6%, sincronização automática dos campos, aviso para meta menor, salvar/reabrir, prévia e chamadas de exportação de PDF e Word usando API simulada.
+- `node scripts/legado/verificar-rc19-calculo.mjs`: interface exercitada em orçamento e relatório, em larguras de 1024 e 1600 px. Verificados lucro próprio e geral, imposto de 6%, sincronização automática dos campos, aviso para meta menor, salvar/reabrir, prévia e chamadas de exportação de PDF e Word usando API simulada.
 - `src/shared/documento/docx.gen.test.ts`: templates e DOCX reais verificam o preço desejado em orçamento e relatório.
-- `node scripts/verificar-rc19-pacote.mjs`: executável empacotado abriu com perfil temporário isolado, mostrou a tela de entrada e respondeu `1.5.0-rc.19` pelo IPC, sem erros de renderer.
+- `node scripts/legado/verificar-rc19-pacote.mjs`: executável empacotado abriu com perfil temporário isolado, mostrou a tela de entrada e respondeu `1.5.0-rc.19` pelo IPC, sem erros de renderer.
 - Conteúdo do `app.asar` conferido: versão rc.19 e nomenclatura nova; runtime de IA presente.
 
 ## Instalador

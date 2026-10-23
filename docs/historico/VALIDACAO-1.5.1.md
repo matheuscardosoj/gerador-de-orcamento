@@ -13,15 +13,15 @@
 
 ## Evidências de teste
 
-- `node scripts/verificar-1-5-1-cadastros.mjs`: passou com perfil e dados sintéticos;
+- `node scripts/legado/verificar-1-5-1-cadastros.mjs`: passou com perfil e dados sintéticos;
   verificou paginação de clientes e serviços, busca e apresentação de falha na
   exclusão de serviço.
-- `node scripts/verificar-rc20-calculo.mjs`: passou em orçamento e relatório, cobrindo
+- `node scripts/legado/verificar-rc20-calculo.mjs`: passou em orçamento e relatório, cobrindo
   notificações flutuantes, cálculo, metas, prévias e quatro exportações PDF/Word.
 - `npm run check`: passou (lint, formatação, TypeScript, 359 testes em 66 arquivos e
   build de produção).
 - `npm run dist`: gerou `release/Gerador de Orçamentos Setup 1.5.1.exe`.
-- `node scripts/verificar-1-5-1-pacote.mjs`: o executável abriu com perfil temporário,
+- `node scripts/legado/verificar-1-5-1-pacote.mjs`: o executável abriu com perfil temporário,
   retornou a versão `1.5.1` e não registrou erros de página.
 
 ## Instalador local

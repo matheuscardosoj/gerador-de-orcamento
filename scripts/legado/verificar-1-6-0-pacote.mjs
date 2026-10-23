@@ -1,7 +1,7 @@
 // Valida o executável final da 1.6.0 com um perfil novo e descartável: abertura, versão,
 // recursos empacotados (IA, migração 013 e rollback), tema escuro salvo ao reabrir e o
 // bloqueio de navegação externa da janela.
-// Uso: node scripts/verificar-1-6-0-pacote.mjs [pasta-do-pacote]  (padrão: release/1.6.0)
+// Uso: node scripts/legado/verificar-1-6-0-pacote.mjs [pasta-do-pacote]  (padrão: release/1.6.0)
 import assert from 'node:assert/strict'
 import {
   existsSync,

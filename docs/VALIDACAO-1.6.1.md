@@ -22,13 +22,13 @@ real também se perdia na mensagem genérica.
 
 ## Ensaios e resultados
 
-| Ensaio                                                    | Resultado                                                                                                                                             |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run check` (lint, formatação, tipos, testes e build) | 563 testes em 81 arquivos aprovados                                                                                                                   |
-| Teste de perfil com banco ilegível (`perfil-danificado`)  | Erro com código e sem caminho; o perfil não fica preso e o banco padrão volta a abrir                                                                 |
-| Teste de `contas.json` truncado e do registro de falhas   | Arquivo guardado ao lado; registro sem e-mails; falha de gravação do log não lança erro                                                               |
-| `scripts/verificar-1-6-1-pacote.mjs` (executável final)   | Abre na 1.6.1 com `contas.json` truncado: arquivo guardado, causa registrada com código, tela de entrada, exportação disponível; tema escuro reaberto |
-| CI no GitHub Actions (Windows, Node 24)                   | Conferido no PR (ver o histórico do PR)                                                                                                               |
+| Ensaio                                                         | Resultado                                                                                                                                             |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run check` (lint, formatação, tipos, testes e build)      | 563 testes em 81 arquivos aprovados                                                                                                                   |
+| Teste de perfil com banco ilegível (`perfil-danificado`)       | Erro com código e sem caminho; o perfil não fica preso e o banco padrão volta a abrir                                                                 |
+| Teste de `contas.json` truncado e do registro de falhas        | Arquivo guardado ao lado; registro sem e-mails; falha de gravação do log não lança erro                                                               |
+| `scripts/legado/verificar-1-6-1-pacote.mjs` (executável final) | Abre na 1.6.1 com `contas.json` truncado: arquivo guardado, causa registrada com código, tela de entrada, exportação disponível; tema escuro reaberto |
+| CI no GitHub Actions (Windows, Node 24)                        | Conferido no PR (ver o histórico do PR)                                                                                                               |
 
 ## Limites desta validação
 

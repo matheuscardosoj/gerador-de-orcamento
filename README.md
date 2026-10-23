@@ -100,7 +100,7 @@ fidelidade, tamanho do instalador (limite de ~2 GB do NSIS) e memória.
 
 ## Status
 
-**Versão 1.6.1**, SQLite esquema 14 e protocolo central de nuvem 4. O aplicativo usa
+**Versão 1.6.2**, SQLite esquema 14 e protocolo central de nuvem 4. O aplicativo usa
 somente Nº do documento e mantém chaves técnicas ocultas. Inclui usuários vinculados,
 Broadcast privado (WebSocket do Supabase Realtime, com sincronização de segurança a cada
 30 s), controle de edição, rascunhos offline, preservação de operações pendentes em

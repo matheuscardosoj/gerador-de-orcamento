@@ -10,14 +10,14 @@ Versão: `1.5.0`
 - Os campos continuam usando `<select>` e `<option>` nativos.
 - O popup agora segue o tema dos campos do app: tipografia, borda slate, cantos arredondados, realce teal, foco visível e sombra.
 - A lista tem altura máxima de 320 px (ou 60% da janela, quando menor) e rola para opções adicionais.
-- Verificação Playwright com 40 opções extras: `node scripts/verificar-rc20-calculo.mjs` passou; orçamento e relatório mantiveram o fluxo e não produziram erros de renderer.
+- Verificação Playwright com 40 opções extras: `node scripts/legado/verificar-rc20-calculo.mjs` passou; orçamento e relatório mantiveram o fluxo e não produziram erros de renderer.
 - Captura do popup longo: `output/playwright/rc20-calculo/select-opcoes-com-rolagem.png`.
 
 ## Aplicativo e cálculos
 
 - `npm run check`: aprovado — lint, formatação, TypeScript, 359 testes em 66 arquivos e build de produção.
-- `node scripts/verificar-rc20-calculo.mjs`: aprovado em orçamento e relatório, incluindo valores de itens, impostos, metas, prévia e exportações simuladas de PDF e Word.
-- `node scripts/verificar-rc20-pacote.mjs`: executável final abriu com perfil isolado, informou `1.5.0` e não registrou erros de renderer.
+- `node scripts/legado/verificar-rc20-calculo.mjs`: aprovado em orçamento e relatório, incluindo valores de itens, impostos, metas, prévia e exportações simuladas de PDF e Word.
+- `node scripts/legado/verificar-rc20-pacote.mjs`: executável final abriu com perfil isolado, informou `1.5.0` e não registrou erros de renderer.
 - `npm run dist`: gerou o instalador Windows x64.
 
 ## Banco Supabase
