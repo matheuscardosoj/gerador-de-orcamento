@@ -99,6 +99,7 @@ beforeAll(async () => {
       pcA
     ])
   await pg.exec(readFileSync('supabase/migrations/002_colaboracao_v2.sql', 'utf8'))
+  await pg.exec(readFileSync('supabase/migrations/013_realtime_sem_renovacao.sql', 'utf8'))
   await pg.query('SELECT gdo_dispositivo_v2($1,$2)', [pcA, 'PC A'])
   await pg.exec('SET ROLE authenticated')
 })
@@ -310,4 +311,31 @@ it('apresenta pedidos de edição ao possuidor e não repete auditoria nas renov
   expect(
     (await pg.query<{ n: number }>('SELECT count(*) AS n FROM auditoria_colaboracao')).rows[0].n
   ).toBe(antes)
+})
+it('não avisa os computadores quando só o prazo da sessão de edição é renovado', async () => {
+  // A tabela de avisos só é legível pelo dono do banco, não pelo papel authenticated.
+  const avisos = async (): Promise<number> => {
+    await pg.exec('RESET ROLE')
+    try {
+      return Number(
+        (await pg.query<{ n: number }>('SELECT count(*) AS n FROM realtime.avisos')).rows[0].n
+      )
+    } finally {
+      await pg.exec('SET ROLE authenticated')
+    }
+  }
+  const c = (
+    await pg.query<{ r: { geracao: number } }>("SELECT gdo_edicao_v2('recibo','novo',$1) AS r", [
+      pcA
+    ])
+  ).rows[0].r
+  const antes = await avisos()
+
+  await edicao('novo', 'renovar', pcA, c.geracao)
+  await edicao('novo', 'renovar', pcA, c.geracao)
+  expect(await avisos()).toBe(antes)
+
+  // Mudanças reais de posse continuam avisando todos.
+  await edicao('novo', 'liberar', pcA, c.geracao)
+  expect(await avisos()).toBeGreaterThan(antes)
 })
