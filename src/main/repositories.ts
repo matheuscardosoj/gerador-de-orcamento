@@ -64,6 +64,7 @@ import {
   validarOrcamentoFinal,
   validarRelatorioFinal
 } from '@shared/validacao'
+import { validarEmpresaParcial, validarServicoCatalogo } from '@shared/validacao-cadastros'
 
 const nowIso = (): string => new Date().toISOString()
 /** O total gravado nunca vem do renderer: é sempre a soma dos itens do documento. */
@@ -121,6 +122,7 @@ export const empresaRepo = {
     return e.logoHash ? { ...e, logoDataUrl: imagemDataUrl(e.logoHash) ?? null } : e
   },
   save: (patch: Partial<EmpresaConfig>): EmpresaConfig => {
+    exigirValidacao(validarEmpresaParcial(patch))
     const atual = { ...empresaRepo.get(), ...patch }
     const hash = atual.logoDataUrl ? registrarImagem(atual.logoDataUrl, null, 0, 0, true) : null
     gravarConfig('empresa', { ...atual, logoHash: hash ?? undefined, logoDataUrl: null })
@@ -181,6 +183,7 @@ export const servicosRepo = {
     return l ? paraServico(l) : null
   },
   create: (dto: Omit<ServicoCatalogo, 'id'> & { id?: string }): ServicoCatalogo => {
+    exigirValidacao(validarServicoCatalogo(dto, false))
     const id = dto.id ?? randomUUID()
     return tx(() => {
       const s: ServicoCatalogo = { ...dto, codigo: proximoCodigoCadastro('servico', id), id }
@@ -197,6 +200,7 @@ export const servicosRepo = {
     })
   },
   update: (id: string, patch: Partial<ServicoCatalogo>): ServicoCatalogo | null => {
+    exigirValidacao(validarServicoCatalogo(patch, true))
     const atual = servicosRepo.get(id)
     if (!atual) return null
     const novo = { ...atual, ...patch, id, codigo: atual.codigo }

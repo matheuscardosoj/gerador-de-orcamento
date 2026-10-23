@@ -155,7 +155,13 @@ export function configurarSessaoConta(
 function sessao(): Sessao | null {
   if (sessaoVolatil) return sessaoVolatil
   const s = config<string>('sessaoNuvem')
-  return s ? JSON.parse(safeStorage.decryptString(Buffer.from(s, 'base64'))) : null
+  if (!s) return null
+  try {
+    return JSON.parse(safeStorage.decryptString(Buffer.from(s, 'base64')))
+  } catch {
+    // Perfil aberto por outro usuário do Windows ou credencial corrompida: pede novo login.
+    return null
+  }
 }
 function gravarSessao(s: Sessao): void {
   sessaoVolatil = lembrarSessao ? null : s
@@ -955,7 +961,12 @@ function aplicar(e: Remoto): void {
         console.warn(`[nuvem] imagem remota inválida ignorada: ${String(p.id).slice(0, 16)}`)
       else upsert(p.tabela, p.row)
       if (p.tabela === 'clientes') {
-        const dados = JSON.parse(texto(p.row.dados_json) || '{}') as { codigo?: number }
+        let dados: { codigo?: number } = {}
+        try {
+          dados = JSON.parse(texto(p.row.dados_json) || '{}')
+        } catch {
+          // Dados do cliente malformados não impedem a sincronização dos demais registros.
+        }
         registrarCodigoRemoto('cliente', dados.codigo, p.id)
       } else if (p.tabela === 'servicos') registrarCodigoRemoto('servico', p.row.codigo, p.id)
     } else
@@ -1011,7 +1022,12 @@ function aplicar(e: Remoto): void {
         upsert(nome, row)
         if (nome === 'versoes') {
           // Uma exclusão pode chegar antes de o outro PC ter recebido o documento.
-          const numero = Number(JSON.parse(String(row.documento)).numero)
+          let numero = Number.NaN
+          try {
+            numero = Number(JSON.parse(String(row.documento)).numero)
+          } catch {
+            // Versão ilegível: o número fica sem reserva, mas o lote continua.
+          }
           if (protocoloNuvem() < 3 && Number.isSafeInteger(numero) && numero > 0)
             run(`INSERT OR IGNORE INTO ${tabelaNumerosUsados()} VALUES (?,?)`, [p.tipo, numero])
         }

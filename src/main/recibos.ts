@@ -110,16 +110,28 @@ export const recibosRepo = {
     return { ok: true }
   },
   list: (): Recibo[] => {
+    // Uma linha corrompida não pode esconder todos os outros recibos.
+    const lerJson = (valor: string): Record<string, unknown> | null => {
+      try {
+        return JSON.parse(valor)
+      } catch {
+        return null
+      }
+    }
     const metas = new Map(
       all("SELECT documento_id,dados FROM documento_meta WHERE tipo='recibo'").map((l) => [
         texto(l.documento_id),
-        JSON.parse(texto(l.dados))
+        lerJson(texto(l.dados)) ?? {}
       ])
     )
-    return all('SELECT id,dados FROM recibos ORDER BY numero DESC').map((l) => ({
-      ...JSON.parse(texto(l.dados)),
-      ...metas.get(texto(l.id))
-    }))
+    return all('SELECT id,dados FROM recibos ORDER BY numero DESC').flatMap((l) => {
+      const recibo = lerJson(texto(l.dados))
+      if (!recibo) {
+        console.warn(`[recibos] registro ilegível ignorado na listagem: ${texto(l.id)}`)
+        return []
+      }
+      return [{ ...recibo, ...metas.get(texto(l.id)) } as unknown as Recibo]
+    })
   },
   get: (id: string): Recibo | null => {
     const l = get('SELECT dados FROM recibos WHERE id=?', [id])
