@@ -204,6 +204,7 @@ function Acesso({
   const [empresaExcluir, setEmpresaExcluir] = useState<(typeof conta.empresas)[number] | null>(null)
   const [nomeDigitado, setNomeDigitado] = useState('')
   const [erroExclusao, setErroExclusao] = useState('')
+  const [diagnostico, setDiagnostico] = useState('')
   const segundosParaReenviar = Math.max(0, Math.ceil((proximoEnvio - agora) / 1000))
   useEffect(() => {
     if (!enviado || segundosParaReenviar === 0) return
@@ -322,6 +323,20 @@ function Acesso({
         >
           Entrar com outra conta
         </Button>
+        {erro && (
+          <Button
+            variant="ghost"
+            onClick={() =>
+              void api.aplicativo
+                .exportarDiagnostico()
+                .then((caminho) => setDiagnostico(caminho ? `Diagnóstico salvo em ${caminho}` : ''))
+                .catch((e) => setErro(mensagemErro(e)))
+            }
+          >
+            Exportar diagnóstico
+          </Button>
+        )}
+        {diagnostico && <Mensagem tom="info">{diagnostico}</Mensagem>}
         <Modal
           open={!!empresaExcluir}
           title="Excluir empresa permanentemente"

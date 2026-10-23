@@ -16,6 +16,12 @@ import { bancoVazio, semear } from './repositories'
 import { encerrarIA } from './ia'
 import { haAlteracoesPendentes, liberarAlteracoesPendentes, registrarIpc } from './ipc'
 import { urlDoAplicativo } from './origem-janela'
+import { registrarDiagnostico } from './diagnostico'
+import { exportarDiagnostico } from './diagnostico-exportar'
+
+// Falhas que nenhuma tela mostra ficam registradas para o suporte (sem mudar o comportamento).
+process.on('unhandledRejection', (motivo) => registrarDiagnostico('promessa-rejeitada', motivo))
+process.on('uncaughtExceptionMonitor', (erro) => registrarDiagnostico('excecao-nao-tratada', erro))
 
 // Usado só por testes automatizados e validações de pacote. Nunca é definido
 // pelo instalador, portanto o perfil normal do usuário continua inalterado.
@@ -174,7 +180,18 @@ if (temTrava)
     try {
       await contasProntas
     } catch (erro) {
-      dialog.showErrorBox('Não foi possível recuperar seu acesso', mensagemErro(erro))
+      registrarDiagnostico('recuperar-contas', erro)
+      const escolha = dialog.showMessageBoxSync({
+        type: 'error',
+        title: 'Não foi possível recuperar seu acesso',
+        message: 'Não foi possível recuperar seu acesso',
+        detail: mensagemErro(erro),
+        buttons: ['OK', 'Exportar diagnóstico'],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true
+      })
+      if (escolha === 1) await exportarDiagnostico()
     }
     app.once('before-quit', pararTempoReal)
 

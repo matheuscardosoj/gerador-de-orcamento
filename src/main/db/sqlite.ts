@@ -15,6 +15,7 @@ import { join } from 'path'
 import { Database } from 'node-sqlite3-wasm'
 import { aplicarMigracoes } from './schema'
 import { prepararMigracao, verificarBanco } from './pre-migracao'
+import { registrarDiagnostico } from '../diagnostico'
 
 export type Linha = Record<string, string | number | Uint8Array | null>
 
@@ -105,7 +106,20 @@ export function caminhoBackupPreV2(): string {
  */
 export function abrirBanco(): { db: Database; bancoNovo: boolean } {
   if (conexao) return { db: conexao, bancoNovo: false }
-  adquirirTrava()
+  try {
+    adquirirTrava()
+  } catch (e) {
+    const id = registrarDiagnostico('trava-do-banco', e)
+    const outraInstancia = e instanceof Error && /já está aberto/.test(e.message)
+    throw new Error(
+      `${
+        outraInstancia
+          ? 'O banco de dados já está aberto por outra instância do aplicativo.'
+          : 'Não foi possível reservar o banco de dados deste computador.'
+      } Feche outras janelas do aplicativo e tente novamente; se continuar, use "Exportar diagnóstico" (código ${id}).`,
+      { cause: e }
+    )
+  }
   const caminho = caminhoBanco()
   const bancoNovo = !existsSync(caminho)
   let backup: string | null = null
@@ -127,8 +141,15 @@ export function abrirBanco(): { db: Database; bancoNovo: boolean } {
     conexao?.close()
     conexao = null
     liberarTrava()
-    const sufixo = backup ? `\nBackup preservado em: ${backup}` : ''
-    throw new Error(`${String(e).replace(/^Error:\s*/, '')}${sufixo}`)
+    // A causa e o caminho do backup ficam no registro local; a tela mostra só o código dele
+    // (caminhos e SQL na mensagem a transformariam em "Não foi possível concluir esta ação").
+    const id = registrarDiagnostico('abrir-banco', e, { backup, caminho })
+    throw new Error(
+      `Não foi possível abrir ou atualizar o banco de dados deste computador. ${
+        backup ? 'Uma cópia de segurança foi preservada. ' : ''
+      }Use "Exportar diagnóstico" e envie o arquivo ao suporte (código ${id}).`,
+      { cause: e }
+    )
   }
   return { db: conexao, bancoNovo }
 }

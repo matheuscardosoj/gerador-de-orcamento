@@ -1,5 +1,13 @@
 import { afterAll, expect, it, vi } from 'vitest'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
@@ -77,6 +85,21 @@ it('preserva os perfis ao sair e registra a escolha de lembrar sem guardar senha
   expect(readFileSync(join(ambiente.raiz, 'contas.json'), 'utf8')).not.toMatch(
     /access_token|refresh_token|password|senha/
   )
+})
+it('guarda um contas.json truncado ao lado e segue sem perfis salvos', () => {
+  const caminho = join(ambiente.raiz, 'contas.json')
+  const antes = readFileSync(caminho, 'utf8')
+  writeFileSync(caminho, '{"atual": "abc", "perfis": [{"id"')
+  expect(lerPerfis()).toEqual({ atual: null, perfis: [] })
+  const guardados = readdirSync(ambiente.raiz).filter((n) =>
+    n.startsWith('contas.json.corrompido-')
+  )
+  expect(guardados).toHaveLength(1)
+  expect(readFileSync(join(ambiente.raiz, guardados[0]), 'utf8')).toBe(
+    '{"atual": "abc", "perfis": [{"id"'
+  )
+  expect(existsSync(caminho)).toBe(false)
+  writeFileSync(caminho, antes)
 })
 it('apaga somente o perfil local que o servidor marcou como empresa removida', () => {
   const id = idPerfil('https://a.supabase.co', 'empresa-removida', 'usuario')

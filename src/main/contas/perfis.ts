@@ -4,6 +4,7 @@ import { join } from 'path'
 import { app } from 'electron'
 import type { EmpresaConta } from '../../shared/conta'
 import type { ConfigNuvem } from '../../shared/types'
+import { registrarDiagnostico } from '../diagnostico'
 
 export interface PerfilConta {
   id: string
@@ -31,12 +32,32 @@ export function idPerfil(url: string, empresa: string, usuario: string): string 
 export function lerPerfis(): RegistroPerfis {
   const caminho = join(app.getPath('userData'), 'contas.json')
   if (!existsSync(caminho)) return { atual: null, perfis: [] }
-  const dados = JSON.parse(readFileSync(caminho, 'utf8')) as RegistroPerfis
-  if (!Array.isArray(dados.perfis) || dados.perfis.some((p) => !/^[a-f0-9]{64}$/.test(p.id)))
+  try {
+    const dados = JSON.parse(readFileSync(caminho, 'utf8')) as RegistroPerfis
+    if (!Array.isArray(dados.perfis) || dados.perfis.some((p) => !/^[a-f0-9]{64}$/.test(p.id)))
+      throw new Error('Registro de perfis com formato inválido.')
+    return dados
+  } catch (erro) {
+    return isolarRegistroDanificado(caminho, erro)
+  }
+}
+/**
+ * Um `contas.json` truncado ou ilegível não pode travar o aplicativo: o arquivo é guardado ao
+ * lado, com a data, e o computador segue sem perfis salvos (a nuvem devolve os dados no login).
+ */
+function isolarRegistroDanificado(caminho: string, erro: unknown): RegistroPerfis {
+  const guardado = `${caminho}.corrompido-${new Date().toISOString().replace(/[:.]/g, '-')}`
+  try {
+    renameSync(caminho, guardado)
+  } catch (falha) {
+    registrarDiagnostico('contas-json-ilegivel', erro, { guardado: false })
     throw new Error(
-      'Não foi possível abrir os perfis deste computador. Preserve os arquivos e procure o suporte.'
+      'Não foi possível abrir os perfis deste computador. Feche o aplicativo, confira se a pasta de dados permite gravação e procure o suporte.',
+      { cause: falha }
     )
-  return dados
+  }
+  registrarDiagnostico('contas-json-ilegivel', erro, { guardado })
+  return { atual: null, perfis: [] }
 }
 export function gravarPerfil(perfil: PerfilConta): void {
   const registro = lerPerfis()

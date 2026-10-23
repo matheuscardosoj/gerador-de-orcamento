@@ -17,9 +17,12 @@ export function acessoAtivo(): boolean {
 export function exigirAcesso(canal: string, args: unknown[] = []): void {
   // Canais sem dados da empresa: valem também na tela de login.
   if (
-    ['aplicativo.versao', 'aplicativo.alteracoesPendentes', 'aplicativo.definirTema'].includes(
-      canal
-    )
+    [
+      'aplicativo.versao',
+      'aplicativo.alteracoesPendentes',
+      'aplicativo.definirTema',
+      'aplicativo.exportarDiagnostico'
+    ].includes(canal)
   )
     return
   if (!autorizado) throw new Error('Entre na sua conta para acessar os dados da empresa.')

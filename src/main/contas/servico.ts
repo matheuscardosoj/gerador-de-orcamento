@@ -208,6 +208,20 @@ async function fecharPerfil(): Promise<void> {
   encerrarIA()
   fecharBanco()
 }
+/**
+ * Abre o banco do perfil. Se falhar, volta ao banco padrão: deixar o perfil apontado sem conexão
+ * faria toda leitura seguinte (inclusive escolher outra empresa) reabrir o mesmo banco e falhar.
+ */
+function abrirBancoDoPerfil(id: string): void {
+  try {
+    selecionarPerfilDados(id)
+    abrirBanco()
+  } catch (erro) {
+    fecharBanco()
+    selecionarPerfilDados(null)
+    throw erro
+  }
+}
 function gravar(chave: string, valor: unknown): void {
   run(
     'INSERT INTO configuracoes VALUES (?,?) ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor',
@@ -314,8 +328,7 @@ async function recuperarContas(): Promise<void> {
   }
   if (!salvo?.lembrar) return
   await fecharPerfil()
-  selecionarPerfilDados(salvo.id)
-  abrirBanco()
+  abrirBancoDoPerfil(salvo.id)
   configurarSessaoConta(true, salvo.empresa.id, salvo.central)
   if (!lerSessaoConta()) return
   perfil = salvo
@@ -472,8 +485,7 @@ async function selecionar(id: string): Promise<EstadoConta> {
     )
       throw new Error('A cópia dos dados não passou na verificação. O original foi preservado.')
   }
-  selecionarPerfilDados(destino)
-  abrirBanco()
+  abrirBancoDoPerfil(destino)
   // Perfis de conta recebem os padrões exclusivamente da empresa na nuvem.
   // Semear IDs locais antes do primeiro delta duplica os textos em cada login.
   if (bancoVazio()) semear(false)
