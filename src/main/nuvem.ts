@@ -1905,13 +1905,27 @@ export async function aplicarConflito(id: string): Promise<void> {
 }
 export function capturarCadastros(): void {
   if (!config<ConfigNuvem>('nuvem')) return
-  for (const t of tabelas)
-    for (const l of all(`SELECT * FROM ${t}`)) {
-      if (
-        t === 'configuracoes' &&
-        !['empresa', 'parametros', 'camposClientePadrao'].includes(texto(l.chave))
-      )
-        continue
+  const inicio = performance.now()
+  // Imagens são endereçadas por hash e nunca alteradas: as que já têm estado
+  // conhecido não precisam ser relidas (o base64 completo é pesado).
+  const imagensConhecidas = new Set(
+    all(`SELECT chave FROM configuracoes WHERE chave LIKE 'estado:imagens:%'`).map((l) =>
+      texto(l.chave)
+    )
+  )
+  for (const t of tabelas) {
+    const linhas =
+      t === 'configuracoes'
+        ? // Só estas chaves são sincronizadas; evita carregar os caches `estado:*`.
+          all(
+            `SELECT * FROM configuracoes WHERE chave IN ('empresa','parametros','camposClientePadrao')`
+          )
+        : t === 'imagens'
+          ? all(`SELECT hash FROM imagens`)
+              .filter((l) => !imagensConhecidas.has(`estado:imagens:${texto(l.hash)}`))
+              .map((l) => get(`SELECT * FROM imagens WHERE hash=?`, [texto(l.hash)]) ?? l)
+          : all(`SELECT * FROM ${t}`)
+    for (const l of linhas) {
       const id = texto(l.id ?? l.hash ?? l.chave)
       // Apenas captura quando o estado difere do último envio conhecido.
       const chave = `estado:${t}:${id}`
@@ -1936,6 +1950,9 @@ export function capturarCadastros(): void {
         salvar(chave, estado)
       }
     }
+  }
+  const ms = performance.now() - inicio
+  if (ms > 200) console.warn(`[desempenho] capturarCadastros levou ${Math.round(ms)} ms`)
 }
 export function verificarIntegridadeLocal(): void {
   if (texto(db().get('PRAGMA integrity_check')?.integrity_check) !== 'ok')

@@ -290,6 +290,7 @@ export function registrarIpc(): void {
   for (const [canal, fn] of Object.entries(handlers)) {
     ipcMain.handle(canal, async (_evento, ...args) => {
       let finalizar: (() => void) | undefined
+      const inicio = performance.now()
       try {
         exigirAcesso(canal, args)
         if (canal === 'nuvem.sair') return await contaApi.sair()
@@ -387,6 +388,8 @@ export function registrarIpc(): void {
         throw new Error(mensagemErro(erro), { cause: erro })
       } finally {
         finalizar?.()
+        const ms = performance.now() - inicio
+        if (ms > 500) console.warn(`[desempenho] ${canal} levou ${Math.round(ms)} ms`)
       }
     })
   }

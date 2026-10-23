@@ -363,7 +363,10 @@ function RecepcaoPedidosEdicao(): null {
         for (const chave of atuais) ativosRef.current.add(chave)
         return
       }
-      if (evento.status || evento.entidades.some((e) => e.startsWith('controle:'))) executar()
+      const controle = evento.entidades.some((e) => e.startsWith('controle:'))
+      // Um `status` sem entidades durante a varredura é eco das próprias consultas
+      // (cada resposta da nuvem o emite); reagir a ele manteria o laço de requisições.
+      if (controle || (evento.status && !executando)) executar()
     })
     const timer = window.setInterval(executar, 15000)
     return () => {

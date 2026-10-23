@@ -115,9 +115,14 @@ export function abrirBanco(): { db: Database; bancoNovo: boolean } {
     backup = bancoNovo ? null : prepararMigracao(caminho)
     conexao = new Database(caminho)
     conexao.run('PRAGMA foreign_keys = ON')
-    verificarBanco(conexao)
+    // `prepararMigracao` já validou o arquivo existente (e a trava impede outro
+    // processo de alterá-lo). Sem migração pendente nada muda, então repetir a
+    // verificação completa só atrasa a abertura.
+    const jaVerificado = !bancoNovo
+    const semMigracao = jaVerificado && backup === null
+    if (!jaVerificado) verificarBanco(conexao)
     aplicarMigracoes(conexao)
-    verificarBanco(conexao)
+    if (!semMigracao) verificarBanco(conexao)
   } catch (e) {
     conexao?.close()
     conexao = null

@@ -1,4 +1,4 @@
-import { registrarVersao } from './versoes'
+import { documentoJaVersionado, registrarVersao } from './versoes'
 import { orcamentosRepo, relatoriosRepo } from './repositories'
 import { mensagemErro } from '@shared/erros'
 import { recibosRepo } from './recibos'
@@ -135,6 +135,8 @@ if (temTrava)
               ? relatoriosRepo
               : recibosRepo
         for (const d of repo.list()) {
+          // Evita montar o documento completo (com imagens) quando já há versão.
+          if (documentoJaVersionado(tipo, d.id)) continue
           const completo = repo.get(d.id)
           if (completo && !completo.versao)
             registrarVersao(tipo, completo, 'Versão inicial após migração')
