@@ -36,7 +36,13 @@ import {
   cn,
   Mensagem
 } from '../ui/primitives'
-import { dataCivilHoje, formatMoeda, normalizarDataCivil, round2 } from '@shared/format'
+import {
+  dataCivilHoje,
+  formatMoeda,
+  normalizarDataCivil,
+  round2,
+  totalDosItens
+} from '@shared/format'
 import type {
   Orcamento,
   ItemServico,
@@ -163,10 +169,7 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
     }
   }, [orcamentoId])
 
-  const total = useMemo(
-    () => (orc ? round2(orc.itensServico.reduce((s, i) => s + (i.valorTotal || 0), 0)) : 0),
-    [orc]
-  )
+  const total = useMemo(() => (orc ? totalDosItens(orc.itensServico) : 0), [orc])
   const sujo = orc !== null && snapshotSalvo !== null && JSON.stringify(orc) !== snapshotSalvo
   useBloqueioEdicao(sujo)
   const atualizacao = useDocumentoRemoto(

@@ -439,3 +439,33 @@ it('não duplica documentos ao importar o próprio backup', async () => {
   expect(repos.orcamentosRepo.list()).toHaveLength(orcamentosAntes)
   expect(repos.relatoriosRepo.list()).toHaveLength(relatoriosAntes)
 })
+
+it('grava o total do orçamento como a soma dos itens, ignorando o valor enviado', () => {
+  const item = (id: string, valorTotal: number): Orcamento['itensServico'][number] => ({
+    id,
+    descricao: id,
+    unidade: 'm',
+    quantidade: 1,
+    valorUnitario: valorTotal,
+    valorTotal,
+    calculo: null
+  })
+  const base = novoOrcamento('A Total Calculado,')
+  const criado = repos.orcamentosRepo.update(base.id, {
+    itensServico: [item('a', 10.1), item('b', 20.2)],
+    valorTotal: 999
+  })!
+  expect(criado.valorTotal).toBe(30.3)
+
+  // Alterar só o status não pode manter um total antigo divergente dos itens.
+  run('UPDATE orcamentos SET valor_total = 1 WHERE id = ?', [base.id])
+  const reaberto = repos.orcamentosRepo.update(base.id, { titulo: 'Outro título' })!
+  expect(reaberto.valorTotal).toBe(30.3)
+
+  // A soma é arredondada a centavos (0,1 + 0,2 em ponto flutuante dá 0,30000000000000004).
+  const parcial = repos.orcamentosRepo.update(base.id, {
+    itensServico: [item('a', 0.1), item('b', 0.2)]
+  })!
+  expect(parcial.valorTotal).toBe(0.3)
+  repos.orcamentosRepo.remove(base.id)
+})

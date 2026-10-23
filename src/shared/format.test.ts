@@ -4,7 +4,8 @@ import {
   formatDataCurta,
   formatMoeda,
   normalizarDataCivil,
-  round2
+  round2,
+  totalDosItens
 } from './format'
 
 describe('datas civis', () => {
@@ -33,5 +34,16 @@ describe('round2', () => {
     expect(Object.is(round2(-0.004), 0)).toBe(true)
     expect(Object.is(round2(-0), 0)).toBe(true)
     expect(formatMoeda(round2(-0.004))).not.toContain('-')
+  })
+})
+
+describe('totalDosItens', () => {
+  it('soma os itens e arredonda a centavos', () => {
+    expect(totalDosItens([{ valorTotal: 0.1 }, { valorTotal: 0.2 }])).toBe(0.3)
+    expect(totalDosItens([])).toBe(0)
+  })
+
+  it('trata valor ausente ou inválido como zero', () => {
+    expect(totalDosItens([{ valorTotal: Number.NaN }, { valorTotal: 5 }])).toBe(5)
   })
 })

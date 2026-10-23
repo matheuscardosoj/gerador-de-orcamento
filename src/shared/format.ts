@@ -9,6 +9,11 @@ export function round2(n: number): number {
   return r === 0 ? 0 : r
 }
 
+/** Total do documento: soma dos valores dos itens, arredondada a centavos. */
+export function totalDosItens(itens: ReadonlyArray<{ valorTotal: number }>): number {
+  return round2(itens.reduce((soma, item) => soma + (item.valorTotal || 0), 0))
+}
+
 const moedaFmt = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
   currency: 'BRL',

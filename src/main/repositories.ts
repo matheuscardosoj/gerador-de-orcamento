@@ -54,7 +54,7 @@ import type {
 import type { InfoNumeracao, ResultadoNumeracao } from '@shared/api'
 import { calcularTotaisRelatorio } from '@shared/relatorio'
 import { normalizarDestinatario } from '@shared/documento/comum'
-import { dataCivilHoje, normalizarDataCivil } from '@shared/format'
+import { dataCivilHoje, normalizarDataCivil, totalDosItens } from '@shared/format'
 import {
   exigirValidacao,
   validarParametrosFinanceiros,
@@ -66,6 +66,12 @@ import {
 } from '@shared/validacao'
 
 const nowIso = (): string => new Date().toISOString()
+/** O total gravado nunca vem do renderer: é sempre a soma dos itens do documento. */
+const comTotalDosItens = <
+  T extends { itensServico: Array<{ valorTotal: number }>; valorTotal: number }
+>(
+  documento: T
+): T => ({ ...documento, valorTotal: totalDosItens(documento.itensServico) })
 
 // -------------------------------------------------------------- Configurações
 // Singletons guardados como JSON numa linha de `configuracoes`.
@@ -654,13 +660,15 @@ export const orcamentosRepo = {
             true
           )
       gravarConfig('seqOrcamento', Math.max(numero, seqAtual()))
-      const orc = normalizarOrcamento<Orcamento>({
-        ...dto,
-        id: randomUUID(),
-        numero,
-        criadoEm: original?.criadoEm ?? nowIso(),
-        atualizadoEm: original?.atualizadoEm ?? nowIso()
-      })
+      const orc = comTotalDosItens(
+        normalizarOrcamento<Orcamento>({
+          ...dto,
+          id: randomUUID(),
+          numero,
+          criadoEm: original?.criadoEm ?? nowIso(),
+          atualizadoEm: original?.atualizadoEm ?? nowIso()
+        })
+      )
       if (!original && orc.status !== 'rascunho') exigirValidacao(validarOrcamentoFinal(orc))
       run(
         `INSERT INTO orcamentos
@@ -692,12 +700,14 @@ export const orcamentosRepo = {
     tx(() => {
       const atual = orcamentosRepo.get(id)
       if (!atual) return null
-      const novo = normalizarOrcamento<Orcamento>({
-        ...atual,
-        ...patch,
-        id,
-        atualizadoEm: nowIso()
-      })
+      const novo = comTotalDosItens(
+        normalizarOrcamento<Orcamento>({
+          ...atual,
+          ...patch,
+          id,
+          atualizadoEm: nowIso()
+        })
+      )
       if (novo.status !== 'rascunho') exigirValidacao(validarOrcamentoFinal(novo))
       run(
         `UPDATE orcamentos SET data = ?, cliente_id = ?, destinatario = ?, formato = ?, titulo = ?,
