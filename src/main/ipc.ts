@@ -7,6 +7,7 @@ import {
   type TipoRascunhoCadastro
 } from './rascunhos-cadastros'
 import { exigeNumeracaoAtualizada } from './bloqueio-numeracao'
+import { urlDoAplicativo } from './origem-janela'
 import { contaApi } from './contas/servico'
 import { exigirAcesso, iniciarOperacao } from './contas/acesso'
 import { mensagemErro } from '../shared/erros'
@@ -288,10 +289,12 @@ export function registrarIpc(): void {
     })
   }
   for (const [canal, fn] of Object.entries(handlers)) {
-    ipcMain.handle(canal, async (_evento, ...args) => {
+    ipcMain.handle(canal, async (evento, ...args) => {
       let finalizar: (() => void) | undefined
       const inicio = performance.now()
       try {
+        if (!urlDoAplicativo(evento.senderFrame?.url ?? '', process.env['ELECTRON_RENDERER_URL']))
+          throw new Error('Origem não autorizada para esta operação.')
         exigirAcesso(canal, args)
         if (canal === 'nuvem.sair') return await contaApi.sair()
         finalizar = iniciarOperacao()

@@ -5,6 +5,7 @@ import type { AnexoOrcamento, AnexoRelatorio, EmpresaConfig, Orcamento, Relatori
 import { formatMoeda } from '../format'
 import { valorPorExtenso } from '../extenso'
 import { PADRAO_DATA_URL_IMAGEM } from '../imagem-segura'
+import { META_CSP_DOCUMENTO } from './csp'
 import { destinatarioNoDocumento, LIMITE_ANEXO_MM, localEData } from './comum'
 
 function esc(s: string): string {
@@ -284,7 +285,7 @@ export function gerarHtmlOrcamento(orc: Orcamento, empresa: EmpresaConfig): stri
   // A paginação em folhas A4 (motor único em `paginar.ts`) é sempre feita por
   // quem consome este HTML — a prévia chama `paginarDocumento` sobre o
   // `contentDocument` do iframe; o PDF injeta a mesma função na janela oculta.
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Proposta ${esc(
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">${META_CSP_DOCUMENTO}<title>Proposta ${esc(
     String(orc.numero)
   )}</title><style>${estilo}</style></head><body><div class="pagina">${corpo}</div></body></html>`
 }

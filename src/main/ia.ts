@@ -147,7 +147,9 @@ async function garantirServidor(): Promise<number> {
       if (!processo)
         throw new Error(`O servidor de IA encerrou durante a inicialização.${detalheDiagnostico()}`)
       try {
-        const r = await fetch(`http://127.0.0.1:${porta}/health`)
+        const r = await fetch(`http://127.0.0.1:${porta}/health`, {
+          signal: AbortSignal.timeout(2000)
+        })
         if (r.ok) {
           portaAtual = porta
           capturandoBoot = false

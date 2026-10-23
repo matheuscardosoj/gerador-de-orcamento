@@ -5,6 +5,8 @@ import { join } from 'path'
 import { definirAcesso } from '../contas/acesso'
 
 type Handler = (evento: unknown, ...args: unknown[]) => Promise<unknown>
+// Evento como o Electron entrega: a chamada parte do index.html do próprio aplicativo.
+const eventoDoApp = { senderFrame: { url: 'file:///C:/app/out/renderer/index.html' } }
 const estado = vi.hoisted(() => ({ perfil: '', handlers: new Map<string, Handler>() }))
 const raiz = mkdtempSync(join(tmpdir(), 'gdo-cadastros-ipc-'))
 vi.mock('electron', () => ({
@@ -70,7 +72,7 @@ it.each([
     configurarFila()
     const entidade = `${tabela}:${cadastro.id}`
     sql.run('INSERT INTO sincronizacao VALUES (?,?)', [entidade, 7])
-    await estado.handlers.get(`${dominio}.remove`)!(null, cadastro.id)
+    await estado.handlers.get(`${dominio}.remove`)!(eventoDoApp, cadastro.id)
     const operacoes = sql.all('SELECT * FROM fila_nuvem WHERE entidade=?', [entidade])
     expect(operacoes).toHaveLength(1)
     expect(operacoes[0].base).toBe(7)
@@ -99,10 +101,16 @@ it('bloqueia a exclusão IPC de cliente usado em recibo antes de publicar tombst
     observacao: ''
   })
   configurarFila()
-  await expect(estado.handlers.get('clientes.remove')!(null, cliente.id)).rejects.toThrow(
+  await expect(estado.handlers.get('clientes.remove')!(eventoDoApp, cliente.id)).rejects.toThrow(
     'Marque-o como inativo'
   )
   expect(repos.clientesRepo.get(cliente.id)).toEqual(cliente)
   expect(recibos.recibosRepo.get(recibo.id)).toEqual(recibo)
   expect(sql.all('SELECT * FROM fila_nuvem')).toEqual([])
+})
+
+it('recusa chamadas de IPC vindas de fora do aplicativo', async () => {
+  const externo = { senderFrame: { url: 'https://exemplo.com/' } }
+  await expect(estado.handlers.get('clientes.list')!(externo)).rejects.toThrow()
+  await expect(estado.handlers.get('clientes.list')!({ senderFrame: null })).rejects.toThrow()
 })
