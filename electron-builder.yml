@@ -26,21 +26,16 @@ extraResources:
       - CONFIGURACAO.md
   - from: supabase/migrations
     to: supabase/migrations
+    # Toda migração nova entra sozinha; 001 a 003 são da nuvem legada e ficam de fora.
     filter:
-      - 004_codigos_cadastros.sql
-      - 005_reconciliar_numero_recibos_teste.sql
-      - 006_corrigir_fk_codigos_cadastros.sql
-      - 007_padroes_empresa_e_codigo_servico.sql
-      - 008_nome_empresa_selecao.sql
-      - 009_operador_acesso_global.sql
-      - 010_operador_protegido_e_excluir_empresa.sql
-      - 011_sessao_edicao_e_isolamento.sql
-      - 012_geracao_manutencao_empresa.sql
-      - 013_realtime_sem_renovacao.sql
+      - '*.sql'
+      - '!001_*.sql'
+      - '!002_*.sql'
+      - '!003_*.sql'
   - from: supabase/rollbacks
     to: supabase/rollbacks
     filter:
-      - 013_desfazer_realtime_sem_renovacao.sql
+      - '*.sql'
   # Runtime de IA (llama-server.exe + modelo GGUF), baixado por `npm run ia`.
   - from: resources/ia
     to: ia

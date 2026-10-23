@@ -28,6 +28,10 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
+      # Vulnerabilidades graves nas dependências que vão no instalador.
+      - name: Auditar dependências de produção
+        run: npm audit --omit=dev --audit-level=high
+
       # lint, formatação, typecheck, testes e build (mesmo comando usado localmente).
       - name: Verificar
         run: npm run check
