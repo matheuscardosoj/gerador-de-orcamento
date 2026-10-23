@@ -121,7 +121,7 @@ const estados: Record<
   pendente: { label: 'Pagamento pendente', cor: 'amber' }
 }
 function valorCampo(r: RegistroHistorico, k: string): string | number {
-  return (r as unknown as Record<string, string | number>)[k] ?? ''
+  return (Reflect.get(r, k) as string | number | undefined) ?? ''
 }
 function textoCampo(r: RegistroHistorico, k: string): string {
   const v = valorCampo(r, k)
