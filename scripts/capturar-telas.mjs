@@ -109,6 +109,71 @@ try {
         .catch(() => undefined)
       await foto(nome)
     }
+    // Abas de Configurações, modais de Cadastros e popover de colunas.
+    const tentar = async (nome, passos) => {
+      try {
+        await passos()
+        await foto(nome)
+      } catch {
+        // A tela ausente na API de demonstração não impede as demais capturas.
+      }
+    }
+    await page
+      .getByRole('button', { name: /^Configurações/ })
+      .first()
+      .click()
+    let n = 0
+    for (const aba of [
+      'Parâmetros',
+      'Numeração',
+      'Dados',
+      'IA',
+      'Nuvem',
+      'Usuários',
+      'Minha conta'
+    ]) {
+      const alvo = page
+        .getByRole('tab', { name: new RegExp(aba, 'i') })
+        .or(page.getByRole('button', { name: new RegExp('^' + aba, 'i') }))
+      await tentar('09-config-' + String(++n).padStart(2, '0'), async () => {
+        await alvo.first().click({ timeout: 1500 })
+      })
+    }
+    await page
+      .getByRole('button', { name: /^Cadastros/ })
+      .first()
+      .click()
+    await tentar('10-modal-novo-cliente', async () => {
+      await page
+        .getByRole('button', { name: /Novo cliente/ })
+        .first()
+        .click({ timeout: 1500 })
+    })
+    await page.keyboard.press('Escape')
+    await tentar('11-cadastros-servicos', async () => {
+      await page
+        .getByRole('button', { name: /^Serviços/ })
+        .first()
+        .click({ timeout: 1500 })
+    })
+    await tentar('12-modal-novo-servico', async () => {
+      await page
+        .getByRole('button', { name: /Novo serviço/ })
+        .first()
+        .click({ timeout: 1500 })
+    })
+    await page.keyboard.press('Escape')
+    await page
+      .getByRole('button', { name: /^Orçamentos/ })
+      .first()
+      .click()
+    await tentar('13-popover-colunas', async () => {
+      await page
+        .getByRole('button', { name: /Colunas/ })
+        .first()
+        .click({ timeout: 1500 })
+    })
+    await page.keyboard.press('Escape')
     await page
       .getByRole('button', { name: /^Orçamentos/ })
       .first()

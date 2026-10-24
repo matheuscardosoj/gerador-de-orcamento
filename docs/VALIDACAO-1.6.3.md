@@ -20,9 +20,7 @@ fora do Git; o instalador não é assinado (`signAndEditExecutable: false`).
 
 ## Limites desta validação
 
-- A comparação de telas cobre a entrada, as cinco telas principais e o editor de orçamento, com a API de
-  demonstração (listas vazias). Modais, tabelas com muitos dados e outras abas de Configurações não foram
-  comparadas pixel a pixel; o espaçamento `space-*` foi preservado por regra global.
+- A comparação de telas usa a API de demonstração (listas vazias): 30 capturas (entrada, as cinco telas principais, o editor de orçamento, as abas de Configurações disponíveis, os modais de novo cliente e o seletor de colunas, em claro e escuro) ficaram idênticas pixel a pixel contra o Tailwind 3. Tabelas com muitos dados não foram comparadas.
 - Não foi exercitada a sincronização real com o Supabase nem a IA local no Electron 45 (cobertas por testes
   automatizados, mas não por um ensaio com dois computadores como na 1.6.0).
 - O Electron 45 não foi instalado como aplicativo; o executável foi validado pelo `win-unpacked`.
