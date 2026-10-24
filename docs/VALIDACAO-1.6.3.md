@@ -2,9 +2,9 @@
 
 Versão: **1.6.3** (manutenção). SQLite esquema 14 e protocolo de nuvem 4, sem migração nova. Nenhuma
 mudança visível; atualiza dependências e divide módulos grandes. Detalhes no `CHANGELOG.md`.
-Instalador: `release/1.6.3/Gerador de Orçamentos Setup 1.6.3.exe`, 1.173 MiB (1.230.738.035 bytes),
-SHA-256 `2f6bf879b70deb6dce0a8f1832a15146192638cd43891597313fdad56f42ded0`. A pasta `release/` fica
-fora do Git; o instalador não é assinado (`signAndEditExecutable: false`).
+Instalador: `release/1.6.3/Gerador-de-Orcamentos-Setup-1.6.3.exe`, 1.174 MiB (1.231.051.589 bytes),
+SHA-256 `fd5ea0bbb69c55b6444d6bb558b2fa0adb2a2cf8db29830f3c3647acaf37efdb`. A pasta `release/` fica
+fora do Git; o instalador não é assinado (`signAndEditExecutable: false`). Publicado nos GitHub Releases.
 
 ## Ensaios e resultados
 
@@ -27,3 +27,12 @@ fora do Git; o instalador não é assinado (`signAndEditExecutable: false`).
 - TypeScript 7 e a atualização automática/assinatura de código não foram feitos (ver o CHANGELOG).
 - Com o Vitest 5, um teste de `Retry-After` passou a coincidir com a vigilância periódica no mesmo instante;
   a asserção foi ajustada para "nada antes do prazo; envio no prazo".
+
+## Atualização automática
+
+A partir da 1.6.3 o aplicativo instalado consulta os GitHub Releases do projeto 30 s depois de abrir e a cada
+6 horas. Se houver versão nova, pergunta se o usuário quer baixar (só a parte que mudou, pelo blockmap); depois do
+download, pergunta se reinicia agora ou instala ao fechar. Nada baixa sozinho. Não roda em desenvolvimento, nos
+ensaios nem com `GERADOR_USER_DATA_DIR`. Testes automatizados cobrem a decisão; o fluxo ponta a ponta só pode ser
+exercitado quando existir uma versão posterior à 1.6.3 publicada (as instalações anteriores à 1.6.3 precisam
+instalar a 1.6.3 manualmente uma vez).

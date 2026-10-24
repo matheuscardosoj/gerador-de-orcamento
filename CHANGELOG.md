@@ -17,6 +17,9 @@ Nenhuma tela, texto ou fluxo muda. O que mudou por dentro:
   colaboração foram divididos em módulos menores, com testes novos para os painéis de colaboração.
 - Casts `as unknown as` de acesso dinâmico trocados por `Reflect`; `docs/ARQUITETURA.md` descreve o
   contrato de IPC, as fontes do SQL da nuvem e a divisão dos módulos.
+- Atualização automática pelos GitHub Releases (`electron-updater`): o aplicativo avisa quando há versão nova, baixa só
+  o que mudou se o usuário aceitar e instala ao fechar ou quando ele escolher reiniciar. O instalador passa a se chamar
+  `Gerador-de-Orcamentos-Setup-<versão>.exe`.
 - `esbuild` passou a ser dependência declarada (usada pelos scripts de verificação).
 
 ## 1.6.2 — banco travado por um processo que não é mais o aplicativo
