@@ -18,3 +18,13 @@ que fica: nas telas aparecem "VS PRESTADORA DE SERVIÇOS" e "TESTE"; "V S DE JES
 4. **Conferir de novo.** Reexecute o arquivo do passo 1: deve restar uma empresa e o administrador (mais os
    membros da empresa que fica).
 5. Arquivos e imagens da empresa que fica não são tocados por nenhum desses passos.
+
+## Execução rápida (conferida em 24/10/2026)
+
+A consulta de leitura mostrou: empresa **TESTE** (1 orçamento de teste), empresa **VS PRESTADORA DE SERVIÇOS**
+(22 orçamentos, 5 relatórios, 1 recibo, 13 clientes, 17 imagens, que fica), o administrador
+`matheuscardosoj@outlook.com` e três contas de teste sem empresa. No SQL Editor, nesta ordem:
+
+1. `supabase/manutencao/limpeza-backup.sql` (leitura): Export > JSON e guarde o arquivo.
+2. `supabase/manutencao/limpeza-executar.sql`: cole inteiro e execute uma vez. Tem guardas e transação;
+   se algo não bater com o conferido, nada é apagado.
