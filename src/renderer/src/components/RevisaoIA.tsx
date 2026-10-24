@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 import { Button, ConfirmDialog, Field, Modal, Textarea } from '../ui/primitives'
 import type { RevisaoTextoEntrada } from '@shared/revisao-ia'
 import type { SugestaoObservacaoEntrada } from '@shared/api'
+import type { ReactElement } from 'react'
 
 export function RevisaoIA({
   texto,
@@ -19,7 +20,7 @@ export function RevisaoIA({
   campo: RevisaoTextoEntrada['campo']
   anotacao?: SugestaoObservacaoEntrada
   disabled?: boolean
-}): JSX.Element {
+}): ReactElement {
   const [aberto, setAberto] = useState(false),
     [original, setOriginal] = useState(''),
     [sugestao, setSugestao] = useState('')

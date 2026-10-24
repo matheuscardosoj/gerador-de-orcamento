@@ -14,8 +14,9 @@ import {
   cn
 } from '../ui/primitives'
 import { novoId } from './tipos'
+import type { ReactElement } from 'react'
 
-export function Linha({ label, valor }: { label: string; valor: number }): JSX.Element {
+export function Linha({ label, valor }: { label: string; valor: number }): ReactElement {
   return (
     <div className="flex items-baseline justify-between gap-3 text-slate-600">
       <span className="min-w-0 leading-5">{label}</span>
@@ -31,7 +32,7 @@ export function ModoSelect({
 }: {
   value: ModoAplicacao
   onChange: (m: ModoAplicacao) => void
-}): JSX.Element {
+}): ReactElement {
   return (
     <Select value={value} onChange={(e) => onChange(e.target.value as ModoAplicacao)}>
       <option value="cheio">Valor total</option>
@@ -49,7 +50,7 @@ export function Bloco({
   titulo: string
   children: React.ReactNode
   acao?: React.ReactNode
-}): JSX.Element {
+}): ReactElement {
   return (
     <Card className="p-4">
       <div className="mb-3 flex items-center justify-between">
@@ -63,7 +64,7 @@ export function Bloco({
 
 export type BlocoProps = { e: EntradaCalculo; set: (p: Partial<EntradaCalculo>) => void }
 
-export function MaoDeObraBloco({ e, set }: BlocoProps): JSX.Element {
+export function MaoDeObraBloco({ e, set }: BlocoProps): ReactElement {
   const add = (): void =>
     set({
       maoDeObra: [...e.maoDeObra, { id: novoId(), qtdFuncionarios: 1, base: 'diaria', valor: 0 }]
@@ -81,7 +82,7 @@ export function MaoDeObraBloco({ e, set }: BlocoProps): JSX.Element {
         </Button>
       }
     >
-      <div className="space-y-3">
+      <div className="pilha-y-3">
         {e.maoDeObra.length === 0 && (
           <p className="text-xs text-slate-400">Nenhum grupo de mão de obra.</p>
         )}
@@ -154,7 +155,7 @@ export function MaoDeObraBloco({ e, set }: BlocoProps): JSX.Element {
                   }
                 />
                 {g.clt && (
-                  <div className="mt-2 space-y-2">
+                  <div className="mt-2 pilha-y-2">
                     <Field
                       label="Salário registrado na carteira (mensal)"
                       hint="Base dos encargos e da rescisão — pode diferir do valor pago"
@@ -200,7 +201,7 @@ export function LinhaDescricao({
   placeholder: string
   onChange: (v: string) => void
   onRemove: () => void
-}): JSX.Element {
+}): ReactElement {
   return (
     <div className="mb-2 flex items-end gap-2">
       <Field label="Descrição" className="flex-1">
@@ -219,7 +220,7 @@ export function AlimentacaoBloco({
   e,
   set,
   parametros
-}: BlocoProps & { parametros: ParametrosFinanceiros }): JSX.Element {
+}: BlocoProps & { parametros: ParametrosFinanceiros }): ReactElement {
   const add = (): void =>
     set({
       alimentacoes: [
@@ -246,7 +247,7 @@ export function AlimentacaoBloco({
         </Button>
       }
     >
-      <div className="space-y-3">
+      <div className="pilha-y-3">
         {e.alimentacoes.length === 0 && (
           <p className="text-xs text-slate-400">
             Inclua os custos de alimentação das pessoas envolvidas no serviço.
@@ -289,7 +290,7 @@ export function AlimentacaoBloco({
   )
 }
 
-export function FerramentasBloco({ e, set }: BlocoProps): JSX.Element {
+export function FerramentasBloco({ e, set }: BlocoProps): ReactElement {
   const add = (): void =>
     set({
       ferramentas: [
@@ -310,7 +311,7 @@ export function FerramentasBloco({ e, set }: BlocoProps): JSX.Element {
         </Button>
       }
     >
-      <div className="space-y-2">
+      <div className="pilha-y-2">
         {e.ferramentas.length === 0 && (
           <p className="text-xs text-slate-400">
             Inclua insumos e despesas de manutenção dos equipamentos usados no serviço.
@@ -359,7 +360,7 @@ export function CombustivelBloco({
   e,
   set,
   parametros
-}: BlocoProps & { parametros: ParametrosFinanceiros }): JSX.Element {
+}: BlocoProps & { parametros: ParametrosFinanceiros }): ReactElement {
   const add = (): void =>
     set({
       combustiveis: [
@@ -387,7 +388,7 @@ export function CombustivelBloco({
         </Button>
       }
     >
-      <div className="space-y-3">
+      <div className="pilha-y-3">
         {e.combustiveis.length === 0 && (
           <p className="text-xs text-slate-400">Um item por veículo usado no serviço.</p>
         )}
@@ -442,7 +443,7 @@ export function CombustivelBloco({
   )
 }
 
-export function EstadiaBloco({ e, set }: BlocoProps): JSX.Element {
+export function EstadiaBloco({ e, set }: BlocoProps): ReactElement {
   const add = (): void =>
     set({
       estadias: [
@@ -472,7 +473,7 @@ export function EstadiaBloco({ e, set }: BlocoProps): JSX.Element {
         </Button>
       }
     >
-      <div className="space-y-3">
+      <div className="pilha-y-3">
         {e.estadias.length === 0 && (
           <p className="text-xs text-slate-400">
             Inclua despesas de hospedagem por pessoa ou de aluguel de imóvel.
@@ -551,7 +552,7 @@ export function EstadiaBloco({ e, set }: BlocoProps): JSX.Element {
   )
 }
 
-export function AvulsosBloco({ e, set }: BlocoProps): JSX.Element {
+export function AvulsosBloco({ e, set }: BlocoProps): ReactElement {
   const add = (): void =>
     set({ avulsos: [...e.avulsos, { id: novoId(), descricao: '', valor: 0, modo: 'cheio' }] })
   const upd = (id: string, patch: Partial<EntradaCalculo['avulsos'][number]>): void =>
@@ -567,7 +568,7 @@ export function AvulsosBloco({ e, set }: BlocoProps): JSX.Element {
         </Button>
       }
     >
-      <div className="space-y-2">
+      <div className="pilha-y-2">
         {e.avulsos.length === 0 && (
           <p className="text-xs text-slate-400">
             Inclua despesas adicionais do serviço. Escolha o percentual de lucro ou o repasse pelo
@@ -596,7 +597,7 @@ export function AvulsosBloco({ e, set }: BlocoProps): JSX.Element {
                   <ModoSelect value={a.modo} onChange={(m) => upd(a.id, { modo: m })} />
                 </Field>
               </div>
-              <div className="mt-3 space-y-1.5">
+              <div className="mt-3 pilha-y-1.5">
                 <Field label="Cálculo do lucro deste item">
                   <Select
                     value={

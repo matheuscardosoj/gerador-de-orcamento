@@ -5,6 +5,7 @@ import { useNav } from './nav'
 import { Button } from '../ui/primitives'
 import type { TipoDocumento } from '@shared/types'
 import type { Documento } from '@shared/evolucao'
+import type { ReactElement } from 'react'
 
 export function useDocumentoRemoto<T>(
   tipo: TipoDocumento,
@@ -141,7 +142,7 @@ export function AvisoAtualizacao({
   erroRascunho?: string | null
   sujo?: boolean
   guardarRascunhoESair?: () => Promise<void>
-}): JSX.Element | null {
+}): ReactElement | null {
   const { executarComConfirmacao, navegar } = useNav()
   if (excluido)
     return (

@@ -55,7 +55,7 @@ export function enfileirar(entidade: string, payload: unknown): void {
 export function lerMeta(tipo: TipoDocumento, id: string): DocumentoMetadados {
   const l = get('SELECT dados FROM documento_meta WHERE tipo=? AND documento_id=?', [tipo, id])
   const meta: DocumentoMetadados = l ? JSON.parse(texto(l.dados)) : {}
-  delete (meta as unknown as Record<string, unknown>).idInterno
+  Reflect.deleteProperty(meta, 'idInterno')
   const identificador = get('SELECT * FROM autoria_documentos WHERE tipo=? AND documento_id=?', [
     tipo,
     id
@@ -127,17 +127,16 @@ export function exigirResponsavel(tipo: TipoDocumento, id: string): void {
 }
 function normalizado(d: Documento): string {
   const copia = structuredClone(d) as Documento
-  const dados = copia as unknown as Record<string, unknown>
-  delete dados.atualizadoEm
-  delete dados.versao
   for (const chave of [
+    'atualizadoEm',
+    'versao',
     'idInterno',
     'usuarioCriador',
     'alteradoPor',
     'autorNome',
     'computadorResponsavel'
   ])
-    delete dados[chave]
+    Reflect.deleteProperty(copia, chave)
   if ('anexos' in copia)
     copia.anexos = copia.anexos.map((a) => {
       const c = { ...a }
@@ -354,7 +353,7 @@ export function envolverDocumento<T extends object>(repo: T, tipo: TipoDocumento
     const d = ler(id) as Documento | null
     if (!d) return null
     const atual = { ...d, ...lerMeta(tipo, String(id)) }
-    delete (atual as unknown as Record<string, unknown>).idInterno
+    Reflect.deleteProperty(atual, 'idInterno')
     return atual
   }
   for (const nome of [

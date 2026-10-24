@@ -41,6 +41,7 @@ import {
   type ErrosRecibo
 } from '@shared/validacao-recibo'
 import { PreviaDocumentoModal } from '../components/PreviaDocumentoModal'
+import type { ReactElement } from 'react'
 const vazio = (empresa?: EmpresaConfig | null): Recibo => ({
   id: '',
   numero: 0,
@@ -62,7 +63,7 @@ export function RecibosPage({
 }: {
   reciboId?: string
   origemDocumento?: { tipo: 'orcamento' | 'relatorio'; id: string }
-}): JSX.Element {
+}): ReactElement {
   const { navegar, executarComConfirmacao } = useNav()
   const [lista, setLista] = useState<Recibo[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
@@ -356,7 +357,7 @@ export function RecibosPage({
           }
         />
       ) : (
-        <div className="space-y-5">
+        <div className="pilha-y-5">
           <AvisoAtualizacao {...atualizacao} sujo={!!r && JSON.stringify(r) !== salvo} />
           <ColaboracaoDocumento
             tipo="recibo"

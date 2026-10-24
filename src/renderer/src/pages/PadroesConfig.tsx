@@ -23,6 +23,7 @@ import {
   Textarea
 } from '../ui/primitives'
 import { RevisaoIA } from '../components/RevisaoIA'
+import type { ReactElement } from 'react'
 type TextoPadrao = ObservacaoPadrao | FormaPagamentoPadrao
 export function PadroesConfig({
   tipo,
@@ -32,7 +33,7 @@ export function PadroesConfig({
   tipo: 'observacoes' | 'pagamentos'
   novo: boolean
   setNovo: (novo: boolean) => void
-}): JSX.Element {
+}): ReactElement {
   const { data, loading, error, reload } = useAsync(
     () => api[tipo].list(),
     [tipo],
@@ -123,7 +124,7 @@ export function PadroesConfig({
     setOrigemRascunho(null)
   }
   return (
-    <div className="space-y-4">
+    <div className="pilha-y-4">
       <p className="text-sm text-slate-500">
         Defina os textos sugeridos nos documentos. Arraste pela alça para escolher a ordem; os
         documentos já salvos preservam seus textos.
@@ -311,7 +312,7 @@ export function PadroesConfig({
           </>
         }
       >
-        <div className="space-y-4">
+        <div className="pilha-y-4">
           {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
           <Field label="Texto">
             <Textarea

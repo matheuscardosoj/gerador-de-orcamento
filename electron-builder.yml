@@ -52,6 +52,8 @@ win:
       arch:
         - x64
 nsis:
+  # Nome sem espaços nem acentos: é o que o GitHub Releases e o latest.yml referenciam.
+  artifactName: Gerador-de-Orcamentos-Setup-${version}.${ext}
   include: build/installer.nsh
   oneClick: false
   installerLanguages:
@@ -62,4 +64,10 @@ nsis:
   perMachine: false
   allowToChangeInstallationDirectory: true
   deleteAppDataOnUninstall: false
+# As versões ficam nos GitHub Releases; `--publish never` nos scripts impede envio acidental.
+publish:
+  provider: github
+  owner: matheuscardosoj
+  repo: gerador-de-orcamento
+  releaseType: release
 npmRebuild: false

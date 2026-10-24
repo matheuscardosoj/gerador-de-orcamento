@@ -4,6 +4,7 @@ import type { EmpresaConfig, Orcamento } from '@shared/types'
 import { PreviaDocumentoModal } from './PreviaDocumentoModal'
 import { destinatarioComTratamento } from '@shared/documento/comum'
 import { api } from '../lib/api'
+import type { ReactElement } from 'react'
 
 export function PreviaModal({
   orc,
@@ -15,7 +16,7 @@ export function PreviaModal({
   empresa: EmpresaConfig
   tratamento?: string
   onClose: () => void
-}): JSX.Element {
+}): ReactElement {
   const [anexosCompletos, setAnexosCompletos] = useState(orc.anexos ?? [])
   useEffect(() => {
     let vivo = true

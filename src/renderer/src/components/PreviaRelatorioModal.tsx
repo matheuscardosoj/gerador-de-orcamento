@@ -4,6 +4,7 @@ import type { EmpresaConfig, Relatorio } from '@shared/types'
 import { PreviaDocumentoModal } from './PreviaDocumentoModal'
 import { destinatarioComTratamento } from '@shared/documento/comum'
 import { api } from '../lib/api'
+import type { ReactElement } from 'react'
 
 export function PreviaRelatorioModal({
   relatorio,
@@ -15,7 +16,7 @@ export function PreviaRelatorioModal({
   empresa: EmpresaConfig
   tratamento?: string
   onClose: () => void
-}): JSX.Element {
+}): ReactElement {
   const [anexosCompletos, setAnexosCompletos] = useState(relatorio.anexos)
   useEffect(() => {
     let vivo = true

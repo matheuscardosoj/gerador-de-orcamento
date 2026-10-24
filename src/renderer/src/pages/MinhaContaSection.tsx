@@ -7,8 +7,9 @@ import { useBloqueioEdicao, useNav } from '../lib/nav'
 import { useConta } from '../components/ContaGate'
 import { SeletorTema } from '../components/SeletorTema'
 import { Button, Card, Field, Input, PasswordInput, SectionTitle } from '../ui/primitives'
+import type { ReactElement } from 'react'
 
-export function MinhaContaSection(): JSX.Element {
+export function MinhaContaSection(): ReactElement {
   const { conta, atualizar } = useConta()
   const { executarComConfirmacao } = useNav()
   const [nome, setNome] = useState(conta.nome)
@@ -43,7 +44,7 @@ export function MinhaContaSection(): JSX.Element {
     }
   }
   return (
-    <div className="w-full space-y-4">
+    <div className="w-full pilha-y-4">
       {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
       {sucesso && (
         <MensagemFlutuante tom="sucesso" temporaria>
@@ -51,14 +52,14 @@ export function MinhaContaSection(): JSX.Element {
         </MensagemFlutuante>
       )}
       <div className="grid gap-4">
-        <Card className="space-y-4 p-6">
+        <Card className="pilha-y-4 p-6">
           <SectionTitle
             title="Aparência"
             description="Vale para este computador e fica salvo ao fechar o aplicativo. Os documentos gerados (PDF, Word) continuam com fundo branco."
           />
           <SeletorTema />
         </Card>
-        <Card className="space-y-5 p-6">
+        <Card className="pilha-y-5 p-6">
           <SectionTitle
             title="Minha conta"
             description={conta.email}
@@ -71,7 +72,7 @@ export function MinhaContaSection(): JSX.Element {
             }
           />
           <form
-            className="space-y-4"
+            className="pilha-y-4"
             onSubmit={(e) => {
               e.preventDefault()
               void executar(async () => {
@@ -103,7 +104,7 @@ export function MinhaContaSection(): JSX.Element {
             </div>
           </form>
         </Card>
-        <Card className="space-y-5 p-6">
+        <Card className="pilha-y-5 p-6">
           <SectionTitle
             title="Alterar e-mail"
             description={
@@ -148,7 +149,7 @@ export function MinhaContaSection(): JSX.Element {
             </div>
           )}
           <form
-            className="space-y-4"
+            className="pilha-y-4"
             onSubmit={(e) => {
               e.preventDefault()
               void executar(async () => {
@@ -197,13 +198,13 @@ export function MinhaContaSection(): JSX.Element {
             </p>
           </form>
         </Card>
-        <Card className="space-y-5 p-6">
+        <Card className="pilha-y-5 p-6">
           <SectionTitle
             title="Alterar senha"
             description="Confirme sua senha atual para proteger o acesso à conta."
           />
           <form
-            className="space-y-4"
+            className="pilha-y-4"
             onSubmit={(e) => {
               e.preventDefault()
               void executar(async () => {

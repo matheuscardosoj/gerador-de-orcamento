@@ -28,6 +28,7 @@ import {
 import type { ServicoCatalogo } from '@shared/types'
 import type { RascunhoCadastro } from '@shared/evolucao'
 import { useNav } from '../../lib/nav'
+import type { ReactElement } from 'react'
 
 // --------------------------------------------------------------- Serviços
 const servicoVazio = (): Omit<ServicoCatalogo, 'id'> => ({
@@ -49,7 +50,7 @@ export function SecaoServicos({
 }: {
   edit: ServicoCatalogo | 'novo' | null
   setEdit: (edit: ServicoCatalogo | 'novo' | null) => void
-}): JSX.Element {
+}): ReactElement {
   const {
     data,
     loading,
@@ -98,7 +99,7 @@ export function SecaoServicos({
   const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA
   const paginaFiltrada = filtrados.slice(inicio, inicio + ITENS_POR_PAGINA)
   return (
-    <div className="space-y-4">
+    <div className="pilha-y-4">
       {rascunhos?.map((r) => (
         <Mensagem key={r.idOrigem} tom="aviso">
           Alterações de um serviço excluído em outro computador foram guardadas neste computador.{' '}
@@ -291,7 +292,7 @@ function ServicoModal({
   onClose: () => void
   onDeleted: () => void
   onSaved: () => void
-}): JSX.Element {
+}): ReactElement {
   const [form, setForm] = useState<Omit<ServicoCatalogo, 'id'>>(
     (restaurar?.dados as Omit<ServicoCatalogo, 'id'> | undefined) ?? servico ?? servicoVazio()
   )
@@ -372,7 +373,7 @@ function ServicoModal({
         </>
       }
     >
-      <div className="space-y-4">
+      <div className="pilha-y-4">
         {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
         <Field label="Nome do serviço">
           <Input value={form.nome} onChange={(e) => set({ nome: e.target.value })} autoFocus />

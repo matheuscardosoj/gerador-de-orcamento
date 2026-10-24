@@ -1,10 +1,9 @@
 import { app } from 'electron'
 import { createHash } from 'crypto'
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync } from 'fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 import type { ConfigNuvem } from '../../shared/types'
-import { diagnosticoErro } from '../../shared/erros'
-import type { ContaApi, ConviteConta, EmpresaConta, EstadoConta } from '../../shared/conta'
+import type { ContaApi, EstadoConta } from '../../shared/conta'
 import { abrirBanco, fecharBanco, get, run, selecionarPerfilDados, texto } from '../db/sqlite'
 import { bancoVazio, semear } from '../repositories'
 import { avisarDados } from '../eventos'
@@ -25,6 +24,11 @@ import {
   observarAcessoNuvem
 } from '../nuvem'
 import { aguardarOperacoes, definirAcesso } from './acesso'
+import { servico } from './servico-central'
+import { requisitar } from './requisicao'
+import { normalizarContas, type ContasRemotas } from './contas-remotas'
+import { erroExclusao } from './erro-exclusao'
+import { rotularConvites, senhaValida } from './convites'
 import { avaliarConfirmacaoEmail, lerCallbackEmail } from './callback-email'
 import { destinoAposLogin } from './entrada-empresa'
 import {
@@ -40,7 +44,6 @@ import {
 type Token = NonNullable<ReturnType<typeof lerSessaoConta>> & {
   user: { id: string; user_metadata?: { name?: string }; email?: string }
 }
-type ContasRemotas = { operador: boolean; empresas: Array<EmpresaConta & { usuarioNome: string }> }
 let perfil: PerfilConta | null = null
 let tokenEntrada: Token | null = null
 let configEntrada: ConfigNuvem | null = null
@@ -64,77 +67,6 @@ let inicializacaoContas: Promise<void> | null = null
 function emitir(): EstadoConta {
   avisarDados({ origem: 'nuvem', entidades: [], status: true })
   return structuredClone(estado)
-}
-function lerConfiguracaoServico(caminho: string): ConfigNuvem {
-  try {
-    return JSON.parse(readFileSync(caminho, 'utf8'))
-  } catch {
-    throw new Error('A configuração do serviço não é válida. Solicite o instalador atualizado.')
-  }
-}
-function servico(): ConfigNuvem | null {
-  const caminho = join(process.resourcesPath, 'servico.json')
-  const url = process.env.GERADOR_SERVICO_URL
-  const chavePublica = process.env.GERADOR_SERVICO_CHAVE
-  const dados =
-    url && chavePublica
-      ? { url, chavePublica, email: '' }
-      : existsSync(caminho)
-        ? lerConfiguracaoServico(caminho)
-        : null
-  if (
-    dados &&
-    (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(dados.url) ||
-      !String(dados.chavePublica).startsWith('sb_publishable_'))
-  )
-    throw new Error('A configuração do serviço não é válida. Solicite o instalador atualizado.')
-  return dados
-}
-async function requisitar(
-  config: ConfigNuvem,
-  path: string,
-  body?: unknown,
-  token?: string,
-  method?: string
-): Promise<unknown> {
-  let resposta: Response
-  try {
-    resposta = await fetch(config.url + path, {
-      method: method ?? (body === undefined ? 'GET' : 'POST'),
-      headers: {
-        apikey: config.chavePublica,
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(30000)
-    })
-  } catch (erro) {
-    throw Object.assign(
-      new Error(
-        `Falha de rede ao acessar o serviço${erro instanceof Error ? `: ${erro.message}` : '.'}`
-      ),
-      { causaOriginal: erro instanceof Error ? erro.message : String(erro) }
-    )
-  }
-  const dados = await resposta.json().catch(() => null)
-  if (!resposta.ok)
-    throw Object.assign(
-      new Error(
-        dados?.msg ??
-          dados?.message ??
-          dados?.erro ??
-          `HTTP ${resposta.status}: resposta inválida do serviço.`
-      ),
-      {
-        status: resposta.status,
-        code: dados?.code ?? dados?.codigo,
-        codigo: dados?.codigo ?? dados?.code,
-        details: typeof dados?.details === 'string' ? dados.details : undefined,
-        hint: typeof dados?.hint === 'string' ? dados.hint : undefined
-      }
-    )
-  return dados
 }
 
 export async function concluirCallbackEmail(url: string): Promise<string> {
@@ -427,34 +359,6 @@ async function listarAposAutenticar(
   return destino.tipo === 'selecionar' ? emitir() : selecionar(destino.empresaId)
 }
 
-function normalizarContas(valor: unknown): ContasRemotas {
-  if (!valor || typeof valor !== 'object')
-    throw new Error('A resposta de empresas não é válida. Entre novamente.')
-  const bruto = valor as { operador?: unknown; empresas?: unknown }
-  if (!Array.isArray(bruto.empresas))
-    throw new Error('A resposta de empresas não é válida. Entre novamente.')
-  const ids = new Set<string>()
-  const empresas = bruto.empresas.map((item) => {
-    const empresa = item as Partial<EmpresaConta & { usuarioNome: string }>
-    const id = typeof empresa.id === 'string' ? empresa.id.trim() : ''
-    const nome = typeof empresa.nome === 'string' ? empresa.nome.trim() : ''
-    const papel = empresa.papel
-    const usuarioNome = typeof empresa.usuarioNome === 'string' ? empresa.usuarioNome.trim() : ''
-    if (
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) ||
-      !nome ||
-      nome.length > 120 ||
-      (papel !== 'administrador' && papel !== 'membro') ||
-      ids.has(id)
-    )
-      throw new Error(
-        'Uma empresa retornou dados inválidos. Atualize o cadastro e entre novamente.'
-      )
-    ids.add(id)
-    return { id, nome, papel, usuarioNome }
-  })
-  return { operador: bruto.operador === true, empresas }
-}
 async function selecionar(id: string): Promise<EstadoConta> {
   const empresa = estado.empresas.find((e) => e.id === id)
   if (!empresa || !tokenEntrada || !configEntrada)
@@ -559,10 +463,6 @@ async function enviarConvite(dados: Record<string, string>): Promise<void> {
   const id = idSolicitacao(identidade, normalizados)
   await edge({ acao: 'convidar', id, ...normalizados })
   concluirSolicitacao(identidade, normalizados)
-}
-function senhaValida(senha: string): void {
-  if (typeof senha !== 'string' || senha.length < 8 || senha.length > 128)
-    throw new Error('Use uma senha com 8 a 128 caracteres.')
 }
 export const contaApi: ContaApi = {
   continuarAposIndisponibilidade: () =>
@@ -798,17 +698,7 @@ export const contaApi: ContaApi = {
       throw new Error(
         'A empresa ativa mudou enquanto os convites eram carregados. Atualize a lista.'
       )
-    return r.convites.map((c) => ({
-      ...c,
-      estado: c.canceladoEm
-        ? 'Cancelado'
-        : c.aceitoEm
-          ? 'Aceito'
-          : Date.parse(c.expiraEm) < Date.now()
-            ? 'Expirado'
-            : 'Pendente',
-      criadoEm: c.ultimoEnvio
-    })) as unknown as ConviteConta[]
+    return rotularConvites(r.convites)
   },
   convidar: (email, nome, papel) =>
     exclusiva(async () => {
@@ -873,29 +763,6 @@ export const contaApi: ContaApi = {
       if (!empresa) throw new Error('A empresa não está mais disponível. Atualize a lista.')
       if (nomeConfirmado.trim() !== empresa.nome)
         throw new Error('O nome digitado não corresponde ao nome exato da empresa.')
-      const erroExclusao = (etapa: 'capacidades' | 'exclusao', erro: unknown): Error => {
-        const e = erro as { message?: unknown; status?: unknown; codigo?: unknown; code?: unknown }
-        const status = typeof e.status === 'number' ? e.status : null
-        const codigo =
-          typeof e.codigo === 'string' ? e.codigo : typeof e.code === 'string' ? e.code : ''
-        const diagnostico = diagnosticoErro(erro)
-        const pasta = join(app.getPath('userData'), 'logs')
-        try {
-          mkdirSync(pasta, { recursive: true })
-          appendFileSync(
-            join(pasta, 'exclusao-empresa.jsonl'),
-            `${JSON.stringify({ em: new Date().toISOString(), etapa, status, ...diagnostico, codigo: codigo || diagnostico.codigo })}\n`,
-            'utf8'
-          )
-        } catch {
-          // A falha de gravação do diagnóstico não substitui a falha original.
-        }
-        console.error('Falha ao excluir empresa:', { etapa, status, ...diagnostico })
-        return new Error(
-          `Não foi possível excluir a empresa${status ? ` (HTTP ${status})` : ''}${codigo ? `, código ${codigo}` : ''}. O diagnóstico técnico foi registrado neste computador.`,
-          { cause: erro }
-        )
-      }
       let capacidades: { excluirEmpresa?: boolean }
       try {
         capacidades = (await edge({ acao: 'capacidades' })) as { excluirEmpresa?: boolean }

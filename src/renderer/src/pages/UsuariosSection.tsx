@@ -21,11 +21,12 @@ import { correspondeBusca } from '@shared/historico-preferencias'
 import type { MembroEmpresa, StatusNuvem } from '@shared/evolucao'
 import { useConta } from '../components/ContaGate'
 import { ConvitesSection } from './ConvitesSection'
+import type { ReactElement } from 'react'
 
 export function UsuariosSection(props: {
   novo: boolean
   setNovo: (novo: boolean) => void
-}): JSX.Element {
+}): ReactElement {
   const { conta } = useConta()
   return conta.central ? <ConvitesSection {...props} /> : <UsuariosLegadosSection {...props} />
 }
@@ -36,7 +37,7 @@ function UsuariosLegadosSection({
 }: {
   novo: boolean
   setNovo: (novo: boolean) => void
-}): JSX.Element {
+}): ReactElement {
   const [status, setStatus] = useState<StatusNuvem | null>(null)
   const [email, setEmail] = useState(''),
     [nome, setNome] = useState(''),
@@ -86,7 +87,7 @@ function UsuariosLegadosSection({
   }
   const lista = (data ?? []).filter((m) => correspondeBusca(busca, [m.nome, m.email]))
   return (
-    <div className="space-y-4">
+    <div className="pilha-y-4">
       <SectionTitle
         title="Usuários da empresa"
         description="Cada pessoa usa seu login. Todos os membros ativos têm acesso completo; as alterações ficam identificadas no histórico."
@@ -199,7 +200,7 @@ function UsuariosLegadosSection({
           </>
         }
       >
-        <div className="space-y-4">
+        <div className="pilha-y-4">
           <p className="text-sm text-slate-600">
             Crie e confirme a conta em Authentication. Depois informe o e-mail aqui. O usuário
             poderá entrar no aplicativo com seu próprio login.

@@ -16,6 +16,15 @@ export default defineConfig({
     // máquina, e um único teste de sincronização com PGlite já passou de 70 s; localmente
     // o arquivo inteiro leva ~13 s. Prazos folgados só no CI.
     testTimeout: process.env.CI ? 240_000 : 60_000,
-    hookTimeout: process.env.CI ? 240_000 : 120_000
+    hookTimeout: process.env.CI ? 240_000 : 120_000,
+    // `npm run test:cobertura`: relatório em coverage/ (texto e HTML).
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: ['**/*.test.{ts,tsx}', 'src/**/*.d.ts', 'src/renderer/src/lib/mockApi.ts'],
+      reporter: ['text-summary', 'html', 'json-summary'],
+      // Piso logo abaixo da cobertura atual (53,6% das instruções): impede que ela caia sem querer.
+      thresholds: { statements: 52, branches: 47, functions: 42, lines: 53 }
+    }
   }
 })

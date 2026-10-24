@@ -5,7 +5,8 @@ import { useNav } from '../lib/nav'
 import { PageShell } from '../ui/layout'
 import { Button } from '../ui/primitives'
 import { HistoricoDocumentos, registroOrcamento } from '../components/HistoricoDocumentos'
-export function HistoricoPage(): JSX.Element {
+import type { ReactElement } from 'react'
+export function HistoricoPage(): ReactElement {
   const { navegar } = useNav()
   const { data, loading, error, reload } = useAsync(() => api.orcamentos.list(), [], ['orcamento'])
   return (

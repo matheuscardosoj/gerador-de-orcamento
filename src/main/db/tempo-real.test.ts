@@ -160,8 +160,11 @@ it('respeita Retry-After mesmo com sinal de retorno da rede e vigilância perió
   solicitarRecuperacaoNuvem()
   await vi.advanceTimersByTimeAsync(89999)
   expect(renovar).toHaveBeenCalledTimes(1)
+  // Nada é enviado antes de o Retry-After vencer.
+  expect(sincronizar).not.toHaveBeenCalled()
   await vi.advanceTimersByTimeAsync(1)
-  expect(sincronizar).toHaveBeenCalledTimes(1)
+  // Aos 90 s a repetição e a vigilância periódica (a cada 30 s) coincidem; basta que haja envio.
+  expect(sincronizar).toHaveBeenCalled()
 })
 it('falha permanente não entra em repetição automática', async () => {
   vi.useFakeTimers()

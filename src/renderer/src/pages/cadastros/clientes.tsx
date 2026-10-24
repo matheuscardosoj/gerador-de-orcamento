@@ -30,6 +30,7 @@ import {
 import type { Cliente } from '@shared/types'
 import type { RascunhoCadastro } from '@shared/evolucao'
 import { useNav } from '../../lib/nav'
+import type { ReactElement } from 'react'
 
 // --------------------------------------------------------------- Clientes
 const clienteVazio = (): Omit<Cliente, 'id' | 'criadoEm'> => ({
@@ -54,7 +55,7 @@ export function SecaoClientes({
 }: {
   edit: Cliente | 'novo' | null
   setEdit: (edit: Cliente | 'novo' | null) => void
-}): JSX.Element {
+}): ReactElement {
   const {
     data,
     loading,
@@ -120,7 +121,7 @@ export function SecaoClientes({
   const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA
   const paginaFiltrada = filtrados.slice(inicio, inicio + ITENS_POR_PAGINA)
   return (
-    <div className="space-y-4">
+    <div className="pilha-y-4">
       {rascunhos?.map((r) => (
         <Mensagem key={r.idOrigem} tom="aviso">
           Alterações de um cliente excluído em outro computador foram guardadas neste computador.{' '}
@@ -365,7 +366,7 @@ function ClienteModal({
   onClose: () => void
   onDeleted: () => void
   onSaved: () => void
-}): JSX.Element {
+}): ReactElement {
   const [form, setForm] = useState<Omit<Cliente, 'id' | 'criadoEm'>>(
     (restaurar?.dados as Omit<Cliente, 'id' | 'criadoEm'> | undefined) ?? cliente ?? clienteVazio()
   )
@@ -452,7 +453,7 @@ function ClienteModal({
         </>
       }
     >
-      <div className="space-y-4">
+      <div className="pilha-y-4">
         {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
         <Field label="Nome / razão social (obrigatório)">
           <Input value={form.nome} onChange={(e) => set({ nome: e.target.value })} autoFocus />

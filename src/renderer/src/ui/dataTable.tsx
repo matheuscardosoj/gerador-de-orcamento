@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { AppIcon, Button, Card, cn } from './primitives'
+import type { ReactElement } from 'react'
 
 export const ITENS_POR_PAGINA = 12
 
@@ -10,7 +11,7 @@ export function DataTableFrame({
 }: {
   children: ReactNode
   minWidth?: string
-}): JSX.Element {
+}): ReactElement {
   return (
     <Card className="overflow-hidden">
       <DataTableViewport minWidth={minWidth}>{children}</DataTableViewport>
@@ -31,7 +32,7 @@ export function DataTableViewport({
   children: ReactNode
   minWidth?: string
   className?: string
-}): JSX.Element {
+}): ReactElement {
   return (
     <div
       className={cn('data-table-viewport relative overflow-x-auto', className)}
@@ -64,7 +65,7 @@ export function SortableHeader({
   className?: string
   align?: 'left' | 'right'
   wrap?: boolean
-}): JSX.Element {
+}): ReactElement {
   return (
     <th
       scope="col"
@@ -75,7 +76,7 @@ export function SortableHeader({
         type="button"
         onClick={onSort}
         className={cn(
-          'inline-flex w-full items-center gap-1 rounded-sm font-semibold hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal/40',
+          'inline-flex w-full items-center gap-1 rounded-xs font-semibold hover:text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-brand-teal/40',
           wrap ? 'whitespace-normal leading-tight' : 'whitespace-nowrap',
           align === 'right' ? 'justify-end text-right' : 'justify-start text-left'
         )}
@@ -87,7 +88,7 @@ export function SortableHeader({
   )
 }
 
-export function TableActions({ children }: { children: ReactNode }): JSX.Element {
+export function TableActions({ children }: { children: ReactNode }): ReactElement {
   return <div className="flex items-center justify-end gap-1">{children}</div>
 }
 
@@ -99,7 +100,7 @@ export function Pagination({
   pagina: number
   total: number
   onIr: (pagina: number) => void
-}): JSX.Element {
+}): ReactElement {
   const paginas: number[] = []
   const de = Math.max(1, pagina - 2)
   const ate = Math.min(total, pagina + 2)
@@ -144,7 +145,7 @@ function Pagina({
   numero: number
   atual: number
   onIr: (pagina: number) => void
-}): JSX.Element {
+}): ReactElement {
   return (
     <Button
       size="sm"

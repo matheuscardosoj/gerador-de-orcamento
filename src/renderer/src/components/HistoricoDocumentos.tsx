@@ -45,6 +45,7 @@ import {
 import { formatDataCurta, formatMoeda, formatNumero } from '@shared/format'
 import { descricaoExclusaoRecibo, rotuloExclusaoRecibo } from '@shared/recibo-exclusao'
 import type { Recibo, ResumoOrcamento, ResumoRelatorio, TipoDocumento } from '@shared/types'
+import type { ReactElement } from 'react'
 
 export interface RegistroHistorico {
   id: string
@@ -121,7 +122,7 @@ const estados: Record<
   pendente: { label: 'Pagamento pendente', cor: 'amber' }
 }
 function valorCampo(r: RegistroHistorico, k: string): string | number {
-  return (r as unknown as Record<string, string | number>)[k] ?? ''
+  return (Reflect.get(r, k) as string | number | undefined) ?? ''
 }
 function textoCampo(r: RegistroHistorico, k: string): string {
   const v = valorCampo(r, k)
@@ -154,7 +155,7 @@ export function HistoricoDocumentos({
   erroCarga?: string | null
   onAbrir?: (id: string) => void
   onAtualizar?: () => void
-}): JSX.Element {
+}): ReactElement {
   const { navegar } = useNav()
   const [pref, setPref] = useState(() => preferenciasPadrao(tipo))
   const [carregadas, setCarregadas] = useState(false)
@@ -306,7 +307,7 @@ export function HistoricoDocumentos({
         ? ['rascunho', 'emitido', 'pago']
         : ['rascunho', 'pendente', 'recebido', 'cancelado']
   return (
-    <div className="space-y-4">
+    <div className="pilha-y-4">
       {(erro || erroCarga) && <MensagemFlutuante>{erro || erroCarga}</MensagemFlutuante>}
       <div className="flex flex-wrap items-center gap-3">
         <Input
@@ -588,7 +589,7 @@ export function HistoricoDocumentos({
           Escolha as informações e arraste as colunas visíveis para mudar a ordem. Número e ações
           permanecem fixos.
         </p>
-        <div className="space-y-2">
+        <div className="pilha-y-2">
           <ListaOrdenavel
             itens={pref.colunas.map((id) => ({ id }))}
             onChange={(itens) => mudar({ colunas: itens.map((i) => i.id) })}

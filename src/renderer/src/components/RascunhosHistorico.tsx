@@ -6,6 +6,7 @@ import { mensagemErro } from '@shared/erros'
 import { api } from '../lib/api'
 import { useNav } from '../lib/nav'
 import { Button, Card, ConfirmDialog } from '../ui/primitives'
+import type { ReactElement } from 'react'
 
 export function RascunhosHistorico({
   tipo,
@@ -15,7 +16,7 @@ export function RascunhosHistorico({
   tipo: TipoDocumento
   registros: Array<{ id: string }>
   onAbrir?: (id: string) => void
-}): JSX.Element | null {
+}): ReactElement | null {
   const { navegar, executarComConfirmacao } = useNav()
   const [lista, setLista] = useState<RascunhoCompartilhado[]>([])
   const [erro, setErro] = useState('')
@@ -38,7 +39,7 @@ export function RascunhosHistorico({
   if (!orfaos.length && !erro) return null
   const rotulo = { orcamento: 'orçamento', relatorio: 'relatório', recibo: 'recibo' }[tipo]
   return (
-    <Card className="space-y-3 border-amber-200 p-4">
+    <Card className="pilha-y-3 border-amber-200 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-semibold text-slate-800">Rascunhos locais recuperáveis</h2>

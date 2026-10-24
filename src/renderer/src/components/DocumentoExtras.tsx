@@ -14,6 +14,7 @@ import { Button, Card, Input, Modal, Select, Checkbox, SectionTitle, Field } fro
 import { useNav } from '../lib/nav'
 import { paginarDocumento } from '@shared/documento/paginar'
 import { compararDocumentos } from '@shared/comparacao-documentos'
+import type { ReactElement } from 'react'
 
 export function DadosClienteDocumento({
   documento,
@@ -23,7 +24,7 @@ export function DadosClienteDocumento({
   documento: DocumentoMetadados & { clienteId?: string | null }
   clientes: Cliente[]
   onChange: (patch: DocumentoMetadados) => void
-}): JSX.Element {
+}): ReactElement {
   const c = documento.clienteSnapshot ?? clientes.find((c) => c.id === documento.clienteId)
   const campos = documento.camposCliente ?? ['documento']
   return (
@@ -92,7 +93,7 @@ export function LinhaTempo({
   id: string
   onRestaurado: () => void
   onRascunho?: (documento: Documento, id: string) => void
-}): JSX.Element {
+}): ReactElement {
   const [aberto, setAberto] = useState(false)
   const [versoes, setVersoes] = useState<VersaoDocumento[]>([])
   const [selecionada, setSelecionada] = useState<VersaoDocumento | null>(null)
@@ -160,7 +161,7 @@ export function LinhaTempo({
           </Button>
         }
       >
-        <div className="space-y-4">
+        <div className="pilha-y-4">
           {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
           <Field label="Versão do documento">
             <Select
@@ -247,7 +248,7 @@ export function LinhaTempo({
                 ))}
               </div>
               {versoes.length > 1 && (
-                <div className="space-y-3">
+                <div className="pilha-y-3">
                   <Field label="Comparar com">
                     <Select
                       value={anterior?.id ?? ''}

@@ -2,6 +2,26 @@
 
 Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
+## 1.6.3 — dependências atualizadas e código mais modular, sem mudança visual
+
+Nenhuma tela, texto ou fluxo muda. O que mudou por dentro:
+
+- Dependências: Electron 45, React 19, Tailwind 4, Vite 8 (com electron-vite 6 e plugin-react 6),
+  Vitest 5, TypeScript 6, `@electron-toolkit/utils` 4 e atualizações menores. O TypeScript 7 não
+  entrou porque o `typescript-eslint` ainda não o suporta. Na migração do Tailwind, as 14 telas
+  capturadas em `scripts/capturar-telas.mjs` (claro e escuro) ficaram idênticas pixel a pixel;
+  `space-x/y` virou `pilha-x/y` para manter o espaçamento exato, e os campos de data mantêm a altura.
+- Cobertura de código no `npm run check` e no CI, com piso mínimo (`npm run test:cobertura`).
+- `executarSincronizacao` virou uma sequência de etapas nomeadas; a mesclagem de importação de dados
+  também (uma função por etapa); `servico.ts` de contas, `primitives.tsx`, Configurações e o painel de
+  colaboração foram divididos em módulos menores, com testes novos para os painéis de colaboração.
+- Casts `as unknown as` de acesso dinâmico trocados por `Reflect`; `docs/ARQUITETURA.md` descreve o
+  contrato de IPC, as fontes do SQL da nuvem e a divisão dos módulos.
+- Atualização automática pelos GitHub Releases (`electron-updater`): o aplicativo avisa quando há versão nova, baixa só
+  o que mudou se o usuário aceitar e instala ao fechar ou quando ele escolher reiniciar. O instalador passa a se chamar
+  `Gerador-de-Orcamentos-Setup-<versão>.exe`.
+- `esbuild` passou a ser dependência declarada (usada pelos scripts de verificação).
+
 ## 1.6.2 — banco travado por um processo que não é mais o aplicativo
 
 - Correção: o `banco.lock` deixado por uma execução encerrada à força (por exemplo, o instalador

@@ -24,6 +24,7 @@ import {
   SectionTitle,
   Modal
 } from '../ui/primitives'
+import type { ReactElement } from 'react'
 
 const ContaContext = createContext<{
   conta: EstadoConta
@@ -34,7 +35,7 @@ export function useConta() {
   if (!contexto) throw new Error('Conta indisponível')
   return contexto
 }
-export function ContaGate({ children }: { children: ReactNode }): JSX.Element {
+export function ContaGate({ children }: { children: ReactNode }): ReactElement {
   const [conta, setConta] = useState<EstadoConta | null>(null)
   const [erro, setErro] = useState('')
   const [empresa, setEmpresa] = useState<EmpresaConfig | null>(null)
@@ -176,10 +177,10 @@ export function ContaGate({ children }: { children: ReactNode }): JSX.Element {
     </ContaContext.Provider>
   )
 }
-function TelaAcesso({ children }: { children: ReactNode }): JSX.Element {
+function TelaAcesso({ children }: { children: ReactNode }): ReactElement {
   return (
     <main className="flex min-h-full items-center justify-center overflow-y-auto bg-app px-6 py-10">
-      <Card className="w-full max-w-lg space-y-5 p-8">{children}</Card>
+      <Card className="w-full max-w-lg pilha-y-5 p-8">{children}</Card>
     </main>
   )
 }
@@ -189,7 +190,7 @@ function Acesso({
 }: {
   conta: EstadoConta
   atualizar: (c: EstadoConta) => void
-}): JSX.Element {
+}): ReactElement {
   const [email, setEmail] = useState(conta.email),
     [senha, setSenha] = useState(''),
     [lembrar, setLembrar] = useState(conta.lembrar)
@@ -377,7 +378,7 @@ function Acesso({
             </>
           }
         >
-          <div className="space-y-4">
+          <div className="pilha-y-4">
             <Mensagem tom="aviso">
               {empresaExcluir
                 ? `Todos os documentos, cadastros, vínculos e dados sincronizados de “${empresaExcluir.nome}” serão removidos. As contas de autenticação das pessoas serão preservadas. Ao reconectar, os computadores encerrarão o acesso e removerão o perfil local, incluindo rascunhos e alterações pendentes.`
@@ -418,7 +419,7 @@ function Acesso({
       />
       {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
       <form
-        className="space-y-4"
+        className="pilha-y-4"
         onSubmit={(e) => {
           e.preventDefault()
           void executar(async () => {
@@ -559,7 +560,7 @@ function Acesso({
     </TelaAcesso>
   )
 }
-function AtivarEmpresa(): JSX.Element {
+function AtivarEmpresa(): ReactElement {
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
   const [administrador, setAdministrador] = useState('')
@@ -585,7 +586,7 @@ function AtivarEmpresa(): JSX.Element {
         selecione-a acima.
       </p>
       <form
-        className="mt-4 space-y-4"
+        className="mt-4 pilha-y-4"
         onSubmit={(e) => {
           e.preventDefault()
           setOcupado(true)
@@ -656,7 +657,7 @@ function PrimeirosPassos({
 }: {
   empresa: EmpresaConfig
   concluir: (e: EmpresaConfig) => void
-}): JSX.Element {
+}): ReactElement {
   const [form, setForm] = useState(empresa),
     [erro, setErro] = useState(''),
     [ocupado, setOcupado] = useState(false)
@@ -681,7 +682,7 @@ function PrimeirosPassos({
       />
       {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
       <form
-        className="space-y-4"
+        className="pilha-y-4"
         onSubmit={(e) => {
           e.preventDefault()
           void salvar()

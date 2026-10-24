@@ -200,9 +200,7 @@ function financeiroAlterado(base: Documento, d: Documento): boolean {
   const campos = ['adiantamentos', 'reembolsos', 'adiantamentoId']
   if ('totais' in d || 'quitacao' in d) campos.push('status')
   return campos.some(
-    (k) =>
-      JSON.stringify((base as unknown as Record<string, unknown>)[k]) !==
-      JSON.stringify((d as unknown as Record<string, unknown>)[k])
+    (k) => JSON.stringify(Reflect.get(base, k)) !== JSON.stringify(Reflect.get(d, k))
   )
 }
 export async function aplicarRascunho(

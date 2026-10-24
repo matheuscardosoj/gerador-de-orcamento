@@ -37,6 +37,7 @@ import { normalizarDestinatario } from '@shared/documento/comum'
 import { normalizarOrcamento, validarOrcamentoFinal, type ErroValidacao } from '@shared/validacao'
 import { DataTableViewport } from '../../ui/dataTable'
 import { notificar } from '../../lib/notificacoes'
+import type { ReactElement } from 'react'
 export interface Dados {
   empresa: EmpresaConfig
   parametros: ParametrosFinanceiros
@@ -67,7 +68,7 @@ export function DadosGeraisCard({
   clientes: Cliente[]
   erroDoCampo: (campo: string) => string | undefined
   onValidacao: (erros: ErroValidacao[]) => void
-}): JSX.Element {
+}): ReactElement {
   return (
     <Card className="p-6">
       <SectionTitle title="Dados gerais" />
@@ -204,7 +205,7 @@ export function AnotacaoInterna({
   documento: Orcamento | Relatorio
   set: (p: { observacaoInterna?: string }) => void
   tipoDocumento: 'orcamento' | 'relatorio'
-}): JSX.Element {
+}): ReactElement {
   const entrada =
     tipoDocumento === 'orcamento'
       ? { tipo: 'orcamento' as const, documento: documento as Orcamento }
@@ -259,7 +260,7 @@ export function ServicosCard({
   rotuloDocumento?: 'orçamento' | 'relatório'
   errosValidacao?: ErroValidacao[]
   onRemover?: (id: string) => void
-}): JSX.Element {
+}): ReactElement {
   const [calcAberto, setCalcAberto] = useState<ItemServico | 'novo' | null>(null)
   const [manualAberto, setManualAberto] = useState<ItemServico | 'novo' | null>(null)
   const [catalogoSel, setCatalogoSel] = useState('')
@@ -363,7 +364,7 @@ export function ServicosCard({
                 return (
                   <tr key={i.id} className={errosItem.length ? 'bg-amber-50/70' : undefined}>
                     <td className="min-w-0 px-3 py-2 align-middle">
-                      <div className="min-w-0 space-y-1">
+                      <div className="min-w-0 pilha-y-1">
                         <div className="flex min-w-0 items-center gap-2">
                           <span className="min-w-0 break-words text-slate-700">{i.descricao}</span>
                           {i.calculo && <Badge color="green">calculado</Badge>}
@@ -484,7 +485,7 @@ export function ServicoManualModal({
   precoRefInicial?: number
   onClose: () => void
   onSave: (i: ItemServico) => void
-}): JSX.Element {
+}): ReactElement {
   const [descricao, setDescricao] = useState(item?.descricao ?? descricaoInicial ?? '')
   const [unidade, setUnidade] = useState(item?.unidade ?? unidadeInicial ?? 'serviço')
   const [quantidade, setQuantidade] = useState(item?.quantidade ?? 1)
@@ -521,7 +522,7 @@ export function ServicoManualModal({
         </>
       }
     >
-      <div className="space-y-4">
+      <div className="pilha-y-4">
         <Field label="Descrição do serviço">
           <Textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} autoFocus />
           <RevisaoIA texto={descricao} campo="descricaoServico" onAplicar={setDescricao} />
@@ -554,7 +555,7 @@ export function MateriaisCard({
   orc: Orcamento
   set: (p: Partial<Orcamento>) => void
   erroDoCampo: (campo: string) => string | undefined
-}): JSX.Element {
+}): ReactElement {
   const add = (): void =>
     set({
       materiais: [
@@ -582,7 +583,7 @@ export function MateriaisCard({
           Nenhum material.
         </p>
       ) : (
-        <div className="space-y-2">
+        <div className="pilha-y-2">
           <ListaOrdenavel itens={orc.materiais} onChange={(materiais) => set({ materiais })}>
             {orc.materiais.map((m, indice) => (
               <div
@@ -641,7 +642,7 @@ export function TextosCard({
   itens: ItemTexto[]
   sugestoes: Array<{ id: string; texto: string }>
   onChange: (itens: ItemTexto[]) => void
-}): JSX.Element {
+}): ReactElement {
   const add = (texto = '', origemPadraoId?: string): void =>
     onChange([...itens, { id: novoId(), texto, origemPadraoId }])
   const upd = (id: string, texto: string): void =>
@@ -662,7 +663,7 @@ export function TextosCard({
           </Button>
         }
       />
-      <div className="space-y-2">
+      <div className="pilha-y-2">
         <ListaOrdenavel itens={itens} onChange={onChange}>
           {itens.map((i) => (
             <div key={i.id} className="flex items-start gap-2">

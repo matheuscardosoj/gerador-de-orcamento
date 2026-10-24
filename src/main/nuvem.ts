@@ -1009,12 +1009,423 @@ export async function finalizarAtualizacaoNumeracao(revisao: string): Promise<St
   if (!status.erro) ativarTempoReal()
   return status
 }
+type ResultadoEnvio = {
+  bloqueadas: Set<string>
+  cadastrosConfirmados: Set<string>
+  erroEnvio: string | null
+}
+/** Envia a fila local à nuvem, um grupo por vez; falhas e conflitos ficam preservados. */
+async function enviarPendencias(): Promise<ResultadoEnvio> {
+  let erroEnvio: string | null = null
+  const pendencias = filaParaEnvio()
+  const grupos =
+    protocoloNuvem() < 2
+      ? [pendencias]
+      : [...new Set(pendencias.map((l) => texto(l.grupo)))].map((grupo) =>
+          pendencias.filter((l) => texto(l.grupo) === grupo)
+        )
+  const bloqueadas = new Set(
+    [
+      ...all('SELECT entidade FROM conflitos_nuvem'),
+      ...all("SELECT entidade FROM fila_nuvem WHERE estado IN ('falha','conflito')")
+    ].map((l) => texto(l.entidade))
+  )
+  const cadastrosConfirmados = new Set<string>()
+  for (const fila of grupos) {
+    if (
+      !fila.length ||
+      (protocoloNuvem() >= 2 && fila.some((l) => bloqueadas.has(texto(l.entidade))))
+    )
+      continue
+    let result: {
+      ok: boolean
+      numeros?: Array<{ tipo: TipoDocumento; documentoId: string; numero: number }>
+      resultados?: Array<{ entidade: string; revisao: number }>
+      entidade?: string
+      remoto?: Remoto
+    }
+    try {
+      result = (await pedido(
+        `/rest/v1/rpc/${protocoloNuvem() >= 2 ? (protocoloNuvem() >= 3 ? 'gdo_batch_v3' : 'gdo_batch_v2') : 'gdo_batch'}`,
+        {
+          p_operacoes: fila.map((l) => ({
+            id: l.id,
+            entidade: l.entidade,
+            base: l.base,
+            payload: adaptarExclusaoCadastroLegada(
+              JSON.parse(
+                texto(
+                  get('SELECT payload FROM fila_nuvem WHERE id=?', [l.id])?.payload ?? l.payload
+                )
+              )
+            ),
+            geracao: l.geracao
+          })),
+          p_dispositivo: computadorId()
+        }
+      ).catch((e: unknown) => {
+        if (
+          protocoloNuvem() < 2 ||
+          !/Autorização.*(expirada|revogada)|Documento em edição|financeiro reservado|origem reservado/.test(
+            String(e)
+          )
+        )
+          throw e
+        const op =
+          fila.find((l) =>
+            ['orcamento', 'relatorio', 'recibo'].includes(texto(l.entidade).split(':')[0])
+          ) ?? fila[0]
+        run('INSERT OR REPLACE INTO conflitos_nuvem VALUES (?,?,?,?)', [
+          op.id,
+          op.entidade,
+          mensagemErro(e),
+          'null'
+        ])
+        return { ok: false, entidade: op.entidade, remoto: null }
+      })) as typeof result
+    } catch (e) {
+      if (acessoInterrompido) throw e
+      if (['GDM01', 'GDM02'].includes((e as { codigo?: string }).codigo ?? '')) {
+        salvar('atualizacaoBasePendente', true)
+        throw e
+      }
+      const falha = classificarFalhaNuvem(e)
+      const temporaria = falha.temporaria || falha.motivo === 'sessao'
+      // Uma falha de transporte pode ocultar uma confirmação. Mantém a identidade
+      // da operação para reenvio idempotente; nunca cria uma operação substituta.
+      if (temporaria) {
+        falhaSincronizacao = e && typeof e === 'object' && falhasSuperadas.has(e) ? null : falha
+        erroEnvio = mensagemErro(e)
+        break
+      }
+      const detalhe = mensagemErro(e, descricaoOperacao(fila[0]))
+      marcarGrupo(fila, 'falha', JSON.stringify({ versao: 1, detalhe, ...diagnosticoErro(e) }))
+      for (const l of fila) bloqueadas.add(texto(l.entidade))
+      continue
+    }
+    if (!result.ok) {
+      const op = fila.find((l) => l.entidade === result.entidade) ?? fila[0]
+      run('INSERT OR REPLACE INTO conflitos_nuvem VALUES (?,?,?,?)', [
+        op.id,
+        op.entidade,
+        result.remoto == null
+          ? texto(get('SELECT detalhe FROM conflitos_nuvem WHERE id=?', [op.id])?.detalhe) ||
+            'A autorização de edição mudou. Suas alterações locais foram preservadas para conferência.'
+          : 'A base remota mudou. Suas alterações locais foram preservadas.',
+        JSON.stringify(result.remoto)
+      ])
+      marcarGrupo(fila, 'conflito')
+      atualizarAplicacoesRascunhos()
+      if (protocoloNuvem() < 2)
+        throw new Error('Conflito de sincronização. Compare as versões e escolha como continuar.')
+      for (const l of fila) bloqueadas.add(texto(l.entidade))
+      const { preservarConflitos } = await import('./rascunhos')
+      preservarConflitos(fila.map((l) => texto(l.entidade)))
+      continue
+    }
+    tx(() => {
+      for (const r of result.resultados ?? [])
+        run(
+          'INSERT INTO sincronizacao VALUES (?,?) ON CONFLICT(entidade) DO UPDATE SET revisao=excluded.revisao',
+          [r.entidade, r.revisao]
+        )
+      if (protocoloNuvem() >= 3)
+        for (const r of result.resultados ?? [])
+          if (/^(clientes|servicos):/.test(r.entidade)) cadastrosConfirmados.add(r.entidade)
+      confirmarAplicacoesRascunhos(fila.map((l) => texto(l.id)))
+      for (const l of fila) run('DELETE FROM fila_nuvem WHERE id=?', [l.id])
+      for (const n of result.numeros ?? []) confirmarNumero(n.tipo, n.documentoId, n.numero)
+    })
+  }
+  return { bloqueadas, cadastrosConfirmados, erroEnvio }
+}
+/** Consultas independentes (controles, pedidos, membros, mapa de numeração), disparadas em paralelo. */
+function consultarAuxiliares() {
+  return protocoloNuvem() >= 2
+    ? Promise.all([
+        pedido(
+          `/rest/v1/edicoes_documento?select=*&empresa_id=eq.${empresaSelecionada ?? config<ContextoNuvem>('contextoNuvem')?.empresaId}`
+        ),
+        pedido(
+          `/rest/v1/pedidos_edicao?select=*&empresa_id=eq.${empresaSelecionada ?? config<ContextoNuvem>('contextoNuvem')?.empresaId}`
+        ),
+        pedido(`/rest/v1/rpc/${protocoloNuvem() >= 3 ? 'gdo_membros_v3' : 'gdo_membros_v2'}`, {}),
+        ...(protocoloNuvem() >= 3
+          ? [
+              pedido(
+                `/rest/v1/mapa_numeracao?select=tipo,documento_id,anterior,novo&empresa_id=eq.${empresaSelecionada ?? config<ContextoNuvem>('contextoNuvem')?.empresaId}`
+              )
+            ]
+          : [])
+      ]).then(
+        (dados) => ({ dados, erro: null }),
+        (erro) => ({ dados: null, erro })
+      )
+    : null
+}
+type Auxiliares = NonNullable<ReturnType<typeof consultarAuxiliares>>
+/** Baixa o delta remoto e aplica no banco local respeitando pendências e exclusões. */
+async function receberAlteracoes(
+  cursorInicial: number,
+  bloqueadas: Set<string>,
+  cadastrosConfirmados: Set<string>
+): Promise<Remoto[]> {
+  let cursor = cursorInicial
+  const alteracoes = await baixarAlteracoes(cursor)
+  cursor = Math.max(cursor, ...alteracoes.map((e) => e.sequencia))
+  ordenarDependencias(alteracoes)
+  const tombstonesComPendencias = alteracoes.filter(
+    (e) =>
+      (e.payload.excluido || (!!e.payload.tabela && !e.payload.row)) &&
+      temOperacaoAtiva(e.entidade) &&
+      e.revisao >
+        Number(
+          get('SELECT revisao FROM sincronizacao WHERE entidade=?', [e.entidade])?.revisao ?? 0
+        )
+  )
+  const entidadesPreservadasPorExclusao = new Set<string>()
+  for (const e of tombstonesComPendencias) {
+    const tipo = e.entidade.split(':')[0]
+    if (tipos.includes(tipo as TipoDocumento)) {
+      const { preservarConflitos } = await import('./rascunhos')
+      preservarConflitos([e.entidade])
+    }
+    for (const entidade of preservarOperacoesEntidade(
+      e.entidade,
+      'O registro foi excluído em outro computador. Esta alteração antiga foi preservada e não será enviada automaticamente.'
+    )) {
+      entidadesPreservadasPorExclusao.add(entidade)
+      bloqueadas.delete(entidade)
+    }
+  }
+  semRastreamento(() =>
+    tx(() => {
+      if (config<boolean>('renumeracaoPendente')) {
+        for (const t of ['orcamentos', 'relatorios', 'recibos'])
+          run(`UPDATE ${t} SET numero=-1000000000000000-numero`)
+      }
+      for (const e of alteracoes) {
+        aplicarIdentificador(e)
+        const conhecido = Number(
+          get('SELECT revisao FROM sincronizacao WHERE entidade=?', [e.entidade])?.revisao ?? 0
+        )
+        const pendente = temOperacaoAtiva(e.entidade)
+        const removido = e.payload.excluido || (!!e.payload.tabela && !e.payload.row)
+        const confirmadoNesteEnvio = cadastrosConfirmados.has(e.entidade) && !pendente
+        const codigoServicoCorrigido =
+          e.payload.tabela === 'servicos' &&
+          e.payload.row?.codigo != null &&
+          Number(get('SELECT codigo FROM servicos WHERE id=?', [e.payload.id])?.codigo ?? 0) !==
+            Number(e.payload.row.codigo)
+        if (entidadesPreservadasPorExclusao.has(e.entidade) && !removido) continue
+        if (pendente && e.revisao > conhecido && !removido) continue
+        if (e.revisao > conhecido || confirmadoNesteEnvio || (codigoServicoCorrigido && !pendente))
+          aplicar(e)
+      }
+      salvar('cursorNuvem', cursor)
+      if (config<boolean>('renumeracaoPendente')) salvar('renumeracaoPendente', false)
+    })
+  )
+  // O conteúdo confirmado já pode aparecer. Controles, membros e consumo não
+  // devem atrasar a tela nem a publicação da próxima operação local.
+  if (alteracoes.length)
+    avisarDados({ origem: 'nuvem', entidades: alteracoes.map((e) => e.entidade), status: true })
+  return alteracoes
+}
+/** Aplica controles de edição, pedidos e membros trazidos pelas consultas auxiliares. */
+async function aplicarAuxiliares(auxiliares: Auxiliares): Promise<void> {
+  {
+    const extra = await auxiliares
+    if (extra.erro) throw extra.erro
+    const [dadosControles, dadosPedidos, membros, mapaNumeracao] = extra.dados!
+    if (mapaNumeracao) salvar('mapaNumeracaoCache', mapaNumeracao)
+    const controles = dadosControles as Array<{
+      tipo: TipoDocumento
+      documento_id: string
+      usuario_id: string
+      dispositivo: string
+      geracao: number
+      expira_em: string | null
+      offline: boolean
+      revisao: number
+    }>
+    const mudancas: string[] = []
+    tx(() => {
+      for (const c of controles) {
+        if (!tipos.includes(c.tipo) || !Number.isSafeInteger(c.geracao) || c.geracao < 1)
+          throw new Error('Autorização remota inválida.')
+        const antes = get(
+          'SELECT usuario,computador,geracao,offline FROM edicoes_documento WHERE tipo=? AND documento_id=?',
+          [c.tipo, c.documento_id]
+        )
+        aplicarIdentificador({
+          entidade: `${c.tipo}:${c.documento_id}`,
+          revisao: 0,
+          sequencia: 0,
+          payload: { id: c.documento_id, tipo: c.tipo },
+          controle: c
+        })
+        if (
+          !antes ||
+          antes.usuario !== c.usuario_id ||
+          antes.computador !== c.dispositivo ||
+          Number(antes.geracao) !== c.geracao ||
+          Number(antes.offline) !== Number(c.offline)
+        )
+          mudancas.push(`controle:${c.tipo}:${c.documento_id}`)
+      }
+    })
+    if (mudancas.length) avisarDados({ origem: 'nuvem', entidades: mudancas, status: true })
+    const pedidos = dadosPedidos as Array<{
+      tipo: TipoDocumento
+      documento_id: string
+    }>
+    const pedidosAntes = config<typeof pedidos>('pedidosEdicaoCache') ?? []
+    if (JSON.stringify(pedidos) !== JSON.stringify(pedidosAntes)) {
+      salvar('pedidosEdicaoCache', pedidos)
+      avisarDados({
+        origem: 'nuvem',
+        entidades: [...pedidosAntes, ...pedidos].map((p) => `controle:${p.tipo}:${p.documento_id}`),
+        status: true
+      })
+    }
+    if (JSON.stringify(membros) !== JSON.stringify(config('membrosCache'))) {
+      salvar('membrosCache', membros)
+      avisarDados({ origem: 'nuvem', entidades: ['membros'], status: true })
+    }
+  }
+}
+/** Reservas de numeração dos protocolos 1 e 2. */
+async function sincronizarReservas(completa: boolean): Promise<void> {
+  if (completa && protocoloNuvem() === 2) {
+    const reservasRemotas = (await pedido(
+      `/rest/v1/reservas_numeros?select=tipo,numero,documento&dispositivo=eq.${computadorId()}`
+    )) as Array<{ tipo: TipoDocumento; numero: number; documento: string | null }>
+    tx(() => {
+      for (const r of reservasRemotas) {
+        if (
+          !tipos.includes(r.tipo) ||
+          !Number.isInteger(r.numero) ||
+          r.numero < 1 ||
+          r.numero > 999999
+        )
+          throw new Error('Reserva remota inválida.')
+        run(
+          'INSERT INTO reservas VALUES (?,?,?) ON CONFLICT(tipo,numero) DO UPDATE SET usado=MAX(usado,excluded.usado)',
+          [r.tipo, r.numero, r.documento ? 1 : 0]
+        )
+      }
+    })
+  }
+  for (const tipo of tipos)
+    if (protocoloNuvem() === 1 && statusNuvem().reservas[tipo] <= 5) {
+      const minimo = Number(
+        get(`SELECT MAX(numero) AS n FROM ${tabelaNumerosUsados()} WHERE tipo=?`, [tipo])?.n ?? 0
+      )
+      const numeros = (await pedido(
+        `/rest/v1/rpc/${protocoloNuvem() >= 2 ? 'gdo_reserve_v2' : 'gdo_reserve'}`,
+        {
+          p_tipo: tipo,
+          p_dispositivo: computadorId(),
+          p_minimo: minimo
+        }
+      )) as number[]
+      tx(() => {
+        for (const n of numeros) run('INSERT OR IGNORE INTO reservas VALUES (?,?,0)', [tipo, n])
+      })
+    }
+}
+/** Uma resposta perdida não devolve a autorização offline ao computador anterior. */
+async function resolverTransferenciasPendentes(): Promise<void> {
+  for (const l of all("SELECT chave,valor FROM configuracoes WHERE chave LIKE 'transferencia:%'")) {
+    const entidade = texto(l.chave).slice('transferencia:'.length)
+    const dados = (await pedido(
+      `/rest/v1/gdo_entities?select=*&entidade=eq.${encodeURIComponent(entidade)}`
+    )) as Remoto[]
+    if (dados[0])
+      tx(() => {
+        semRastreamento(() => aplicar(dados[0]))
+        run('DELETE FROM configuracoes WHERE chave=?', [l.chave])
+      })
+  }
+}
+/** Corrige códigos de clientes e serviços que a função de delta antiga omitia (uma única vez). */
+async function revisarCodigosCadastros(): Promise<void> {
+  if (protocoloNuvem() >= 3 && !config<boolean>('codigosCadastrosRevisados')) {
+    const servicosRemotos = (await baixarAlteracoes(0)).filter(
+      (e) => ['servicos', 'clientes'].includes(e.payload.tabela ?? '') && !!e.payload.row
+    )
+    const codigoRemoto = (e: Remoto): number =>
+      Number(
+        e.payload.tabela === 'clientes'
+          ? JSON.parse(texto(e.payload.row?.dados_json) || '{}').codigo
+          : e.payload.row?.codigo
+      )
+    if (servicosRemotos.every((e) => codigoRemoto(e) > 0)) {
+      const corrigidos: string[] = []
+      let revisaoCompleta = true
+      semRastreamento(() =>
+        tx(() => {
+          for (const e of servicosRemotos) {
+            if (temOperacaoAtiva(e.entidade)) {
+              revisaoCompleta = false
+              continue
+            }
+            const cliente = e.payload.tabela === 'clientes'
+            const local = get(
+              cliente
+                ? 'SELECT dados_json FROM clientes WHERE id=?'
+                : 'SELECT codigo FROM servicos WHERE id=?',
+              [e.payload.id]
+            )
+            if (!local) continue
+            const codigo = codigoRemoto(e)
+            if (!Number.isSafeInteger(codigo) || codigo < 1) {
+              revisaoCompleta = false
+              continue
+            }
+            const dadosCliente = cliente ? JSON.parse(texto(local.dados_json) || '{}') : null
+            if (Number(cliente ? dadosCliente.codigo : local.codigo) !== codigo) {
+              if (cliente)
+                run('UPDATE clientes SET dados_json=? WHERE id=?', [
+                  JSON.stringify({ ...dadosCliente, codigo }),
+                  e.payload.id
+                ])
+              else run('UPDATE servicos SET codigo=? WHERE id=?', [codigo, e.payload.id])
+              corrigidos.push(e.entidade)
+            }
+            registrarCodigoRemoto(cliente ? 'cliente' : 'servico', codigo, e.payload.id)
+            const chaveEstado = `estado:${e.payload.tabela}:${e.payload.id}`
+            const anterior = config<string>(chaveEstado)
+            if (anterior) {
+              try {
+                const estado = JSON.parse(anterior)
+                if (estado.row) {
+                  if (cliente)
+                    estado.row.dados_json = JSON.stringify({
+                      ...JSON.parse(estado.row.dados_json || '{}'),
+                      codigo
+                    })
+                  else estado.row.codigo = codigo
+                  salvar(chaveEstado, JSON.stringify(estado))
+                }
+              } catch {
+                /* Cache inválido será conferido na captura normal. */
+              }
+            }
+          }
+          salvar('codigosCadastrosRevisados', revisaoCompleta)
+        })
+      )
+      if (corrigidos.length) avisarDados({ origem: 'nuvem', entidades: corrigidos, status: true })
+    }
+  }
+}
 async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
   if (ocupado || conectando) return statusNuvem()
   ocupado = true
   falhaSincronizacao = null
   avisarDados({ origem: 'nuvem', entidades: [], status: true })
-  let erroEnvio: string | null = null
   try {
     if (!completa && config<AtualizacaoNumeracaoPendente>('atualizacaoNumeracaoPendente'))
       throw new Error(
@@ -1026,401 +1437,16 @@ async function executarSincronizacao(completa: boolean): Promise<StatusNuvem> {
     await conferirGeracaoBase()
     if (protocoloNuvem() < 2 && get('SELECT 1 FROM conflitos_nuvem LIMIT 1'))
       throw new Error('Resolva os conflitos antes de sincronizar novas alterações.')
-    const pendencias = filaParaEnvio()
-    const grupos =
-      protocoloNuvem() < 2
-        ? [pendencias]
-        : [...new Set(pendencias.map((l) => texto(l.grupo)))].map((grupo) =>
-            pendencias.filter((l) => texto(l.grupo) === grupo)
-          )
-    const bloqueadas = new Set(
-      [
-        ...all('SELECT entidade FROM conflitos_nuvem'),
-        ...all("SELECT entidade FROM fila_nuvem WHERE estado IN ('falha','conflito')")
-      ].map((l) => texto(l.entidade))
-    )
-    const cadastrosConfirmados = new Set<string>()
-    for (const fila of grupos) {
-      if (
-        !fila.length ||
-        (protocoloNuvem() >= 2 && fila.some((l) => bloqueadas.has(texto(l.entidade))))
-      )
-        continue
-      let result: {
-        ok: boolean
-        numeros?: Array<{ tipo: TipoDocumento; documentoId: string; numero: number }>
-        resultados?: Array<{ entidade: string; revisao: number }>
-        entidade?: string
-        remoto?: Remoto
-      }
-      try {
-        result = (await pedido(
-          `/rest/v1/rpc/${protocoloNuvem() >= 2 ? (protocoloNuvem() >= 3 ? 'gdo_batch_v3' : 'gdo_batch_v2') : 'gdo_batch'}`,
-          {
-            p_operacoes: fila.map((l) => ({
-              id: l.id,
-              entidade: l.entidade,
-              base: l.base,
-              payload: adaptarExclusaoCadastroLegada(
-                JSON.parse(
-                  texto(
-                    get('SELECT payload FROM fila_nuvem WHERE id=?', [l.id])?.payload ?? l.payload
-                  )
-                )
-              ),
-              geracao: l.geracao
-            })),
-            p_dispositivo: computadorId()
-          }
-        ).catch((e: unknown) => {
-          if (
-            protocoloNuvem() < 2 ||
-            !/Autorização.*(expirada|revogada)|Documento em edição|financeiro reservado|origem reservado/.test(
-              String(e)
-            )
-          )
-            throw e
-          const op =
-            fila.find((l) =>
-              ['orcamento', 'relatorio', 'recibo'].includes(texto(l.entidade).split(':')[0])
-            ) ?? fila[0]
-          run('INSERT OR REPLACE INTO conflitos_nuvem VALUES (?,?,?,?)', [
-            op.id,
-            op.entidade,
-            mensagemErro(e),
-            'null'
-          ])
-          return { ok: false, entidade: op.entidade, remoto: null }
-        })) as typeof result
-      } catch (e) {
-        if (acessoInterrompido) throw e
-        if (['GDM01', 'GDM02'].includes((e as { codigo?: string }).codigo ?? '')) {
-          salvar('atualizacaoBasePendente', true)
-          throw e
-        }
-        const falha = classificarFalhaNuvem(e)
-        const temporaria = falha.temporaria || falha.motivo === 'sessao'
-        // Uma falha de transporte pode ocultar uma confirmação. Mantém a identidade
-        // da operação para reenvio idempotente; nunca cria uma operação substituta.
-        if (temporaria) {
-          falhaSincronizacao = e && typeof e === 'object' && falhasSuperadas.has(e) ? null : falha
-          erroEnvio = mensagemErro(e)
-          break
-        }
-        const detalhe = mensagemErro(e, descricaoOperacao(fila[0]))
-        marcarGrupo(fila, 'falha', JSON.stringify({ versao: 1, detalhe, ...diagnosticoErro(e) }))
-        for (const l of fila) bloqueadas.add(texto(l.entidade))
-        continue
-      }
-      if (!result.ok) {
-        const op = fila.find((l) => l.entidade === result.entidade) ?? fila[0]
-        run('INSERT OR REPLACE INTO conflitos_nuvem VALUES (?,?,?,?)', [
-          op.id,
-          op.entidade,
-          result.remoto == null
-            ? texto(get('SELECT detalhe FROM conflitos_nuvem WHERE id=?', [op.id])?.detalhe) ||
-              'A autorização de edição mudou. Suas alterações locais foram preservadas para conferência.'
-            : 'A base remota mudou. Suas alterações locais foram preservadas.',
-          JSON.stringify(result.remoto)
-        ])
-        marcarGrupo(fila, 'conflito')
-        atualizarAplicacoesRascunhos()
-        if (protocoloNuvem() < 2)
-          throw new Error('Conflito de sincronização. Compare as versões e escolha como continuar.')
-        for (const l of fila) bloqueadas.add(texto(l.entidade))
-        const { preservarConflitos } = await import('./rascunhos')
-        preservarConflitos(fila.map((l) => texto(l.entidade)))
-        continue
-      }
-      tx(() => {
-        for (const r of result.resultados ?? [])
-          run(
-            'INSERT INTO sincronizacao VALUES (?,?) ON CONFLICT(entidade) DO UPDATE SET revisao=excluded.revisao',
-            [r.entidade, r.revisao]
-          )
-        if (protocoloNuvem() >= 3)
-          for (const r of result.resultados ?? [])
-            if (/^(clientes|servicos):/.test(r.entidade)) cadastrosConfirmados.add(r.entidade)
-        confirmarAplicacoesRascunhos(fila.map((l) => texto(l.id)))
-        for (const l of fila) run('DELETE FROM fila_nuvem WHERE id=?', [l.id])
-        for (const n of result.numeros ?? []) confirmarNumero(n.tipo, n.documentoId, n.numero)
-      })
-    }
-    let cursor = config<number>('cursorNuvem') ?? 0
-    const auxiliares =
-      protocoloNuvem() >= 2
-        ? Promise.all([
-            pedido(
-              `/rest/v1/edicoes_documento?select=*&empresa_id=eq.${empresaSelecionada ?? config<ContextoNuvem>('contextoNuvem')?.empresaId}`
-            ),
-            pedido(
-              `/rest/v1/pedidos_edicao?select=*&empresa_id=eq.${empresaSelecionada ?? config<ContextoNuvem>('contextoNuvem')?.empresaId}`
-            ),
-            pedido(
-              `/rest/v1/rpc/${protocoloNuvem() >= 3 ? 'gdo_membros_v3' : 'gdo_membros_v2'}`,
-              {}
-            ),
-            ...(protocoloNuvem() >= 3
-              ? [
-                  pedido(
-                    `/rest/v1/mapa_numeracao?select=tipo,documento_id,anterior,novo&empresa_id=eq.${empresaSelecionada ?? config<ContextoNuvem>('contextoNuvem')?.empresaId}`
-                  )
-                ]
-              : [])
-          ]).then(
-            (dados) => ({ dados, erro: null }),
-            (erro) => ({ dados: null, erro })
-          )
-        : null
-    const alteracoes = await baixarAlteracoes(cursor)
-    cursor = Math.max(cursor, ...alteracoes.map((e) => e.sequencia))
-    ordenarDependencias(alteracoes)
-    const tombstonesComPendencias = alteracoes.filter(
-      (e) =>
-        (e.payload.excluido || (!!e.payload.tabela && !e.payload.row)) &&
-        temOperacaoAtiva(e.entidade) &&
-        e.revisao >
-          Number(
-            get('SELECT revisao FROM sincronizacao WHERE entidade=?', [e.entidade])?.revisao ?? 0
-          )
-    )
-    const entidadesPreservadasPorExclusao = new Set<string>()
-    for (const e of tombstonesComPendencias) {
-      const tipo = e.entidade.split(':')[0]
-      if (tipos.includes(tipo as TipoDocumento)) {
-        const { preservarConflitos } = await import('./rascunhos')
-        preservarConflitos([e.entidade])
-      }
-      for (const entidade of preservarOperacoesEntidade(
-        e.entidade,
-        'O registro foi excluído em outro computador. Esta alteração antiga foi preservada e não será enviada automaticamente.'
-      )) {
-        entidadesPreservadasPorExclusao.add(entidade)
-        bloqueadas.delete(entidade)
-      }
-    }
-    semRastreamento(() =>
-      tx(() => {
-        if (config<boolean>('renumeracaoPendente')) {
-          for (const t of ['orcamentos', 'relatorios', 'recibos'])
-            run(`UPDATE ${t} SET numero=-1000000000000000-numero`)
-        }
-        for (const e of alteracoes) {
-          aplicarIdentificador(e)
-          const conhecido = Number(
-            get('SELECT revisao FROM sincronizacao WHERE entidade=?', [e.entidade])?.revisao ?? 0
-          )
-          const pendente = temOperacaoAtiva(e.entidade)
-          const removido = e.payload.excluido || (!!e.payload.tabela && !e.payload.row)
-          const confirmadoNesteEnvio = cadastrosConfirmados.has(e.entidade) && !pendente
-          const codigoServicoCorrigido =
-            e.payload.tabela === 'servicos' &&
-            e.payload.row?.codigo != null &&
-            Number(get('SELECT codigo FROM servicos WHERE id=?', [e.payload.id])?.codigo ?? 0) !==
-              Number(e.payload.row.codigo)
-          if (entidadesPreservadasPorExclusao.has(e.entidade) && !removido) continue
-          if (pendente && e.revisao > conhecido && !removido) continue
-          if (
-            e.revisao > conhecido ||
-            confirmadoNesteEnvio ||
-            (codigoServicoCorrigido && !pendente)
-          )
-            aplicar(e)
-        }
-        salvar('cursorNuvem', cursor)
-        if (config<boolean>('renumeracaoPendente')) salvar('renumeracaoPendente', false)
-      })
-    )
+    const { bloqueadas, cadastrosConfirmados, erroEnvio } = await enviarPendencias()
+    const auxiliares = protocoloNuvem() >= 2 ? consultarAuxiliares() : null
+    await receberAlteracoes(config<number>('cursorNuvem') ?? 0, bloqueadas, cadastrosConfirmados)
     // O conteúdo confirmado já pode aparecer. Controles, membros e consumo não
     // devem atrasar a tela nem a publicação da próxima operação local.
-    if (alteracoes.length)
-      avisarDados({ origem: 'nuvem', entidades: alteracoes.map((e) => e.entidade), status: true })
-    if (protocoloNuvem() >= 2) {
-      const extra = await auxiliares!
-      if (extra.erro) throw extra.erro
-      const [dadosControles, dadosPedidos, membros, mapaNumeracao] = extra.dados!
-      if (mapaNumeracao) salvar('mapaNumeracaoCache', mapaNumeracao)
-      const controles = dadosControles as Array<{
-        tipo: TipoDocumento
-        documento_id: string
-        usuario_id: string
-        dispositivo: string
-        geracao: number
-        expira_em: string | null
-        offline: boolean
-        revisao: number
-      }>
-      const mudancas: string[] = []
-      tx(() => {
-        for (const c of controles) {
-          if (!tipos.includes(c.tipo) || !Number.isSafeInteger(c.geracao) || c.geracao < 1)
-            throw new Error('Autorização remota inválida.')
-          const antes = get(
-            'SELECT usuario,computador,geracao,offline FROM edicoes_documento WHERE tipo=? AND documento_id=?',
-            [c.tipo, c.documento_id]
-          )
-          aplicarIdentificador({
-            entidade: `${c.tipo}:${c.documento_id}`,
-            revisao: 0,
-            sequencia: 0,
-            payload: { id: c.documento_id, tipo: c.tipo },
-            controle: c
-          })
-          if (
-            !antes ||
-            antes.usuario !== c.usuario_id ||
-            antes.computador !== c.dispositivo ||
-            Number(antes.geracao) !== c.geracao ||
-            Number(antes.offline) !== Number(c.offline)
-          )
-            mudancas.push(`controle:${c.tipo}:${c.documento_id}`)
-        }
-      })
-      if (mudancas.length) avisarDados({ origem: 'nuvem', entidades: mudancas, status: true })
-      const pedidos = dadosPedidos as Array<{
-        tipo: TipoDocumento
-        documento_id: string
-      }>
-      const pedidosAntes = config<typeof pedidos>('pedidosEdicaoCache') ?? []
-      if (JSON.stringify(pedidos) !== JSON.stringify(pedidosAntes)) {
-        salvar('pedidosEdicaoCache', pedidos)
-        avisarDados({
-          origem: 'nuvem',
-          entidades: [...pedidosAntes, ...pedidos].map(
-            (p) => `controle:${p.tipo}:${p.documento_id}`
-          ),
-          status: true
-        })
-      }
-      if (JSON.stringify(membros) !== JSON.stringify(config('membrosCache'))) {
-        salvar('membrosCache', membros)
-        avisarDados({ origem: 'nuvem', entidades: ['membros'], status: true })
-      }
-    }
-    if (completa && protocoloNuvem() === 2) {
-      const reservasRemotas = (await pedido(
-        `/rest/v1/reservas_numeros?select=tipo,numero,documento&dispositivo=eq.${computadorId()}`
-      )) as Array<{ tipo: TipoDocumento; numero: number; documento: string | null }>
-      tx(() => {
-        for (const r of reservasRemotas) {
-          if (
-            !tipos.includes(r.tipo) ||
-            !Number.isInteger(r.numero) ||
-            r.numero < 1 ||
-            r.numero > 999999
-          )
-            throw new Error('Reserva remota inválida.')
-          run(
-            'INSERT INTO reservas VALUES (?,?,?) ON CONFLICT(tipo,numero) DO UPDATE SET usado=MAX(usado,excluded.usado)',
-            [r.tipo, r.numero, r.documento ? 1 : 0]
-          )
-        }
-      })
-    }
-    for (const tipo of tipos)
-      if (protocoloNuvem() === 1 && statusNuvem().reservas[tipo] <= 5) {
-        const minimo = Number(
-          get(`SELECT MAX(numero) AS n FROM ${tabelaNumerosUsados()} WHERE tipo=?`, [tipo])?.n ?? 0
-        )
-        const numeros = (await pedido(
-          `/rest/v1/rpc/${protocoloNuvem() >= 2 ? 'gdo_reserve_v2' : 'gdo_reserve'}`,
-          {
-            p_tipo: tipo,
-            p_dispositivo: computadorId(),
-            p_minimo: minimo
-          }
-        )) as number[]
-        tx(() => {
-          for (const n of numeros) run('INSERT OR IGNORE INTO reservas VALUES (?,?,0)', [tipo, n])
-        })
-      }
-    // Uma resposta perdida não devolve a autorização offline ao computador anterior.
-    // Só uma consulta à base remota pode resolver a transferência pendente.
-    for (const l of all(
-      "SELECT chave,valor FROM configuracoes WHERE chave LIKE 'transferencia:%'"
-    )) {
-      const entidade = texto(l.chave).slice('transferencia:'.length)
-      const dados = (await pedido(
-        `/rest/v1/gdo_entities?select=*&entidade=eq.${encodeURIComponent(entidade)}`
-      )) as Remoto[]
-      if (dados[0])
-        tx(() => {
-          semRastreamento(() => aplicar(dados[0]))
-          run('DELETE FROM configuracoes WHERE chave=?', [l.chave])
-        })
-    }
+    if (auxiliares) await aplicarAuxiliares(auxiliares)
+    await sincronizarReservas(completa)
+    await resolverTransferenciasPendentes()
     if (completa) salvar('bytesNuvem', await pedido('/rest/v1/rpc/gdo_usage', {}))
-    // A função de delta antiga omitia codigo. Uma única leitura integral após a
-    // migração corrige serviços já conhecidos cujo cursor não avançou.
-    if (protocoloNuvem() >= 3 && !config<boolean>('codigosCadastrosRevisados')) {
-      const servicosRemotos = (await baixarAlteracoes(0)).filter(
-        (e) => ['servicos', 'clientes'].includes(e.payload.tabela ?? '') && !!e.payload.row
-      )
-      const codigoRemoto = (e: Remoto): number =>
-        Number(
-          e.payload.tabela === 'clientes'
-            ? JSON.parse(texto(e.payload.row?.dados_json) || '{}').codigo
-            : e.payload.row?.codigo
-        )
-      if (servicosRemotos.every((e) => codigoRemoto(e) > 0)) {
-        const corrigidos: string[] = []
-        let revisaoCompleta = true
-        semRastreamento(() =>
-          tx(() => {
-            for (const e of servicosRemotos) {
-              if (temOperacaoAtiva(e.entidade)) {
-                revisaoCompleta = false
-                continue
-              }
-              const cliente = e.payload.tabela === 'clientes'
-              const local = get(
-                cliente
-                  ? 'SELECT dados_json FROM clientes WHERE id=?'
-                  : 'SELECT codigo FROM servicos WHERE id=?',
-                [e.payload.id]
-              )
-              if (!local) continue
-              const codigo = codigoRemoto(e)
-              if (!Number.isSafeInteger(codigo) || codigo < 1) {
-                revisaoCompleta = false
-                continue
-              }
-              const dadosCliente = cliente ? JSON.parse(texto(local.dados_json) || '{}') : null
-              if (Number(cliente ? dadosCliente.codigo : local.codigo) !== codigo) {
-                if (cliente)
-                  run('UPDATE clientes SET dados_json=? WHERE id=?', [
-                    JSON.stringify({ ...dadosCliente, codigo }),
-                    e.payload.id
-                  ])
-                else run('UPDATE servicos SET codigo=? WHERE id=?', [codigo, e.payload.id])
-                corrigidos.push(e.entidade)
-              }
-              registrarCodigoRemoto(cliente ? 'cliente' : 'servico', codigo, e.payload.id)
-              const chaveEstado = `estado:${e.payload.tabela}:${e.payload.id}`
-              const anterior = config<string>(chaveEstado)
-              if (anterior) {
-                try {
-                  const estado = JSON.parse(anterior)
-                  if (estado.row) {
-                    if (cliente)
-                      estado.row.dados_json = JSON.stringify({
-                        ...JSON.parse(estado.row.dados_json || '{}'),
-                        codigo
-                      })
-                    else estado.row.codigo = codigo
-                    salvar(chaveEstado, JSON.stringify(estado))
-                  }
-                } catch {
-                  /* Cache inválido será conferido na captura normal. */
-                }
-              }
-            }
-            salvar('codigosCadastrosRevisados', revisaoCompleta)
-          })
-        )
-        if (corrigidos.length) avisarDados({ origem: 'nuvem', entidades: corrigidos, status: true })
-      }
-    }
+    await revisarCodigosCadastros()
     salvar('ultimaNuvem', new Date().toISOString())
     salvar(
       'erroNuvem',

@@ -39,6 +39,7 @@ import {
   type ErroValidacao
 } from '@shared/validacao'
 import { notificar } from '../lib/notificacoes'
+import type { ReactElement } from 'react'
 
 function mensagemDoCampo(erros: ErroValidacao[], campo: string): string | undefined {
   return erros.find((erro) => erro.campo === campo)?.mensagem
@@ -50,7 +51,7 @@ type Base = Pick<
 >
 const agora = (): string => new Date().toISOString()
 
-export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): JSX.Element {
+export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): ReactElement {
   const { navegar } = useNav()
   const [dados, setDados] = useState<Base | null>(null)
   useCadastrosAtualizados(setDados)
@@ -364,7 +365,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
           Alterações aqui não mudam a proposta.
         </Mensagem>
       )}
-      <div className="mb-5 space-y-5">
+      <div className="mb-5 pilha-y-5">
         <AvisoAtualizacao {...atualizacao} sujo={sujo} />
         <ColaboracaoDocumento
           tipo="relatorio"
@@ -496,7 +497,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
           />
         </div>
       </Card>
-      <div className="space-y-6">
+      <div className="pilha-y-6">
         <ServicosCard
           orc={orcAdaptado}
           set={(p) => set({ itensServico: p.itensServico ?? rel.itensServico })}
@@ -606,7 +607,7 @@ function Resumo({
   label: string
   valor: number
   destaque?: boolean
-}): JSX.Element {
+}): ReactElement {
   return (
     <div className={destaque ? 'rounded-lg bg-brand-teal/10 p-3' : 'rounded-lg bg-slate-50 p-3'}>
       <p className="text-xs text-slate-500">{label}</p>
@@ -632,7 +633,7 @@ function LancamentosCard({
   erroDoCampo: (campo: string) => string | undefined
   onChange: (v: LancamentoRelatorio[]) => void
   onRemover: (id: string) => void
-}): JSX.Element {
+}): ReactElement {
   const add = () => onChange([...itens, { id: novoId(), descricao: '', valor: 0 }])
   const upd = (id: string, p: Partial<LancamentoRelatorio>) =>
     onChange(itens.map((x) => (x.id === id ? { ...x, ...p } : x)))
@@ -650,7 +651,7 @@ function LancamentosCard({
       {itens.length === 0 ? (
         <p className="text-sm text-slate-500">Nenhum lançamento.</p>
       ) : (
-        <div className="space-y-2">
+        <div className="pilha-y-2">
           <ListaOrdenavel itens={itens} onChange={onChange}>
             {itens.map((x, indice) => (
               <div
@@ -697,7 +698,7 @@ function AnexosRelatorioCard({
   anexos: Relatorio['anexos']
   relatorio: Relatorio
   onChange: (v: Relatorio['anexos']) => void
-}): JSX.Element {
+}): ReactElement {
   const referencias = [
     ...relatorio.itensServico.map((x, n) => ({
       tipo: 'servico' as const,

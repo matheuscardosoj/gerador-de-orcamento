@@ -9,6 +9,7 @@ import {
   notificar
 } from '../lib/notificacoes'
 import { AppIcon } from '../ui/primitives'
+import type { ReactElement } from 'react'
 
 const aparencia: Record<
   NivelNotificacao,
@@ -40,7 +41,7 @@ const aparencia: Record<
   }
 }
 
-export function Notificacoes(): JSX.Element | null {
+export function Notificacoes(): ReactElement | null {
   const [fila, setFila] = useState<Notificacao[]>(notificacoesAtivas)
   const [expandida, setExpandida] = useState(false)
   const [host, setHost] = useState<HTMLElement>(document.body)
@@ -78,7 +79,7 @@ export function Notificacoes(): JSX.Element | null {
       {fila.length > 3 && (
         <button
           type="button"
-          className="pointer-events-auto self-end rounded-full bg-inverso px-2.5 py-1 text-xs font-medium text-white shadow"
+          className="pointer-events-auto self-end rounded-full bg-inverso px-2.5 py-1 text-xs font-medium text-white shadow-sm"
           aria-expanded={expandida}
           onClick={() => setExpandida((aberta) => !aberta)}
         >
@@ -98,7 +99,7 @@ function AvisoFlutuante({
 }: {
   notificacao: Notificacao
   aoFechar: (id: string) => void
-}): JSX.Element {
+}): ReactElement {
   const [pausado, setPausado] = useState(false)
   const [ocupado, setOcupado] = useState(false)
   const estilo = aparencia[notificacao.nivel]
@@ -135,7 +136,7 @@ function AvisoFlutuante({
         {notificacao.acao && (
           <button
             type="button"
-            className="mt-2 rounded-md text-sm font-semibold underline underline-offset-2 focus:outline-none focus:ring-2 focus:ring-brand-teal/40"
+            className="mt-2 rounded-md text-sm font-semibold underline underline-offset-2 focus:outline-hidden focus:ring-2 focus:ring-brand-teal/40"
             disabled={ocupado || notificacao.acao.desabilitada}
             onClick={() => {
               if (ocupado) return
@@ -164,7 +165,7 @@ function AvisoFlutuante({
       <button
         type="button"
         aria-label="Fechar aviso"
-        className="rounded-md p-1 text-slate-500 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-teal/40"
+        className="rounded-md p-1 text-slate-500 hover:bg-slate-100 focus:outline-hidden focus:ring-2 focus:ring-brand-teal/40"
         onClick={() => aoFechar(notificacao.id)}
       >
         <AppIcon icon={X} size="sm" />

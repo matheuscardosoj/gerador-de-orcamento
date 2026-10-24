@@ -1,5 +1,6 @@
 import { paginarDocumento } from '@shared/documento/paginar'
 import { Modal } from '../ui/primitives'
+import type { ReactElement } from 'react'
 
 /** Todas as prévias usam a mesma moldura, rolagem e controles do aplicativo. */
 export function PreviaDocumentoModal({
@@ -12,7 +13,7 @@ export function PreviaDocumentoModal({
   tituloFrame: string
   html: string
   onClose: () => void
-}): JSX.Element {
+}): ReactElement {
   return (
     <Modal open title={titulo} size="2xl" onClose={onClose}>
       <iframe

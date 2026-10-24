@@ -17,6 +17,7 @@ import {
   ServicosCard,
   TextosCard
 } from './orcamento/cartoes'
+import type { ReactElement } from 'react'
 export type { Dados }
 import { PageShell } from '../ui/layout'
 import { Button, Mensagem } from '../ui/primitives'
@@ -33,7 +34,7 @@ import {
   type ErroValidacao
 } from '@shared/validacao'
 import { notificar } from '../lib/notificacoes'
-export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): JSX.Element {
+export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): ReactElement {
   const { navegar } = useNav()
   const [dados, setDados] = useState<Dados | null>(null)
   useCadastrosAtualizados(setDados)
@@ -344,7 +345,7 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
           <p className="mt-1">{mensagemValidacao(errosValidacao)}</p>
         </Mensagem>
       )}
-      <div className="space-y-5">
+      <div className="pilha-y-5">
         <AvisoAtualizacao {...atualizacao} sujo={sujo} />
         <ColaboracaoDocumento
           tipo="orcamento"

@@ -4,16 +4,11 @@ import { consultarEdicao, aceitarEstadoEdicao, estadoEdicaoAtual } from '../lib/
 import { mensagemErro } from '@shared/erros'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  ArrowRightLeft,
   CloudDownload,
-  CopyPlus,
   GitCompareArrows,
-  LockKeyhole,
   Save,
   UnlockKeyhole,
   UsersRound,
-  Pencil,
-  Trash2,
   ArrowLeft
 } from 'lucide-react'
 import type {
@@ -25,66 +20,14 @@ import type {
   ComparacaoRascunho,
   RevisaoRecebimentos
 } from '@shared/evolucao'
-import { compararDocumentos } from '@shared/comparacao-documentos'
-import { formatMoeda } from '@shared/format'
 import { api } from '../lib/api'
 import { useNav } from '../lib/nav'
-import {
-  Button,
-  Card,
-  SectionTitle,
-  Modal,
-  Field,
-  Select,
-  Mensagem,
-  Badge,
-  ConfirmDialog
-} from '../ui/primitives'
-import { DataTableViewport } from '../ui/dataTable'
+import { Button, Card, SectionTitle, Modal, Mensagem, Badge, ConfirmDialog } from '../ui/primitives'
+import { TabelaRascunhos, PainelComparacao } from './colaboracao/rascunhos'
+import { RecebimentosPendentes } from './colaboracao/financeiro'
+import { ControleDaEdicao } from './colaboracao/controle'
 import { notificar, concluirNotificacao } from '../lib/notificacoes'
-
-const rotuloCampo = (campo: string): string =>
-  campo
-    .split('.')
-    .map(
-      (p) =>
-        ({
-          descricao: 'Descrição',
-          preco: 'Preço e cálculo do serviço',
-          observacao: 'Observação',
-          observacaoInterna: 'Anotação interna',
-          introducao: 'Introdução',
-          destinatario: 'Cliente',
-          valor: 'Valor',
-          valorUnitario: 'Valor unitário',
-          quantidade: 'Quantidade',
-          itensServico: 'Serviços',
-          pagamentos: 'Condições de pagamento',
-          observacoes: 'Observações',
-          materiais: 'Materiais',
-          anexos: 'Fotos',
-          __ordem: 'Ordem dos itens',
-          status: 'Estado',
-          quitacao: 'Quitação',
-          adiantamentos: 'Adiantamentos',
-          reembolsos: 'Reembolsos'
-        })[p] ?? (p.length > 30 ? 'Item' : p)
-    )
-    .join(' / ')
-function texto(v: unknown): string {
-  if (v === undefined || v === null) return 'Ausente'
-  if (typeof v === 'string') return v || 'Vazio'
-  return JSON.stringify(v, null, 2)
-}
-function trechoComputador(id: string, ids: string[]): string {
-  let tamanho = 8
-  while (
-    tamanho < id.length &&
-    ids.some((outro) => outro !== id && outro.startsWith(id.slice(0, tamanho)))
-  )
-    tamanho += 1
-  return id.slice(0, tamanho)
-}
+import type { ReactElement } from 'react'
 
 /** O controle de edição e os rascunhos nunca executam recebimentos implicitamente. */
 export function ColaboracaoDocumento({
@@ -101,7 +44,7 @@ export function ColaboracaoDocumento({
   rascunhoId?: string
   onSalvar?: () => Promise<Documento | null>
   onAbrir: (documento: Documento, rascunhoId?: string) => void
-}): JSX.Element | null {
+}): ReactElement | null {
   const { navegar, navegarAposSalvar, executarComConfirmacao } = useNav()
   const { conta } = useConta()
   const empresaId = conta.empresa?.id ?? ''
@@ -559,401 +502,106 @@ export function ColaboracaoDocumento({
           </Button>
         }
       >
-        <div className="space-y-5">
+        <div className="pilha-y-5">
           <SectionTitle
             title="Rascunhos deste computador"
             description="Alternativas preservadas a partir de uma revisão conhecida. Salvar um rascunho não registra pagamento nem altera o documento compartilhado."
           />
-          {rascunhos.length ? (
-            <DataTableViewport minWidth="660px">
-              <thead className="bg-slate-50 text-left text-xs text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">Atualizado</th>
-                  <th className="px-4 py-3">Revisão de partida</th>
-                  <th className="px-4 py-3">Situação</th>
-                  <th className="w-72 px-4 py-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {rascunhos.map((r) => (
-                  <tr key={r.id}>
-                    <td className="px-4 py-3">
-                      {new Date(r.atualizadoEm).toLocaleString('pt-BR')}
-                    </td>
-                    <td className="px-4 py-3">{r.baseRevisao}</td>
-                    <td className="px-4 py-3">
-                      <Badge color={r.estado === 'conflito' ? 'amber' : 'slate'}>
-                        {r.estado === 'envio_interrompido'
-                          ? 'Envio precisa de revisão'
-                          : r.estado === 'aguardando_confirmacao'
-                            ? 'Aguardando confirmação da nuvem'
-                            : r.estado === 'conflito'
-                              ? 'Conflito'
-                              : 'Local'}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap justify-end gap-2">
-                        <Button
-                          icon={Trash2}
-                          size="sm"
-                          variant="outline"
-                          disabled={ocupado || r.estado === 'aguardando_confirmacao'}
-                          onClick={() => setExcluir(r)}
-                        >
-                          Excluir rascunho
-                        </Button>
-                        <Button
-                          icon={Pencil}
-                          size="sm"
-                          variant="outline"
-                          disabled={ocupado || r.estado === 'aguardando_confirmacao'}
-                          onClick={() =>
-                            executarComConfirmacao(() => {
-                              onAbrir(r.documento, r.id)
-                              setAberto(false)
-                            })
-                          }
-                        >
-                          Editar
-                        </Button>
-                        <Button
-                          icon={GitCompareArrows}
-                          size="sm"
-                          variant="outline"
-                          disabled={ocupado || r.estado === 'aguardando_confirmacao'}
-                          onClick={() => void executar(() => comparar(r))}
-                        >
-                          Comparar
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </DataTableViewport>
-          ) : (
-            <p className="text-sm text-slate-500">
-              Não há rascunhos guardados para este documento.
-            </p>
-          )}
+          <TabelaRascunhos
+            rascunhos={rascunhos}
+            ocupado={ocupado}
+            onExcluir={setExcluir}
+            onEditar={(r) =>
+              executarComConfirmacao(() => {
+                onAbrir(r.documento, r.id)
+                setAberto(false)
+              })
+            }
+            onComparar={(r) => void executar(() => comparar(r))}
+          />
           {comparacao && (
-            <div className="space-y-4 border-t border-slate-200 pt-5">
-              <SectionTitle
-                title="Comparar com a versão da empresa"
-                description={`Revisão atual: ${comparacao.revisaoRemota}. Alterações em campos diferentes são combinadas; disputas precisam da sua escolha.`}
-              />
-              {!comparacao.remoto && (
-                <Mensagem tom="aviso">
-                  O documento foi excluído. Preserve este trabalho criando um novo documento.
-                </Mensagem>
-              )}
-              {comparacao.conflitos.map((c) => (
-                <Card key={c.caminho} className="p-4">
-                  <p className="mb-3 font-medium text-slate-700">
-                    {rotuloCampo(c.caminho)}{' '}
-                    {c.financeiro && <Badge color="amber">Revisar valores / condições</Badge>}
-                  </p>
-                  <div className="grid gap-3 md:grid-cols-3">
-                    {(
-                      [
-                        ['Partida', c.base],
-                        ['Seu rascunho', c.local],
-                        ['Empresa', c.remoto]
-                      ] as const
-                    ).map(([label, v]) => (
-                      <div key={label}>
-                        <p className="mb-1 text-xs font-medium text-slate-500">{label}</p>
-                        <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-3 font-sans text-sm text-slate-700">
-                          {texto(v)}
-                        </pre>
-                      </div>
-                    ))}
-                  </div>
-                  <Field label="Usar neste campo">
-                    <Select
-                      value={escolhas[c.caminho] ?? ''}
-                      onChange={(e) =>
-                        setEscolhas({
-                          ...escolhas,
-                          [c.caminho]: e.target.value as 'local' | 'remoto'
-                        })
-                      }
-                    >
-                      <option value="">Escolha uma alternativa</option>
-                      <option value="local">Seu rascunho</option>
-                      <option value="remoto">Versão da empresa</option>
-                    </Select>
-                  </Field>
-                </Card>
-              ))}
-              {!!comparacao.remoto && (
-                <div className="max-h-64 overflow-auto rounded-lg border border-slate-200">
-                  <DataTableViewport minWidth="640px">
-                    <thead className="bg-slate-50 text-left text-xs text-slate-500">
-                      <tr>
-                        <th className="px-4 py-3">Mudança independente</th>
-                        <th className="px-4 py-3">Empresa</th>
-                        <th className="px-4 py-3">Resultado combinado</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {compararDocumentos(comparacao.remoto, comparacao.documento).map((d) => (
-                        <tr key={d.campo}>
-                          <th className="px-4 py-3 text-left font-medium">{d.campo}</th>
-                          <td className="break-words px-4 py-3">{d.anterior}</td>
-                          <td className="break-words px-4 py-3">{d.atual}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </DataTableViewport>
-                </div>
-              )}
-              <Mensagem tom="info">
-                Recebimentos, estornos e quitação não são desfeitos por esta comparação. Uma nova
-                revisão preserva todas as anteriores.
-              </Mensagem>
-              {reciboProtegido && (
-                <Mensagem tom="info">
-                  Este recibo já foi confirmado ou cancelado. Para corrigir, use cancelamento e crie
-                  uma cobrança substituta. O rascunho pode ser comparado, copiado ou excluído.
-                </Mensagem>
-              )}
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  icon={Save}
-                  disabled={
-                    ocupado ||
-                    !!reciboProtegido ||
-                    !comparacao.remoto ||
-                    comparacao.conflitos.some((c) => !escolhas[c.caminho])
-                  }
-                  onClick={() =>
-                    executarComConfirmacao(
-                      () =>
-                        void executar(async () =>
-                          abrirDocumento(
-                            await api.rascunhos.aplicar(
-                              comparacao.rascunho.id,
-                              comparacao.revisaoRemota,
-                              escolhas
-                            )
-                          )
-                        )
-                    )
-                  }
-                >
-                  Aplicar como nova revisão
-                </Button>
-                <Button
-                  icon={CopyPlus}
-                  variant="outline"
-                  disabled={ocupado}
-                  onClick={() =>
-                    executarComConfirmacao(
-                      () =>
-                        void executar(async () => {
-                          const d = await api.rascunhos.copiar(comparacao.rascunho.id)
-                          setAberto(false)
-                          navegar(
-                            tipo === 'orcamento'
-                              ? { nome: 'editor', orcamentoId: d.id }
-                              : tipo === 'relatorio'
-                                ? { nome: 'editorRelatorio', relatorioId: d.id }
-                                : { nome: 'recibos', reciboId: d.id }
-                          )
-                        })
-                    )
-                  }
-                >
-                  Criar novo documento
-                </Button>
-              </div>
-            </div>
-          )}
-          {(status?.protocolo ?? 1) >= 2 && (
-            <div className="space-y-4 border-t border-slate-200 pt-5">
-              {(tipo === 'recibo' || tipo === 'relatorio') && (
-                <>
-                  <SectionTitle
-                    title="Recebimentos pendentes"
-                    description="Revise operações que não receberam confirmação da nuvem. A conciliação de textos não altera pagamentos."
-                  />
-                  <Button
-                    variant="outline"
-                    disabled={ocupado}
-                    onClick={() =>
-                      void executar(async () =>
-                        setRecebimentos(
-                          await api.colaboracao.revisarRecebimentos(tipo, documento.id)
+            <PainelComparacao
+              comparacao={comparacao}
+              escolhas={escolhas}
+              ocupado={ocupado}
+              reciboProtegido={!!reciboProtegido}
+              onEscolher={(caminho, valor) => setEscolhas({ ...escolhas, [caminho]: valor })}
+              onAplicar={() =>
+                executarComConfirmacao(
+                  () =>
+                    void executar(async () =>
+                      abrirDocumento(
+                        await api.rascunhos.aplicar(
+                          comparacao.rascunho.id,
+                          comparacao.revisaoRemota,
+                          escolhas
                         )
                       )
-                    }
-                  >
-                    Revisar recebimentos
-                  </Button>
-                  {recebimentos && (
-                    <>
-                      {recebimentos.operacoes.length ? (
-                        <DataTableViewport minWidth="700px">
-                          <thead className="bg-slate-50 text-left text-xs text-slate-500">
-                            <tr>
-                              <th className="w-24 px-4 py-3">Recibo</th>
-                              <th className="w-32 px-4 py-3">Operação</th>
-                              <th className="w-32 px-4 py-3">Valor</th>
-                              <th className="px-4 py-3">Conferência</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {recebimentos.operacoes.map((o) => (
-                              <tr key={o.reciboId}>
-                                <td className="px-4 py-3">{o.numero}</td>
-                                <td className="px-4 py-3">
-                                  {o.acao === 'confirmar'
-                                    ? 'Recebimento'
-                                    : o.excluir
-                                      ? 'Estorno e exclusão'
-                                      : 'Estorno'}
-                                </td>
-                                <td className="px-4 py-3">{formatMoeda(o.valor)}</td>
-                                <td className="px-4 py-3">
-                                  <p className="font-medium text-slate-700">{o.cliente}</p>
-                                  <p className="mt-1 text-slate-500">{o.detalhe}</p>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </DataTableViewport>
-                      ) : (
-                        <p className="text-sm text-slate-500">
-                          Não há recebimentos pendentes neste conjunto.
-                        </p>
-                      )}
-                      {!!recebimentos.operacoes.length && (
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            disabled={
-                              ocupado ||
-                              recebimentos.operacoes.some((o) => o.situacao === 'divergente')
-                            }
-                            onClick={() => setConfirmarFinanceiro('reaplicar')}
-                          >
-                            Confirmar operações revisadas
-                          </Button>
-                          <Button
-                            variant="outline"
-                            disabled={ocupado}
-                            onClick={() => setConfirmarFinanceiro('arquivar')}
-                          >
-                            Arquivar pendências locais
-                          </Button>
-                        </div>
-                      )}
-                      {confirmarFinanceiro && (
-                        <Mensagem tom="aviso">
-                          <p className="mb-3">
-                            {confirmarFinanceiro === 'reaplicar'
-                              ? 'As operações serão refeitas sobre o saldo atual, com autorização e nova transação. O que a nuvem já confirmou não será contabilizado novamente.'
-                              : 'As operações locais ainda não confirmadas serão arquivadas com backup, rascunhos e registro de auditoria. Os pagamentos confirmados na empresa permanecem iguais. Se houve recebimento físico divergente, prepare um novo recibo após revisar.'}{' '}
-                            As alterações de conteúdo locais ficarão em rascunhos para comparação
-                            separada.
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            <Button
-                              disabled={ocupado || sujo}
-                              onClick={() =>
-                                void executar(async () => {
-                                  await api.colaboracao.conciliarRecebimentos(
-                                    recebimentos,
-                                    confirmarFinanceiro
-                                  )
-                                  setRecebimentos(null)
-                                  setConfirmarFinanceiro(null)
-                                  notificar(
-                                    'Operações conferidas; os registros originais foram preservados.',
-                                    'sucesso'
-                                  )
-                                  const d = await (tipo === 'recibo'
-                                    ? api.recibos.get(documento.id)
-                                    : api.relatorios.get(documento.id))
-                                  if (d) onAbrir(d)
-                                  setAberto(false)
-                                })
-                              }
-                            >
-                              Confirmar revisão financeira
-                            </Button>
-                            <Button variant="outline" onClick={() => setConfirmarFinanceiro(null)}>
-                              Voltar
-                            </Button>
-                          </div>
-                        </Mensagem>
-                      )}
-                    </>
-                  )}
-                </>
-              )}
-              <SectionTitle
-                title="Controle da edição"
-                description="A emissão offline é exclusiva. Recuperar revoga a autorização anterior; alterações de computadores desconectados serão conciliadas quando retornarem."
+                    )
+                )
+              }
+              onCriarNovo={() =>
+                executarComConfirmacao(
+                  () =>
+                    void executar(async () => {
+                      const d = await api.rascunhos.copiar(comparacao.rascunho.id)
+                      setAberto(false)
+                      navegar(
+                        tipo === 'orcamento'
+                          ? { nome: 'editor', orcamentoId: d.id }
+                          : tipo === 'relatorio'
+                            ? { nome: 'editorRelatorio', relatorioId: d.id }
+                            : { nome: 'recibos', reciboId: d.id }
+                      )
+                    })
+                )
+              }
+            />
+          )}
+          {(status?.protocolo ?? 1) >= 2 && (
+            <div className="pilha-y-4 border-t border-slate-200 pt-5">
+              <RecebimentosPendentes
+                tipo={tipo}
+                recebimentos={recebimentos}
+                confirmarFinanceiro={confirmarFinanceiro}
+                ocupado={ocupado}
+                sujo={sujo}
+                onRevisar={() =>
+                  void executar(async () =>
+                    setRecebimentos(await api.colaboracao.revisarRecebimentos(tipo, documento.id))
+                  )
+                }
+                onEscolher={setConfirmarFinanceiro}
+                onConfirmar={() =>
+                  void executar(async () => {
+                    if (!recebimentos || !confirmarFinanceiro) return
+                    await api.colaboracao.conciliarRecebimentos(recebimentos, confirmarFinanceiro)
+                    setRecebimentos(null)
+                    setConfirmarFinanceiro(null)
+                    notificar(
+                      'Operações conferidas; os registros originais foram preservados.',
+                      'sucesso'
+                    )
+                    const d = await (tipo === 'recibo'
+                      ? api.recibos.get(documento.id)
+                      : api.relatorios.get(documento.id))
+                    if (d) onAbrir(d)
+                    setAberto(false)
+                  })
+                }
               />
-              <div className="flex flex-wrap items-end gap-3">
-                {controle?.podeEditar && (
-                  <>
-                    <Field label="Transferir para">
-                      <Select value={destino} onChange={(e) => setDestino(e.target.value)}>
-                        <option value="">Escolha o computador</option>
-                        {computadores.map((c) => {
-                          const atual = c.id === status?.computador
-                          return (
-                            <option value={c.id} key={c.id} title={c.id} disabled={atual}>
-                              {c.nome} ·{' '}
-                              {trechoComputador(
-                                c.id,
-                                computadores.map((item) => item.id)
-                              )}
-                              {atual ? ' (este computador)' : ''}
-                            </option>
-                          )
-                        })}
-                      </Select>
-                    </Field>
-                    <Button
-                      variant="outline"
-                      icon={ArrowRightLeft}
-                      disabled={!destino || ocupado || sujo}
-                      onClick={() => controlar('transferir', destino)}
-                    >
-                      Transferir controle
-                    </Button>
-                  </>
-                )}
-                <Button
-                  variant="outline"
-                  icon={LockKeyhole}
-                  disabled={ocupado}
-                  onClick={() => setRecuperar(true)}
-                >
-                  Recuperar controle
-                </Button>
-              </div>
-              {recuperar && (
-                <Mensagem tom="aviso">
-                  <p className="mb-3">
-                    A autorização anterior será revogada no servidor. Um computador desconectado só
-                    receberá a revogação ao reconectar, e seus números reservados não serão
-                    reutilizados. Preserve seu rascunho antes de continuar.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <Button disabled={ocupado || sujo} onClick={() => controlar('recuperar')}>
-                      Confirmar recuperação
-                    </Button>
-                    <Button variant="outline" onClick={() => setRecuperar(false)}>
-                      Voltar
-                    </Button>
-                  </div>
-                </Mensagem>
-              )}
+              <ControleDaEdicao
+                controle={controle}
+                status={status}
+                computadores={computadores}
+                destino={destino}
+                recuperar={recuperar}
+                ocupado={ocupado}
+                sujo={sujo}
+                onDestino={setDestino}
+                onRecuperar={setRecuperar}
+                onControlar={controlar}
+              />
             </div>
           )}
         </div>

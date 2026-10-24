@@ -16,6 +16,7 @@ import {
   cn
 } from '../ui/primitives'
 import type { AnexoOrcamento } from '@shared/types'
+import type { ReactElement } from 'react'
 
 /** Campos comuns aos anexos de orçamento e de relatório. */
 export interface AnexoEditavel {
@@ -52,7 +53,7 @@ export function AnexosCard<T extends AnexoEditavel>({
   atualizarVinculo?: (anexo: T, id: string) => Partial<T>
   prepararNovos?: (anexos: AnexoOrcamento[]) => T[]
   buscarImagem: (id: string) => Promise<string | null>
-}): JSX.Element {
+}): ReactElement {
   const inputRef = useRef<HTMLInputElement>(null)
   const [arrastando, setArrastando] = useState(false)
   const [processando, setProcessando] = useState(false)
@@ -126,7 +127,7 @@ export function AnexosCard<T extends AnexoEditavel>({
           : 'Nenhuma foto anexada. Arraste imagens aqui ou use “Fotos”.'}
       </div>
       {anexos.length > 0 && (
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 pilha-y-3">
           <ListaOrdenavel itens={anexos} onChange={onChange}>
             {anexos.map((a, idx) => (
               <div key={a.id} className="flex gap-4 rounded-lg border border-slate-200 p-3">
@@ -198,7 +199,7 @@ function ModalFoto({
   anexo: AnexoEditavel
   buscarImagem: (id: string) => Promise<string | null>
   onClose: () => void
-}): JSX.Element {
+}): ReactElement {
   const [src, setSrc] = useState<string | undefined>(anexo.imagemDataUrl ?? anexo.miniaturaDataUrl)
   useEffect(() => {
     if (anexo.imagemDataUrl) return
