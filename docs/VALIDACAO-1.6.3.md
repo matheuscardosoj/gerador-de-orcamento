@@ -21,8 +21,8 @@ fora do Git; o instalador não é assinado (`signAndEditExecutable: false`).
 ## Limites desta validação
 
 - A comparação de telas usa a API de demonstração (listas vazias): 30 capturas (entrada, as cinco telas principais, o editor de orçamento, as abas de Configurações disponíveis, os modais de novo cliente e o seletor de colunas, em claro e escuro) ficaram idênticas pixel a pixel contra o Tailwind 3. Tabelas com muitos dados não foram comparadas.
-- Não foi exercitada a sincronização real com o Supabase nem a IA local no Electron 45 (cobertas por testes
-  automatizados, mas não por um ensaio com dois computadores como na 1.6.0).
+- Teste real no executável 1.6.3 (Electron 45), empresa **TESTE** do Supabase, com a sessão aberta pelo usuário: protocolo 4, tempo real "conectado"; um orçamento criado ficou com número definitivo após sincronizar, sem pendências nem erro; uma edição foi enviada em 2,8 s; a IA local iniciou o modelo embutido e corrigiu o texto de teste (acentos, maiúscula e ponto final) em 4,4 s. O orçamento de teste ("Teste Electron 45") ficou na empresa TESTE.
+- Não foi exercitada a propagação entre dois computadores nesta versão (feita na 1.6.0), nem o diálogo nativo de salvar PDF/Word: a geração do PDF foi validada pelo ensaio de paginação em layout real (`printToPDF` no Electron 45) e a do Word, pelos testes automatizados.
 - O Electron 45 não foi instalado como aplicativo; o executável foi validado pelo `win-unpacked`.
 - TypeScript 7 e a atualização automática/assinatura de código não foram feitos (ver o CHANGELOG).
 - Com o Vitest 5, um teste de `Retry-After` passou a coincidir com a vigilância periódica no mesmo instante;
