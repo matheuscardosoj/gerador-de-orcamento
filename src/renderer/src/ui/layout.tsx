@@ -1,5 +1,6 @@
 import { useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { cn } from './primitives'
+import type { ReactElement } from 'react'
 
 /** Cabeçalho + container com largura máxima para as páginas. */
 export function PageShell({
@@ -14,7 +15,7 @@ export function PageShell({
   acoes?: ReactNode
   children: ReactNode
   largura?: 'md' | 'lg' | 'xl' | 'full'
-}): JSX.Element {
+}): ReactElement {
   const max =
     largura === 'md'
       ? 'max-w-3xl'
@@ -47,7 +48,7 @@ export function Tabs<T extends string>({
   tabs: Array<{ id: T; label: string }>
   atual: T
   onChange: (id: T) => void
-}): JSX.Element {
+}): ReactElement {
   const botoes = useRef<Array<HTMLButtonElement | null>>([])
   const moverFoco = (evento: KeyboardEvent<HTMLButtonElement>, indice: number): void => {
     let destino = indice

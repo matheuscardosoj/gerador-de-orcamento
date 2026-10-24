@@ -7,8 +7,9 @@ import { useBloqueioEdicao, useNav } from '../lib/nav'
 import { useConta } from '../components/ContaGate'
 import { SeletorTema } from '../components/SeletorTema'
 import { Button, Card, Field, Input, PasswordInput, SectionTitle } from '../ui/primitives'
+import type { ReactElement } from 'react'
 
-export function MinhaContaSection(): JSX.Element {
+export function MinhaContaSection(): ReactElement {
   const { conta, atualizar } = useConta()
   const { executarComConfirmacao } = useNav()
   const [nome, setNome] = useState(conta.nome)

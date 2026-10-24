@@ -2,6 +2,7 @@ import { ArrowRightLeft, LockKeyhole } from 'lucide-react'
 import type { ControleEdicao, StatusNuvem } from '@shared/evolucao'
 import { Button, SectionTitle, Field, Select, Mensagem } from '../../ui/primitives'
 import { trechoComputador } from './rascunhos'
+import type { ReactElement } from 'react'
 
 export function ControleDaEdicao({
   controle,
@@ -25,7 +26,7 @@ export function ControleDaEdicao({
   onDestino: (id: string) => void
   onRecuperar: (ativo: boolean) => void
   onControlar: (acao: 'transferir' | 'recuperar', computador?: string) => void
-}): JSX.Element {
+}): ReactElement {
   return (
     <>
       <SectionTitle

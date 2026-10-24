@@ -3,6 +3,7 @@ import { Monitor, Moon, Sun } from 'lucide-react'
 import type { PreferenciaTema } from '@shared/tema'
 import { definirPreferenciaTema, usePreferenciaTema, useTemaEfetivo } from '../lib/tema'
 import { AppIcon } from '../ui/primitives'
+import type { ReactElement } from 'react'
 
 const OPCOES: ReadonlyArray<{ valor: PreferenciaTema; rotulo: string; icone: typeof Sun }> = [
   { valor: 'claro', rotulo: 'Claro', icone: Sun },
@@ -11,7 +12,7 @@ const OPCOES: ReadonlyArray<{ valor: PreferenciaTema; rotulo: string; icone: typ
 ]
 
 /** Escolha do tema com botões de opção nativos: teclado e leitor de tela funcionam sem código extra. */
-export function SeletorTema(): JSX.Element {
+export function SeletorTema(): ReactElement {
   const [preferencia, definir] = usePreferenciaTema()
   const grupo = useId()
   return (
@@ -38,7 +39,7 @@ export function SeletorTema(): JSX.Element {
 }
 
 /** Atalho da barra lateral: alterna entre claro e escuro a partir do tema que está na tela. */
-export function BotaoAlternarTema(): JSX.Element {
+export function BotaoAlternarTema(): ReactElement {
   const escuro = useTemaEfetivo() === 'escuro'
   const rotulo = escuro ? 'Mudar para o tema claro' : 'Mudar para o tema escuro'
   return (

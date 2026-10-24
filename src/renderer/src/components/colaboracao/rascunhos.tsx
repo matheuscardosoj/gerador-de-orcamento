@@ -3,6 +3,7 @@ import type { RascunhoCompartilhado, ComparacaoRascunho } from '@shared/evolucao
 import { compararDocumentos } from '@shared/comparacao-documentos'
 import { Button, Card, SectionTitle, Field, Select, Mensagem, Badge } from '../../ui/primitives'
 import { DataTableViewport } from '../../ui/dataTable'
+import type { ReactElement } from 'react'
 export const rotuloCampo = (campo: string): string =>
   campo
     .split('.')
@@ -58,7 +59,7 @@ export function TabelaRascunhos({
   onExcluir: (r: RascunhoCompartilhado) => void
   onEditar: (r: RascunhoCompartilhado) => void
   onComparar: (r: RascunhoCompartilhado) => void
-}): JSX.Element {
+}): ReactElement {
   return (
     <>
       {rascunhos.length ? (
@@ -145,7 +146,7 @@ export function PainelComparacao({
   onEscolher: (caminho: string, valor: 'local' | 'remoto') => void
   onAplicar: () => void
   onCriarNovo: () => void
-}): JSX.Element {
+}): ReactElement {
   return (
     <div className="space-y-4 border-t border-slate-200 pt-5">
       <SectionTitle

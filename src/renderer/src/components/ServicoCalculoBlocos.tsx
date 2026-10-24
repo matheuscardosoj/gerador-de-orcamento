@@ -14,8 +14,9 @@ import {
   cn
 } from '../ui/primitives'
 import { novoId } from './tipos'
+import type { ReactElement } from 'react'
 
-export function Linha({ label, valor }: { label: string; valor: number }): JSX.Element {
+export function Linha({ label, valor }: { label: string; valor: number }): ReactElement {
   return (
     <div className="flex items-baseline justify-between gap-3 text-slate-600">
       <span className="min-w-0 leading-5">{label}</span>
@@ -31,7 +32,7 @@ export function ModoSelect({
 }: {
   value: ModoAplicacao
   onChange: (m: ModoAplicacao) => void
-}): JSX.Element {
+}): ReactElement {
   return (
     <Select value={value} onChange={(e) => onChange(e.target.value as ModoAplicacao)}>
       <option value="cheio">Valor total</option>
@@ -49,7 +50,7 @@ export function Bloco({
   titulo: string
   children: React.ReactNode
   acao?: React.ReactNode
-}): JSX.Element {
+}): ReactElement {
   return (
     <Card className="p-4">
       <div className="mb-3 flex items-center justify-between">
@@ -63,7 +64,7 @@ export function Bloco({
 
 export type BlocoProps = { e: EntradaCalculo; set: (p: Partial<EntradaCalculo>) => void }
 
-export function MaoDeObraBloco({ e, set }: BlocoProps): JSX.Element {
+export function MaoDeObraBloco({ e, set }: BlocoProps): ReactElement {
   const add = (): void =>
     set({
       maoDeObra: [...e.maoDeObra, { id: novoId(), qtdFuncionarios: 1, base: 'diaria', valor: 0 }]
@@ -200,7 +201,7 @@ export function LinhaDescricao({
   placeholder: string
   onChange: (v: string) => void
   onRemove: () => void
-}): JSX.Element {
+}): ReactElement {
   return (
     <div className="mb-2 flex items-end gap-2">
       <Field label="Descrição" className="flex-1">
@@ -219,7 +220,7 @@ export function AlimentacaoBloco({
   e,
   set,
   parametros
-}: BlocoProps & { parametros: ParametrosFinanceiros }): JSX.Element {
+}: BlocoProps & { parametros: ParametrosFinanceiros }): ReactElement {
   const add = (): void =>
     set({
       alimentacoes: [
@@ -289,7 +290,7 @@ export function AlimentacaoBloco({
   )
 }
 
-export function FerramentasBloco({ e, set }: BlocoProps): JSX.Element {
+export function FerramentasBloco({ e, set }: BlocoProps): ReactElement {
   const add = (): void =>
     set({
       ferramentas: [
@@ -359,7 +360,7 @@ export function CombustivelBloco({
   e,
   set,
   parametros
-}: BlocoProps & { parametros: ParametrosFinanceiros }): JSX.Element {
+}: BlocoProps & { parametros: ParametrosFinanceiros }): ReactElement {
   const add = (): void =>
     set({
       combustiveis: [
@@ -442,7 +443,7 @@ export function CombustivelBloco({
   )
 }
 
-export function EstadiaBloco({ e, set }: BlocoProps): JSX.Element {
+export function EstadiaBloco({ e, set }: BlocoProps): ReactElement {
   const add = (): void =>
     set({
       estadias: [
@@ -551,7 +552,7 @@ export function EstadiaBloco({ e, set }: BlocoProps): JSX.Element {
   )
 }
 
-export function AvulsosBloco({ e, set }: BlocoProps): JSX.Element {
+export function AvulsosBloco({ e, set }: BlocoProps): ReactElement {
   const add = (): void =>
     set({ avulsos: [...e.avulsos, { id: novoId(), descricao: '', valor: 0, modo: 'cheio' }] })
   const upd = (id: string, patch: Partial<EntradaCalculo['avulsos'][number]>): void =>

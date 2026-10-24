@@ -2,6 +2,7 @@ import { mensagemErro } from '@shared/erros'
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { Save, Check } from 'lucide-react'
 import { Button } from '../../ui/primitives'
+import type { ReactElement } from 'react'
 
 export type EstadoSalvar = { salvando: boolean; ok: boolean; disabled: boolean }
 export const AcoesFormulario = createContext<{
@@ -17,7 +18,7 @@ export function BotaoSalvar({
   salvando: boolean
   ok: boolean
   disabled?: boolean
-}): JSX.Element | null {
+}): ReactElement | null {
   const contexto = useContext(AcoesFormulario)
   const atualizar = contexto?.atualizar,
     formId = contexto?.formId

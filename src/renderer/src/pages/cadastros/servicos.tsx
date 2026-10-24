@@ -28,6 +28,7 @@ import {
 import type { ServicoCatalogo } from '@shared/types'
 import type { RascunhoCadastro } from '@shared/evolucao'
 import { useNav } from '../../lib/nav'
+import type { ReactElement } from 'react'
 
 // --------------------------------------------------------------- Serviços
 const servicoVazio = (): Omit<ServicoCatalogo, 'id'> => ({
@@ -49,7 +50,7 @@ export function SecaoServicos({
 }: {
   edit: ServicoCatalogo | 'novo' | null
   setEdit: (edit: ServicoCatalogo | 'novo' | null) => void
-}): JSX.Element {
+}): ReactElement {
   const {
     data,
     loading,
@@ -291,7 +292,7 @@ function ServicoModal({
   onClose: () => void
   onDeleted: () => void
   onSaved: () => void
-}): JSX.Element {
+}): ReactElement {
   const [form, setForm] = useState<Omit<ServicoCatalogo, 'id'>>(
     (restaurar?.dados as Omit<ServicoCatalogo, 'id'> | undefined) ?? servico ?? servicoVazio()
   )

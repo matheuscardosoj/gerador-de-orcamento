@@ -10,6 +10,7 @@ import {
 import { api } from './api'
 import { notificar, type NivelNotificacao } from './notificacoes'
 import { ConfirmDialog } from '../ui/primitives'
+import type { ReactElement } from 'react'
 
 export type AbaConfiguracoes =
   | 'conta'
@@ -43,7 +44,7 @@ interface NavContexto {
 
 const Ctx = createContext<NavContexto | null>(null)
 
-export function NavProvider({ children }: { children: ReactNode }): JSX.Element {
+export function NavProvider({ children }: { children: ReactNode }): ReactElement {
   const [rota, setRota] = useState<Rota>({ nome: 'historico' })
   const [revisaoRota, setRevisaoRota] = useState(0)
   const [pendente, setPendente] = useState<{ executar: () => void; cancelar?: () => void } | null>(

@@ -14,10 +14,11 @@ import { SecaoEmpresa } from './configuracoes/empresa'
 import { SecaoParametros } from './configuracoes/parametros'
 import { SecaoIA } from './configuracoes/ia'
 import { SecaoDados } from './configuracoes/dados'
+import type { ReactElement } from 'react'
 
 type Aba = AbaConfiguracoes
 
-export function ConfiguracoesPage(): JSX.Element {
+export function ConfiguracoesPage(): ReactElement {
   const { conta } = useConta()
   const { rota, navegar } = useNav()
   const aba: Aba = rota.nome === 'configuracoes' ? (rota.aba ?? 'conta') : 'conta'

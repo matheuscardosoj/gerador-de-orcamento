@@ -23,6 +23,7 @@ import {
   Textarea
 } from '../ui/primitives'
 import { RevisaoIA } from '../components/RevisaoIA'
+import type { ReactElement } from 'react'
 type TextoPadrao = ObservacaoPadrao | FormaPagamentoPadrao
 export function PadroesConfig({
   tipo,
@@ -32,7 +33,7 @@ export function PadroesConfig({
   tipo: 'observacoes' | 'pagamentos'
   novo: boolean
   setNovo: (novo: boolean) => void
-}): JSX.Element {
+}): ReactElement {
   const { data, loading, error, reload } = useAsync(
     () => api[tipo].list(),
     [tipo],

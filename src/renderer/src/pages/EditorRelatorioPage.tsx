@@ -39,6 +39,7 @@ import {
   type ErroValidacao
 } from '@shared/validacao'
 import { notificar } from '../lib/notificacoes'
+import type { ReactElement } from 'react'
 
 function mensagemDoCampo(erros: ErroValidacao[], campo: string): string | undefined {
   return erros.find((erro) => erro.campo === campo)?.mensagem
@@ -50,7 +51,7 @@ type Base = Pick<
 >
 const agora = (): string => new Date().toISOString()
 
-export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): JSX.Element {
+export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): ReactElement {
   const { navegar } = useNav()
   const [dados, setDados] = useState<Base | null>(null)
   useCadastrosAtualizados(setDados)
@@ -606,7 +607,7 @@ function Resumo({
   label: string
   valor: number
   destaque?: boolean
-}): JSX.Element {
+}): ReactElement {
   return (
     <div className={destaque ? 'rounded-lg bg-brand-teal/10 p-3' : 'rounded-lg bg-slate-50 p-3'}>
       <p className="text-xs text-slate-500">{label}</p>
@@ -632,7 +633,7 @@ function LancamentosCard({
   erroDoCampo: (campo: string) => string | undefined
   onChange: (v: LancamentoRelatorio[]) => void
   onRemover: (id: string) => void
-}): JSX.Element {
+}): ReactElement {
   const add = () => onChange([...itens, { id: novoId(), descricao: '', valor: 0 }])
   const upd = (id: string, p: Partial<LancamentoRelatorio>) =>
     onChange(itens.map((x) => (x.id === id ? { ...x, ...p } : x)))
@@ -697,7 +698,7 @@ function AnexosRelatorioCard({
   anexos: Relatorio['anexos']
   relatorio: Relatorio
   onChange: (v: Relatorio['anexos']) => void
-}): JSX.Element {
+}): ReactElement {
   const referencias = [
     ...relatorio.itensServico.map((x, n) => ({
       tipo: 'servico' as const,

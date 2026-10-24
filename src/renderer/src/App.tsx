@@ -30,6 +30,7 @@ import { EditorRelatorioPage } from './pages/EditorRelatorioPage'
 import { notificar, concluirNotificacao, atualizarAcaoNotificacao } from './lib/notificacoes'
 import { CicloPedidosEdicao, pedidosAtuais } from './lib/pedidos-edicao'
 import type { ControleEdicao } from '@shared/evolucao'
+import type { ReactElement } from 'react'
 
 const itens: Array<{ nome: Rota['nome']; label: string; icon: LucideIcon }> = [
   { nome: 'historico', label: 'Orçamentos', icon: FileText },
@@ -39,7 +40,7 @@ const itens: Array<{ nome: Rota['nome']; label: string; icon: LucideIcon }> = [
   { nome: 'configuracoes', label: 'Configurações', icon: Settings }
 ]
 
-function Sidebar(): JSX.Element {
+function Sidebar(): ReactElement {
   const { rota, navegar, avisar, executarComConfirmacao } = useNav()
   const { atualizar } = useConta()
   // Recarrega o nome da empresa ao trocar de tela (reflete edições nas Configurações).
@@ -165,7 +166,7 @@ function Sidebar(): JSX.Element {
   )
 }
 
-function Conteudo(): JSX.Element {
+function Conteudo(): ReactElement {
   const { rota, revisaoRota } = useNav()
   switch (rota.nome) {
     case 'historico':
@@ -400,7 +401,7 @@ function RecepcaoPedidosEdicao(): null {
   return null
 }
 
-function App(): JSX.Element {
+function App(): ReactElement {
   return (
     <ContaGate>
       <NavProvider>

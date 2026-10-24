@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { cn } from './cn'
 import { AppIcon, Button } from './botoes'
+import type { ReactElement } from 'react'
 
 // ------------------------------------------------------------------- Modal
 const pilhaModais: symbol[] = []
@@ -24,7 +25,7 @@ export function Modal({
   footer?: ReactNode
   size?: 'md' | 'lg' | 'xl' | '2xl' | '3xl'
   busy?: boolean
-}): JSX.Element | null {
+}): ReactElement | null {
   const tituloId = useId()
   const caixaRef = useRef<HTMLDivElement>(null)
   const focoAnterior = useRef<HTMLElement | null>(null)
@@ -174,7 +175,7 @@ export function ConfirmDialog({
   busy?: boolean
   onCancel: () => void
   onConfirm: () => void | Promise<void>
-}): JSX.Element | null {
+}): ReactElement | null {
   return (
     <Modal
       open={open}

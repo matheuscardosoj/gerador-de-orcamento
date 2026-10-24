@@ -4,9 +4,10 @@ import { useState } from 'react'
 import { Download, ArchiveRestore, Import } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Button, Card, SectionTitle, ConfirmDialog } from '../../ui/primitives'
+import type { ReactElement } from 'react'
 
 // ----------------------------------------------------------- Dados e backup
-export function SecaoDados(): JSX.Element {
+export function SecaoDados(): ReactElement {
   const [ocupado, setOcupado] = useState<'exportar' | 'restaurar' | 'mesclar' | null>(null)
   const [resultado, setResultado] = useState<string | null>(null)
   const [erro, setErro] = useState<string | null>(null)

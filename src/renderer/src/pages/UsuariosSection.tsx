@@ -21,11 +21,12 @@ import { correspondeBusca } from '@shared/historico-preferencias'
 import type { MembroEmpresa, StatusNuvem } from '@shared/evolucao'
 import { useConta } from '../components/ContaGate'
 import { ConvitesSection } from './ConvitesSection'
+import type { ReactElement } from 'react'
 
 export function UsuariosSection(props: {
   novo: boolean
   setNovo: (novo: boolean) => void
-}): JSX.Element {
+}): ReactElement {
   const { conta } = useConta()
   return conta.central ? <ConvitesSection {...props} /> : <UsuariosLegadosSection {...props} />
 }
@@ -36,7 +37,7 @@ function UsuariosLegadosSection({
 }: {
   novo: boolean
   setNovo: (novo: boolean) => void
-}): JSX.Element {
+}): ReactElement {
   const [status, setStatus] = useState<StatusNuvem | null>(null)
   const [email, setEmail] = useState(''),
     [nome, setNome] = useState(''),

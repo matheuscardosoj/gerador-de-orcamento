@@ -27,6 +27,7 @@ import { TabelaRascunhos, PainelComparacao } from './colaboracao/rascunhos'
 import { RecebimentosPendentes } from './colaboracao/financeiro'
 import { ControleDaEdicao } from './colaboracao/controle'
 import { notificar, concluirNotificacao } from '../lib/notificacoes'
+import type { ReactElement } from 'react'
 
 /** O controle de edição e os rascunhos nunca executam recebimentos implicitamente. */
 export function ColaboracaoDocumento({
@@ -43,7 +44,7 @@ export function ColaboracaoDocumento({
   rascunhoId?: string
   onSalvar?: () => Promise<Documento | null>
   onAbrir: (documento: Documento, rascunhoId?: string) => void
-}): JSX.Element | null {
+}): ReactElement | null {
   const { navegar, navegarAposSalvar, executarComConfirmacao } = useNav()
   const { conta } = useConta()
   const empresaId = conta.empresa?.id ?? ''

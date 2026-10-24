@@ -30,6 +30,7 @@ import {
 import type { Cliente } from '@shared/types'
 import type { RascunhoCadastro } from '@shared/evolucao'
 import { useNav } from '../../lib/nav'
+import type { ReactElement } from 'react'
 
 // --------------------------------------------------------------- Clientes
 const clienteVazio = (): Omit<Cliente, 'id' | 'criadoEm'> => ({
@@ -54,7 +55,7 @@ export function SecaoClientes({
 }: {
   edit: Cliente | 'novo' | null
   setEdit: (edit: Cliente | 'novo' | null) => void
-}): JSX.Element {
+}): ReactElement {
   const {
     data,
     loading,
@@ -365,7 +366,7 @@ function ClienteModal({
   onClose: () => void
   onDeleted: () => void
   onSaved: () => void
-}): JSX.Element {
+}): ReactElement {
   const [form, setForm] = useState<Omit<Cliente, 'id' | 'criadoEm'>>(
     (restaurar?.dados as Omit<Cliente, 'id' | 'criadoEm'> | undefined) ?? cliente ?? clienteVazio()
   )

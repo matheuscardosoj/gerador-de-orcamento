@@ -22,6 +22,7 @@ import {
   EmptyState
 } from '../ui/primitives'
 import { DataTableFrame, TableActions } from '../ui/dataTable'
+import type { ReactElement } from 'react'
 
 export function ConvitesSection({
   novo,
@@ -29,7 +30,7 @@ export function ConvitesSection({
 }: {
   novo: boolean
   setNovo: (v: boolean) => void
-}): JSX.Element {
+}): ReactElement {
   const { conta, atualizar } = useConta()
   const { executarComConfirmacao } = useNav()
   const admin = conta.empresa?.papel === 'administrador'

@@ -34,6 +34,7 @@ import {
   Linha
 } from './ServicoCalculoBlocos'
 import { mensagemValidacao, validarEntradaCalculo } from '@shared/validacao'
+import type { ReactElement } from 'react'
 
 interface Props {
   parametros: ParametrosFinanceiros
@@ -57,7 +58,7 @@ export function ServicoCalculoModal({
   onConfirm,
   rotuloDocumento = 'orçamento',
   modoServico = 'calculado'
-}: Props): JSX.Element {
+}: Props): ReactElement {
   const [descricao, setDescricao] = useState(descricaoInicial ?? '')
   const [unidade, setUnidade] = useState(unidadeInicial ?? 'serviço')
   const [quantidade, setQuantidade] = useState(quantidadeInicial ?? 1)

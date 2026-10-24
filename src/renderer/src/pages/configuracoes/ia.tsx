@@ -7,8 +7,9 @@ import { Button, Card, Field, Input, Select, SectionTitle, Mensagem } from '../.
 import type { ConfigIA, StatusIA } from '@shared/types'
 import { mensagemValidacao, validarUrlOllamaLocal } from '@shared/validacao'
 import { BotaoSalvar } from './comum'
+import type { ReactElement } from 'react'
 
-export function SecaoIA(): JSX.Element {
+export function SecaoIA(): ReactElement {
   const { data, error: erroCarga } = useAsync(() => api.ia.get(), [])
   const [form, setForm] = useState<ConfigIA | null>(null)
   const [salvo, setSalvo] = useState('')

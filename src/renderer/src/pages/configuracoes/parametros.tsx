@@ -8,9 +8,10 @@ import { Card, Field, NumberField, Select, SectionTitle, Mensagem } from '../../
 import type { ParametrosFinanceiros } from '@shared/types'
 import { mensagemValidacao, validarParametrosFinanceiros } from '@shared/validacao'
 import { BotaoSalvar } from './comum'
+import type { ReactElement } from 'react'
 
 // ------------------------------------------------------------ Parâmetros
-export function SecaoParametros(): JSX.Element {
+export function SecaoParametros(): ReactElement {
   const { data, error: erroCarga } = useAsync(() => api.parametros.get(), [])
   const [form, setForm] = useState<ParametrosFinanceiros | null>(null)
   const [salvo, setSalvo] = useState('')

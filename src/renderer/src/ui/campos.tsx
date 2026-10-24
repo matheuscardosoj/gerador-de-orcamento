@@ -22,6 +22,7 @@ import {
   valorNumericoCanonico
 } from '@shared/entrada-numerica'
 import { cn } from './cn'
+import type { ReactElement } from 'react'
 
 // ------------------------------------------------------------------- Inputs
 const fieldBase =
@@ -124,7 +125,7 @@ export function NumericInput({
 } & Omit<
   InputHTMLAttributes<HTMLInputElement>,
   'value' | 'onChange' | 'type' | 'max' | 'min' | 'step'
->): JSX.Element {
+>): ReactElement {
   const inteiro = step === 1
   const negativo = min !== undefined && min < 0
   const casasDecimais = format === 'money' ? 2 : 10
@@ -255,7 +256,7 @@ export function NumberField({
 } & Omit<
   InputHTMLAttributes<HTMLInputElement>,
   'value' | 'onChange' | 'type' | 'min' | 'max' | 'step'
->): JSX.Element {
+>): ReactElement {
   return (
     <NumericInput
       {...props}
@@ -278,7 +279,7 @@ export function Field({
   error?: ReactNode
   children: ReactNode
   className?: string
-}): JSX.Element {
+}): ReactElement {
   const gerado = useId()
   const hintId = hint ? `${gerado}-hint` : undefined
   const errorId = error ? `${gerado}-error` : undefined
@@ -348,7 +349,7 @@ export function Checkbox({
   onChange: (v: boolean) => void
   label?: ReactNode
   disabled?: boolean
-}): JSX.Element {
+}): ReactElement {
   return (
     <label
       className={cn(

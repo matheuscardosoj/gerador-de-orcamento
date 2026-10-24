@@ -10,6 +10,7 @@ import {
 import { createPortal } from 'react-dom'
 import { type LucideIcon } from 'lucide-react'
 import { cn } from './cn'
+import type { ReactElement } from 'react'
 
 // ------------------------------------------------------------------- Ícone
 /**
@@ -22,7 +23,7 @@ export function Icone({
 }: {
   children: ReactNode
   className?: string
-}): JSX.Element {
+}): ReactElement {
   return (
     <span
       aria-hidden
@@ -44,7 +45,7 @@ export function AppIcon({
   icon: LucideIcon
   className?: string
   size?: 'sm' | 'md' | 'lg'
-}): JSX.Element {
+}): ReactElement {
   const pixels = size === 'sm' ? 16 : size === 'lg' ? 20 : 18
   return (
     <Icon
@@ -107,7 +108,7 @@ export function IconButton({
   label: string
   variant?: ButtonVariant
   size?: ButtonSize
-}): JSX.Element {
+}): ReactElement {
   const ancora = useRef<HTMLSpanElement>(null)
   const dicaId = useId()
   const [mouse, setMouse] = useState(false)
@@ -160,7 +161,7 @@ export function DicaIconButton({
   ancora: { readonly current: HTMLSpanElement | null }
   id: string
   label: string
-}): JSX.Element {
+}): ReactElement {
   const dica = useRef<HTMLSpanElement>(null)
   const [posicao, setPosicao] = useState<{ top: number; left: number } | null>(null)
   useLayoutEffect(() => {

@@ -45,6 +45,7 @@ import {
 import { formatDataCurta, formatMoeda, formatNumero } from '@shared/format'
 import { descricaoExclusaoRecibo, rotuloExclusaoRecibo } from '@shared/recibo-exclusao'
 import type { Recibo, ResumoOrcamento, ResumoRelatorio, TipoDocumento } from '@shared/types'
+import type { ReactElement } from 'react'
 
 export interface RegistroHistorico {
   id: string
@@ -154,7 +155,7 @@ export function HistoricoDocumentos({
   erroCarga?: string | null
   onAbrir?: (id: string) => void
   onAtualizar?: () => void
-}): JSX.Element {
+}): ReactElement {
   const { navegar } = useNav()
   const [pref, setPref] = useState(() => preferenciasPadrao(tipo))
   const [carregadas, setCarregadas] = useState(false)

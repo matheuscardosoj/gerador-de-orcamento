@@ -5,10 +5,11 @@ import { Button } from '../ui/primitives'
 import type { Cliente, ServicoCatalogo } from '@shared/types'
 import { SecaoClientes } from './cadastros/clientes'
 import { SecaoServicos } from './cadastros/servicos'
+import type { ReactElement } from 'react'
 
 type Aba = 'clientes' | 'servicos'
 
-export function CadastrosPage(): JSX.Element {
+export function CadastrosPage(): ReactElement {
   const [aba, setAba] = useState<Aba>('clientes')
   const [editCliente, setEditCliente] = useState<Cliente | 'novo' | null>(null)
   const [editServico, setEditServico] = useState<ServicoCatalogo | 'novo' | null>(null)

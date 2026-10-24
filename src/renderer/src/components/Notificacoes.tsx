@@ -9,6 +9,7 @@ import {
   notificar
 } from '../lib/notificacoes'
 import { AppIcon } from '../ui/primitives'
+import type { ReactElement } from 'react'
 
 const aparencia: Record<
   NivelNotificacao,
@@ -40,7 +41,7 @@ const aparencia: Record<
   }
 }
 
-export function Notificacoes(): JSX.Element | null {
+export function Notificacoes(): ReactElement | null {
   const [fila, setFila] = useState<Notificacao[]>(notificacoesAtivas)
   const [expandida, setExpandida] = useState(false)
   const [host, setHost] = useState<HTMLElement>(document.body)
@@ -98,7 +99,7 @@ function AvisoFlutuante({
 }: {
   notificacao: Notificacao
   aoFechar: (id: string) => void
-}): JSX.Element {
+}): ReactElement {
   const [pausado, setPausado] = useState(false)
   const [ocupado, setOcupado] = useState(false)
   const estilo = aparencia[notificacao.nivel]

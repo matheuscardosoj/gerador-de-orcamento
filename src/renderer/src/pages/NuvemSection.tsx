@@ -17,7 +17,8 @@ import {
   ConfirmDialog,
   SectionTitle
 } from '../ui/primitives'
-export function NuvemSection(): JSX.Element {
+import type { ReactElement } from 'react'
+export function NuvemSection(): ReactElement {
   const { navegar } = useNav()
   const { conta } = useConta()
   const [c, setC] = useState<ConfigNuvem>({ url: '', chavePublica: '', email: '' })

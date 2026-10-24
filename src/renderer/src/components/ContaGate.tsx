@@ -24,6 +24,7 @@ import {
   SectionTitle,
   Modal
 } from '../ui/primitives'
+import type { ReactElement } from 'react'
 
 const ContaContext = createContext<{
   conta: EstadoConta
@@ -34,7 +35,7 @@ export function useConta() {
   if (!contexto) throw new Error('Conta indisponível')
   return contexto
 }
-export function ContaGate({ children }: { children: ReactNode }): JSX.Element {
+export function ContaGate({ children }: { children: ReactNode }): ReactElement {
   const [conta, setConta] = useState<EstadoConta | null>(null)
   const [erro, setErro] = useState('')
   const [empresa, setEmpresa] = useState<EmpresaConfig | null>(null)
@@ -176,7 +177,7 @@ export function ContaGate({ children }: { children: ReactNode }): JSX.Element {
     </ContaContext.Provider>
   )
 }
-function TelaAcesso({ children }: { children: ReactNode }): JSX.Element {
+function TelaAcesso({ children }: { children: ReactNode }): ReactElement {
   return (
     <main className="flex min-h-full items-center justify-center overflow-y-auto bg-app px-6 py-10">
       <Card className="w-full max-w-lg space-y-5 p-8">{children}</Card>
@@ -189,7 +190,7 @@ function Acesso({
 }: {
   conta: EstadoConta
   atualizar: (c: EstadoConta) => void
-}): JSX.Element {
+}): ReactElement {
   const [email, setEmail] = useState(conta.email),
     [senha, setSenha] = useState(''),
     [lembrar, setLembrar] = useState(conta.lembrar)
@@ -559,7 +560,7 @@ function Acesso({
     </TelaAcesso>
   )
 }
-function AtivarEmpresa(): JSX.Element {
+function AtivarEmpresa(): ReactElement {
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
   const [administrador, setAdministrador] = useState('')
@@ -656,7 +657,7 @@ function PrimeirosPassos({
 }: {
   empresa: EmpresaConfig
   concluir: (e: EmpresaConfig) => void
-}): JSX.Element {
+}): ReactElement {
   const [form, setForm] = useState(empresa),
     [erro, setErro] = useState(''),
     [ocupado, setOcupado] = useState(false)

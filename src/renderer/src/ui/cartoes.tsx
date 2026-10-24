@@ -2,6 +2,7 @@ import { Children, useEffect, useState, type ReactNode } from 'react'
 import { mensagemErro } from '@shared/erros'
 import { notificar } from '../lib/notificacoes'
 import { cn } from './cn'
+import type { ReactElement } from 'react'
 
 // -------------------------------------------------------------------- Card
 export function Card({
@@ -10,7 +11,7 @@ export function Card({
 }: {
   children: ReactNode
   className?: string
-}): JSX.Element {
+}): ReactElement {
   return (
     <div className={cn('rounded-xl border border-slate-200 bg-surface shadow-sm', className)}>
       {children}
@@ -26,7 +27,7 @@ export function SectionTitle({
   title: ReactNode
   description?: ReactNode
   action?: ReactNode
-}): JSX.Element {
+}): ReactElement {
   return (
     <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0 break-words">
@@ -44,7 +45,7 @@ export function Badge({
 }: {
   children: ReactNode
   color?: 'slate' | 'green' | 'amber' | 'red' | 'blue'
-}): JSX.Element {
+}): ReactElement {
   const colors: Record<string, string> = {
     slate: 'bg-slate-100 text-slate-600',
     green: 'bg-emerald-100 text-emerald-700',
@@ -75,7 +76,7 @@ export function Mensagem({
   tom?: 'erro' | 'aviso' | 'info' | 'sucesso'
   className?: string
   temporaria?: boolean
-}): JSX.Element | null {
+}): ReactElement | null {
   const [visivel, setVisivel] = useState(true)
   const conteudo = Children.toArray(children)
     .map((item) => (typeof item === 'string' || typeof item === 'number' ? String(item) : ''))
@@ -112,7 +113,7 @@ export function EmptyState({
   title: ReactNode
   description?: ReactNode
   action?: ReactNode
-}): JSX.Element {
+}): ReactElement {
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
       <p className="font-medium text-slate-700">{title}</p>

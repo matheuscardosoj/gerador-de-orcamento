@@ -37,6 +37,7 @@ import { normalizarDestinatario } from '@shared/documento/comum'
 import { normalizarOrcamento, validarOrcamentoFinal, type ErroValidacao } from '@shared/validacao'
 import { DataTableViewport } from '../../ui/dataTable'
 import { notificar } from '../../lib/notificacoes'
+import type { ReactElement } from 'react'
 export interface Dados {
   empresa: EmpresaConfig
   parametros: ParametrosFinanceiros
@@ -67,7 +68,7 @@ export function DadosGeraisCard({
   clientes: Cliente[]
   erroDoCampo: (campo: string) => string | undefined
   onValidacao: (erros: ErroValidacao[]) => void
-}): JSX.Element {
+}): ReactElement {
   return (
     <Card className="p-6">
       <SectionTitle title="Dados gerais" />
@@ -204,7 +205,7 @@ export function AnotacaoInterna({
   documento: Orcamento | Relatorio
   set: (p: { observacaoInterna?: string }) => void
   tipoDocumento: 'orcamento' | 'relatorio'
-}): JSX.Element {
+}): ReactElement {
   const entrada =
     tipoDocumento === 'orcamento'
       ? { tipo: 'orcamento' as const, documento: documento as Orcamento }
@@ -259,7 +260,7 @@ export function ServicosCard({
   rotuloDocumento?: 'orçamento' | 'relatório'
   errosValidacao?: ErroValidacao[]
   onRemover?: (id: string) => void
-}): JSX.Element {
+}): ReactElement {
   const [calcAberto, setCalcAberto] = useState<ItemServico | 'novo' | null>(null)
   const [manualAberto, setManualAberto] = useState<ItemServico | 'novo' | null>(null)
   const [catalogoSel, setCatalogoSel] = useState('')
@@ -484,7 +485,7 @@ export function ServicoManualModal({
   precoRefInicial?: number
   onClose: () => void
   onSave: (i: ItemServico) => void
-}): JSX.Element {
+}): ReactElement {
   const [descricao, setDescricao] = useState(item?.descricao ?? descricaoInicial ?? '')
   const [unidade, setUnidade] = useState(item?.unidade ?? unidadeInicial ?? 'serviço')
   const [quantidade, setQuantidade] = useState(item?.quantidade ?? 1)
@@ -554,7 +555,7 @@ export function MateriaisCard({
   orc: Orcamento
   set: (p: Partial<Orcamento>) => void
   erroDoCampo: (campo: string) => string | undefined
-}): JSX.Element {
+}): ReactElement {
   const add = (): void =>
     set({
       materiais: [
@@ -641,7 +642,7 @@ export function TextosCard({
   itens: ItemTexto[]
   sugestoes: Array<{ id: string; texto: string }>
   onChange: (itens: ItemTexto[]) => void
-}): JSX.Element {
+}): ReactElement {
   const add = (texto = '', origemPadraoId?: string): void =>
     onChange([...itens, { id: novoId(), texto, origemPadraoId }])
   const upd = (id: string, texto: string): void =>

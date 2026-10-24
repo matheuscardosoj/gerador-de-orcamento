@@ -2,6 +2,7 @@ import type { TipoDocumento, RevisaoRecebimentos } from '@shared/evolucao'
 import { formatMoeda } from '@shared/format'
 import { Button, SectionTitle, Mensagem } from '../../ui/primitives'
 import { DataTableViewport } from '../../ui/dataTable'
+import type { ReactElement } from 'react'
 
 export function RecebimentosPendentes({
   tipo,
@@ -21,7 +22,7 @@ export function RecebimentosPendentes({
   onRevisar: () => void
   onEscolher: (acao: 'reaplicar' | 'arquivar' | null) => void
   onConfirmar: () => void
-}): JSX.Element | null {
+}): ReactElement | null {
   if (tipo !== 'recibo' && tipo !== 'relatorio') return null
   return (
     <>

@@ -16,6 +16,7 @@ import {
   cn
 } from '../ui/primitives'
 import type { AnexoOrcamento } from '@shared/types'
+import type { ReactElement } from 'react'
 
 /** Campos comuns aos anexos de orçamento e de relatório. */
 export interface AnexoEditavel {
@@ -52,7 +53,7 @@ export function AnexosCard<T extends AnexoEditavel>({
   atualizarVinculo?: (anexo: T, id: string) => Partial<T>
   prepararNovos?: (anexos: AnexoOrcamento[]) => T[]
   buscarImagem: (id: string) => Promise<string | null>
-}): JSX.Element {
+}): ReactElement {
   const inputRef = useRef<HTMLInputElement>(null)
   const [arrastando, setArrastando] = useState(false)
   const [processando, setProcessando] = useState(false)
@@ -198,7 +199,7 @@ function ModalFoto({
   anexo: AnexoEditavel
   buscarImagem: (id: string) => Promise<string | null>
   onClose: () => void
-}): JSX.Element {
+}): ReactElement {
   const [src, setSrc] = useState<string | undefined>(anexo.imagemDataUrl ?? anexo.miniaturaDataUrl)
   useEffect(() => {
     if (anexo.imagemDataUrl) return

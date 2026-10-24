@@ -28,7 +28,7 @@ export function ListaOrdenavel<T extends { id: string }>({
   onChange: (itens: T[]) => void
   children: ReactNode
   disabled?: boolean
-}): JSX.Element {
+}): ReactElement {
   const sensores = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -72,7 +72,7 @@ function LinhaOrdenavel({
   id: string
   disabled: boolean
   linha: ReactElement
-}): JSX.Element {
+}): ReactElement {
   const {
     attributes,
     listeners,

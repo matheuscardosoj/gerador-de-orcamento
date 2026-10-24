@@ -6,9 +6,10 @@ import { useBloqueioEdicao } from '../../lib/nav'
 import { Button, Card, Field, Input, Select, SectionTitle, Checkbox } from '../../ui/primitives'
 import type { EmpresaConfig, CampoCliente } from '@shared/types'
 import { BotaoSalvar, useMutacao } from './comum'
+import type { ReactElement } from 'react'
 
 // --------------------------------------------------------------- Empresa
-export function SecaoEmpresa(): JSX.Element {
+export function SecaoEmpresa(): ReactElement {
   const { data, error: erroCarga } = useAsync(() => api.empresa.get(), [])
   const [form, setForm] = useState<EmpresaConfig | null>(null)
   const [salvo, setSalvo] = useState('')
