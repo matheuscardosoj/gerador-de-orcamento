@@ -254,3 +254,18 @@ REVOKE ALL ON FUNCTION sincronizacao.criar_padroes_empresa() FROM PUBLIC,anon,au
 DROP TRIGGER IF EXISTS gdo_padroes_empresa ON public.empresas;
 CREATE TRIGGER gdo_padroes_empresa AFTER INSERT ON public.empresas
   FOR EACH ROW EXECUTE FUNCTION sincronizacao.criar_padroes_empresa();
+
+-- Computadores sem repetição (migração 014).
+CREATE OR REPLACE FUNCTION public.gdo_computadores_v4() RETURNS TABLE(id uuid, nome text, visto_em timestamptz)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
+DECLARE e uuid:=gdo_empresa();
+BEGIN
+ RETURN QUERY
+  SELECT DISTINCT ON (lower(btrim(c.nome)), d.usuario_id) c.id, c.nome, d.visto_em
+    FROM computadores c
+    JOIN dispositivos_usuarios d ON d.empresa_id=c.empresa_id AND d.dispositivo=c.id
+   WHERE c.empresa_id=e
+   ORDER BY lower(btrim(c.nome)), d.usuario_id, d.visto_em DESC;
+END $$;
+REVOKE ALL ON FUNCTION public.gdo_computadores_v4() FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.gdo_computadores_v4() TO authenticated;
