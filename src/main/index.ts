@@ -18,6 +18,7 @@ import { haAlteracoesPendentes, liberarAlteracoesPendentes, registrarIpc } from 
 import { urlDoAplicativo } from './origem-janela'
 import { registrarDiagnostico } from './diagnostico'
 import { exportarDiagnostico } from './diagnostico-exportar'
+import { iniciarAtualizacaoAutomatica } from './atualizacao'
 
 // Falhas que nenhuma tela mostra ficam registradas para o suporte (sem mudar o comportamento).
 process.on('unhandledRejection', (motivo) => registrarDiagnostico('promessa-rejeitada', motivo))
@@ -196,6 +197,7 @@ if (temTrava)
     app.once('before-quit', pararTempoReal)
 
     prontoParaCallback = true
+    iniciarAtualizacaoAutomatica()
     void processarCallbacks()
 
     app.on('activate', function () {
