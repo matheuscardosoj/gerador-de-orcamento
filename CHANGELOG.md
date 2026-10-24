@@ -2,6 +2,14 @@
 
 Todas as mudanças relevantes deste projeto são documentadas neste arquivo.
 
+## 1.6.4 — computadores sem repetição em "Transferir para"
+
+- Correção: cada perfil local (empresa e usuário) cria o próprio identificador de computador, então o mesmo
+  Windows aparecia várias vezes na lista "Transferir para" do controle de edição (por exemplo, N-MATHEUS três
+  vezes). A lista agora mostra cada computador uma vez, com o identificador visto por último. Exige a migração
+  `014_computadores_unicos.sql` (uma função de leitura, já aplicada ao projeto em 24/10/2026; o rollback é
+  `rollbacks/014_desfazer_computadores_unicos.sql`). Sem a migração, o aplicativo volta à lista antiga.
+
 ## 1.6.3 — dependências atualizadas e código mais modular, sem mudança visual
 
 Nenhuma tela, texto ou fluxo muda. O que mudou por dentro:

@@ -5,6 +5,13 @@
 > atualização; não execute novamente o esquema inicial nem restaure um backup
 > antigo sobre a base ativa.
 
+## Atualização 1.6.4: migração 014 (recomendada)
+
+Execute `migrations/014_computadores_unicos.sql` uma vez no SQL Editor. Cria `gdo_computadores_v4()`, uma
+função de leitura que devolve cada computador uma única vez (o identificador visto por último, por pessoa),
+usada na lista "Transferir para". Não altera dados e é idempotente. Para desfazer, execute
+`rollbacks/014_desfazer_computadores_unicos.sql`. Sem a migração o aplicativo funciona, com a lista repetida.
+
 ## Atualização 1.6.0: migração 013 (recomendada)
 
 Execute `migrations/013_realtime_sem_renovacao.sql` uma vez no SQL Editor. Ela faz o aviso em

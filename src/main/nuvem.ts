@@ -1545,9 +1545,25 @@ export async function repetirOperacaoNuvem(id: string): Promise<StatusNuvem> {
   tentarNovamenteOperacao(id)
   return sincronizarNuvem(false)
 }
+/**
+ * Computadores da empresa para "Transferir para". Cada perfil local tem o próprio identificador,
+ * então o mesmo Windows aparece várias vezes na tabela; a função da migração 014 devolve só o visto
+ * por último. Sem a migração (PGRST202) volta à lista completa de antes.
+ */
 export async function dispositivosNuvem(): Promise<Array<{ id: string; nome: string }>> {
   const empresa = statusNuvem().empresaId
   if (!empresa) throw new Error('Selecione uma empresa antes de consultar os computadores.')
+  if (protocoloNuvem() >= 4) {
+    try {
+      const lista = (await pedido('/rest/v1/rpc/gdo_computadores_v4', {})) as Array<{
+        id: string
+        nome: string
+      }>
+      return lista.map(({ id, nome }) => ({ id, nome }))
+    } catch (erro) {
+      if ((erro as { codigo?: string }).codigo !== 'PGRST202') throw erro
+    }
+  }
   return (await pedido(`/rest/v1/gdo_devices?select=id,nome&usuario=eq.${empresa}`)) as Array<{
     id: string
     nome: string
