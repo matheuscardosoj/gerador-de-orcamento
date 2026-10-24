@@ -13,7 +13,7 @@ export function Card({
   className?: string
 }): ReactElement {
   return (
-    <div className={cn('rounded-xl border border-slate-200 bg-surface shadow-sm', className)}>
+    <div className={cn('rounded-xl border border-slate-200 bg-surface shadow-xs', className)}>
       {children}
     </div>
   )

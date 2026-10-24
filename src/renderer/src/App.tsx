@@ -89,7 +89,7 @@ function Sidebar(): ReactElement {
           <BotaoAlternarTema />
         </div>
       </div>
-      <nav className="flex-1 space-y-1 p-3">
+      <nav className="flex-1 pilha-y-1 p-3">
         {itens.map((item) => {
           const ativo =
             rota.nome === item.nome ||
@@ -101,7 +101,7 @@ function Sidebar(): ReactElement {
               onClick={() => navegar({ nome: item.nome })}
               aria-current={ativo ? 'page' : undefined}
               className={cn(
-                'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-brand-teal/40',
+                'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-hidden focus:ring-2 focus:ring-brand-teal/40',
                 ativo ? 'bg-brand-teal/10 text-brand-tealDark' : 'text-slate-600 hover:bg-slate-100'
               )}
             >
@@ -116,7 +116,7 @@ function Sidebar(): ReactElement {
           <button
             type="button"
             disabled={acao !== null}
-            className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-2 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-teal/40 disabled:opacity-50"
+            className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-2 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-brand-teal/40 disabled:opacity-50"
             onClick={() => {
               setAcao('sincronizar')
               void api.nuvem
@@ -138,7 +138,7 @@ function Sidebar(): ReactElement {
           <button
             type="button"
             disabled={acao !== null}
-            className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-2 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-teal/40 disabled:opacity-50"
+            className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-2 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-brand-teal/40 disabled:opacity-50"
             onClick={() =>
               executarComConfirmacao(() => {
                 setAcao('sair')
@@ -156,7 +156,7 @@ function Sidebar(): ReactElement {
         </div>
         v{versao ?? '…'} · base da empresa
         <button
-          className="mt-1 block rounded-lg text-left text-slate-600 hover:text-brand-tealDark focus:outline-none focus:ring-2 focus:ring-brand-teal/40"
+          className="mt-1 block rounded-lg text-left text-slate-600 hover:text-brand-tealDark focus:outline-hidden focus:ring-2 focus:ring-brand-teal/40"
           onClick={() => navegar({ nome: 'configuracoes', aba: 'nuvem' })}
         >
           {resumirSincronizacao(nuvem).titulo}

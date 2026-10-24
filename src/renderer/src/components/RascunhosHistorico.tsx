@@ -39,7 +39,7 @@ export function RascunhosHistorico({
   if (!orfaos.length && !erro) return null
   const rotulo = { orcamento: 'orçamento', relatorio: 'relatório', recibo: 'recibo' }[tipo]
   return (
-    <Card className="space-y-3 border-amber-200 p-4">
+    <Card className="pilha-y-3 border-amber-200 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-semibold text-slate-800">Rascunhos locais recuperáveis</h2>

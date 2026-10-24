@@ -61,7 +61,7 @@ export function SecaoParametros(): ReactElement {
   }
 
   return (
-    <form id="config-parametros" onSubmit={salvar} className="space-y-5">
+    <form id="config-parametros" onSubmit={salvar} className="pilha-y-5">
       <Card className="p-6">
         <SectionTitle
           title="Encargos CLT (%)"

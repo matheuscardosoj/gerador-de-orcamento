@@ -76,7 +76,7 @@ export function SortableHeader({
         type="button"
         onClick={onSort}
         className={cn(
-          'inline-flex w-full items-center gap-1 rounded-sm font-semibold hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal/40',
+          'inline-flex w-full items-center gap-1 rounded-xs font-semibold hover:text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-brand-teal/40',
           wrap ? 'whitespace-normal leading-tight' : 'whitespace-nowrap',
           align === 'right' ? 'justify-end text-right' : 'justify-start text-left'
         )}

@@ -180,7 +180,7 @@ export function ContaGate({ children }: { children: ReactNode }): ReactElement {
 function TelaAcesso({ children }: { children: ReactNode }): ReactElement {
   return (
     <main className="flex min-h-full items-center justify-center overflow-y-auto bg-app px-6 py-10">
-      <Card className="w-full max-w-lg space-y-5 p-8">{children}</Card>
+      <Card className="w-full max-w-lg pilha-y-5 p-8">{children}</Card>
     </main>
   )
 }
@@ -378,7 +378,7 @@ function Acesso({
             </>
           }
         >
-          <div className="space-y-4">
+          <div className="pilha-y-4">
             <Mensagem tom="aviso">
               {empresaExcluir
                 ? `Todos os documentos, cadastros, vínculos e dados sincronizados de “${empresaExcluir.nome}” serão removidos. As contas de autenticação das pessoas serão preservadas. Ao reconectar, os computadores encerrarão o acesso e removerão o perfil local, incluindo rascunhos e alterações pendentes.`
@@ -419,7 +419,7 @@ function Acesso({
       />
       {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
       <form
-        className="space-y-4"
+        className="pilha-y-4"
         onSubmit={(e) => {
           e.preventDefault()
           void executar(async () => {
@@ -586,7 +586,7 @@ function AtivarEmpresa(): ReactElement {
         selecione-a acima.
       </p>
       <form
-        className="mt-4 space-y-4"
+        className="mt-4 pilha-y-4"
         onSubmit={(e) => {
           e.preventDefault()
           setOcupado(true)
@@ -682,7 +682,7 @@ function PrimeirosPassos({
       />
       {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
       <form
-        className="space-y-4"
+        className="pilha-y-4"
         onSubmit={(e) => {
           e.preventDefault()
           void salvar()

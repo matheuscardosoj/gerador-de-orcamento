@@ -26,7 +26,7 @@ import type { ReactElement } from 'react'
 
 // ------------------------------------------------------------------- Inputs
 const fieldBase =
-  'w-full rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/30 disabled:bg-slate-100'
+  'w-full rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-teal focus:outline-hidden focus:ring-2 focus:ring-brand-teal/30 disabled:bg-slate-100'
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   function Input({ className, ...props }, ref) {
@@ -49,7 +49,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HT
         />
         <button
           type="button"
-          className="absolute bottom-[2px] right-[2px] top-[2px] inline-flex w-9 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-teal/40"
+          className="absolute bottom-[2px] right-[2px] top-[2px] inline-flex w-9 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-inset focus:ring-brand-teal/40"
           aria-label={visivel ? 'Ocultar senha' : 'Mostrar senha'}
           aria-pressed={visivel}
           aria-controls={id ?? inputId}
@@ -314,7 +314,7 @@ export function Field({
       )
     : children
   return (
-    <div className={cn('block min-w-0 space-y-1', className)}>
+    <div className={cn('block min-w-0 pilha-y-1', className)}>
       {label &&
         (idControle ? (
           <label htmlFor={idControle} className="block text-sm font-medium text-slate-700">
@@ -362,7 +362,7 @@ export function Checkbox({
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
         disabled={disabled}
-        className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-teal accent-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/40"
+        className="mt-0.5 h-4 w-4 shrink-0 rounded-sm border-slate-300 text-brand-teal accent-brand-teal focus:outline-hidden focus:ring-2 focus:ring-brand-teal/40"
       />
       {label}
     </label>

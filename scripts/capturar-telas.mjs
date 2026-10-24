@@ -2,7 +2,7 @@
 // aparência antes e depois de uma atualização de estilos ou de dependências.
 // Uso: node scripts/capturar-telas.mjs <pasta-de-saida>
 //      node scripts/capturar-telas.mjs --comparar <pasta-a> <pasta-b>   (diferença por tela)
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createServer } from 'vite'

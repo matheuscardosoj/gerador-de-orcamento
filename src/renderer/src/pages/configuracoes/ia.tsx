@@ -85,7 +85,7 @@ export function SecaoIA(): ReactElement {
   }
 
   return (
-    <form id="config-ia" onSubmit={salvar} className="space-y-5">
+    <form id="config-ia" onSubmit={salvar} className="pilha-y-5">
       <Card className="p-6">
         <SectionTitle
           title="Revisão de textos com IA local"

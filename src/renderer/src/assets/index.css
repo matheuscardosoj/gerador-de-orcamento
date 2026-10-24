@@ -1,6 +1,54 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@config '../../../../tailwind.config.mjs';
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+/* O tema escuro é a classe `dark` em <html> (src/renderer/src/lib/tema.ts). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* `pilha-x-*` e `pilha-y-*` (antes `space-*` do Tailwind) mantêm ao comportamento da versão 3: a margem vai no irmão seguinte
+   (e não abaixo/à direita do anterior), então a margem própria de um filho (mb-4, mt-1…)
+   continua colapsando com o espaçamento em vez de substituí-lo. */
+@utility pilha-y-* {
+  & > :not([hidden]) ~ :not([hidden]) {
+    margin-block-start: calc(var(--spacing) * --value(number));
+  }
+}
+@utility pilha-x-* {
+  & > :not([hidden]) ~ :not([hidden]) {
+    margin-inline-start: calc(var(--spacing) * --value(number));
+  }
+}
+
+/* O Tailwind 4 usa currentColor nas bordas e trocou alguns padrões; isto mantém o visual da 3. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+  /* O Tailwind 4 zera o preenchimento interno dos campos de data (1px em cima e embaixo no
+     navegador) e fixa a altura do valor; a versão 3 deixava os padrões do navegador. */
+  ::-webkit-date-and-time-value {
+    min-height: revert;
+  }
+  ::-webkit-datetime-edit-fields-wrapper {
+    padding: revert;
+  }
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+}
 
 /* A largura mínima depende das colunas e do espaço real do cartão,
    independentemente do tamanho da janela ou da escala do monitor. */

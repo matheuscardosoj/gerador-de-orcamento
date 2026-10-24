@@ -307,7 +307,7 @@ export function HistoricoDocumentos({
         ? ['rascunho', 'emitido', 'pago']
         : ['rascunho', 'pendente', 'recebido', 'cancelado']
   return (
-    <div className="space-y-4">
+    <div className="pilha-y-4">
       {(erro || erroCarga) && <MensagemFlutuante>{erro || erroCarga}</MensagemFlutuante>}
       <div className="flex flex-wrap items-center gap-3">
         <Input
@@ -589,7 +589,7 @@ export function HistoricoDocumentos({
           Escolha as informações e arraste as colunas visíveis para mudar a ordem. Número e ações
           permanecem fixos.
         </p>
-        <div className="space-y-2">
+        <div className="pilha-y-2">
           <ListaOrdenavel
             itens={pref.colunas.map((id) => ({ id }))}
             onChange={(itens) => mudar({ colunas: itens.map((i) => i.id) })}

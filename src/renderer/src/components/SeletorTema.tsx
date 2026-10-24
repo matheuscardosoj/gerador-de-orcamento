@@ -48,7 +48,7 @@ export function BotaoAlternarTema(): ReactElement {
       onClick={() => definirPreferenciaTema(escuro ? 'claro' : 'escuro')}
       aria-label={rotulo}
       title={rotulo}
-      className="shrink-0 rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal/40"
+      className="shrink-0 rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-brand-teal/40"
     >
       <AppIcon icon={escuro ? Sun : Moon} size="sm" />
     </button>

@@ -52,7 +52,7 @@ export function SecaoDados(): ReactElement {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="pilha-y-6">
       <Card className="p-6">
         <SectionTitle
           title="Cópia de segurança"

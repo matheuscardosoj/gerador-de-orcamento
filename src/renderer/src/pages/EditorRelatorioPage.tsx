@@ -365,7 +365,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
           Alterações aqui não mudam a proposta.
         </Mensagem>
       )}
-      <div className="mb-5 space-y-5">
+      <div className="mb-5 pilha-y-5">
         <AvisoAtualizacao {...atualizacao} sujo={sujo} />
         <ColaboracaoDocumento
           tipo="relatorio"
@@ -497,7 +497,7 @@ export function EditorRelatorioPage({ relatorioId }: { relatorioId?: string }): 
           />
         </div>
       </Card>
-      <div className="space-y-6">
+      <div className="pilha-y-6">
         <ServicosCard
           orc={orcAdaptado}
           set={(p) => set({ itensServico: p.itensServico ?? rel.itensServico })}
@@ -651,7 +651,7 @@ function LancamentosCard({
       {itens.length === 0 ? (
         <p className="text-sm text-slate-500">Nenhum lançamento.</p>
       ) : (
-        <div className="space-y-2">
+        <div className="pilha-y-2">
           <ListaOrdenavel itens={itens} onChange={onChange}>
             {itens.map((x, indice) => (
               <div

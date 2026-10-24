@@ -121,7 +121,7 @@ export function SecaoClientes({
   const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA
   const paginaFiltrada = filtrados.slice(inicio, inicio + ITENS_POR_PAGINA)
   return (
-    <div className="space-y-4">
+    <div className="pilha-y-4">
       {rascunhos?.map((r) => (
         <Mensagem key={r.idOrigem} tom="aviso">
           Alterações de um cliente excluído em outro computador foram guardadas neste computador.{' '}
@@ -453,7 +453,7 @@ function ClienteModal({
         </>
       }
     >
-      <div className="space-y-4">
+      <div className="pilha-y-4">
         {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
         <Field label="Nome / razão social (obrigatório)">
           <Input value={form.nome} onChange={(e) => set({ nome: e.target.value })} autoFocus />

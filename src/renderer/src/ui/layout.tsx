@@ -76,7 +76,7 @@ export function Tabs<T extends string>({
           onClick={() => onChange(t.id)}
           onKeyDown={(evento) => moverFoco(evento, indice)}
           className={cn(
-            '-mb-px whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-teal/40',
+            '-mb-px whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors focus:outline-hidden focus:ring-2 focus:ring-inset focus:ring-brand-teal/40',
             atual === t.id
               ? 'border-brand-teal text-brand-tealDark'
               : 'border-transparent text-slate-500 hover:text-slate-700'

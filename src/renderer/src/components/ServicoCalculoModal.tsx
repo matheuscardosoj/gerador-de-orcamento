@@ -169,9 +169,9 @@ export function ServicoCalculoModal({
     >
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         {/* Coluna de entradas */}
-        <div className="space-y-4">
+        <div className="pilha-y-4">
           <Bloco titulo="Serviço">
-            <div className="space-y-3">
+            <div className="pilha-y-3">
               <Field label="Descrição do serviço">
                 <Input
                   value={descricao}
@@ -207,7 +207,7 @@ export function ServicoCalculoModal({
               <AvulsosBloco e={e} set={set} />
 
               <Bloco titulo="Formação do preço">
-                <div className="space-y-3">
+                <div className="pilha-y-3">
                   <Checkbox
                     label="Incluir imposto da nota fiscal no preço"
                     checked={e.emitirNota}
@@ -246,7 +246,7 @@ export function ServicoCalculoModal({
                       min={0}
                     />
                   </Field>
-                  <div className="space-y-3 border-t border-slate-200 pt-3">
+                  <div className="pilha-y-3 border-t border-slate-200 pt-3">
                     <Field
                       label="Preço final desejado deste serviço (R$)"
                       hint="Considera todas as unidades deste serviço e o imposto habilitado. Ao alterar o valor, o percentual geral se ajusta automaticamente; custos, lucros próprios e repasses são preservados."
@@ -271,7 +271,7 @@ export function ServicoCalculoModal({
             <div className="border-b border-slate-200 bg-surface px-4 py-3">
               <h4 className="text-sm font-semibold text-slate-700">Resumo do cálculo</h4>
             </div>
-            <div className="max-h-[40vh] space-y-1.5 overflow-y-auto px-4 py-3">
+            <div className="max-h-[40vh] pilha-y-1.5 overflow-y-auto px-4 py-3">
               {resultado.breakdown.length === 0 && (
                 <p className="py-4 text-center text-xs text-slate-400">
                   Adicione custos para ver o detalhamento
@@ -285,7 +285,7 @@ export function ServicoCalculoModal({
                 )
                 if (itens.length === 0) return null
                 return (
-                  <div key={grupo} className="space-y-1.5">
+                  <div key={grupo} className="pilha-y-1.5">
                     <p className="text-xs font-semibold text-slate-600">
                       {grupo === 'servico' ? 'Custos do serviço' : 'Outros custos e repasses'}
                     </p>
@@ -303,7 +303,7 @@ export function ServicoCalculoModal({
                 )
               })}
             </div>
-            <div className="space-y-1.5 border-t border-slate-200 bg-surface px-4 py-3 text-sm">
+            <div className="pilha-y-1.5 border-t border-slate-200 bg-surface px-4 py-3 text-sm">
               <Linha
                 label="Custo do serviço"
                 valor={resultado.custoServico ?? resultado.custoTotal}

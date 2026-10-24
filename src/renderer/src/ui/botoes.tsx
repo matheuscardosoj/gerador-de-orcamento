@@ -64,10 +64,10 @@ type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline'
 type ButtonSize = 'sm' | 'md'
 
 const buttonVariants: Record<ButtonVariant, string> = {
-  primary: 'bg-brand-teal text-white hover:bg-brand-tealHover shadow-sm',
+  primary: 'bg-brand-teal text-white hover:bg-brand-tealHover shadow-xs',
   secondary: 'bg-slate-200 text-slate-800 hover:bg-slate-300',
   ghost: 'text-slate-600 hover:bg-slate-100',
-  danger: 'bg-perigo text-white hover:bg-perigo-forte shadow-sm',
+  danger: 'bg-perigo text-white hover:bg-perigo-forte shadow-xs',
   outline: 'border border-slate-300 text-slate-700 hover:bg-slate-50 bg-surface'
 }
 
@@ -83,7 +83,7 @@ export const Button = forwardRef<
     <button
       ref={ref}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-brand-teal/40 disabled:cursor-not-allowed disabled:opacity-50',
+        'inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium transition-colors focus:outline-hidden focus:ring-2 focus:ring-brand-teal/40 disabled:cursor-not-allowed disabled:opacity-50',
         size === 'sm' ? 'px-3 py-1.5 text-sm' : 'px-4 py-2 text-sm',
         buttonVariants[variant],
         className

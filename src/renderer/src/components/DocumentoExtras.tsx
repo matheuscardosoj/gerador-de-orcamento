@@ -161,7 +161,7 @@ export function LinhaTempo({
           </Button>
         }
       >
-        <div className="space-y-4">
+        <div className="pilha-y-4">
           {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
           <Field label="Versão do documento">
             <Select
@@ -248,7 +248,7 @@ export function LinhaTempo({
                 ))}
               </div>
               {versoes.length > 1 && (
-                <div className="space-y-3">
+                <div className="pilha-y-3">
                   <Field label="Comparar com">
                     <Select
                       value={anterior?.id ?? ''}

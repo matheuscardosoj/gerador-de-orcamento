@@ -82,7 +82,7 @@ export function MaoDeObraBloco({ e, set }: BlocoProps): ReactElement {
         </Button>
       }
     >
-      <div className="space-y-3">
+      <div className="pilha-y-3">
         {e.maoDeObra.length === 0 && (
           <p className="text-xs text-slate-400">Nenhum grupo de mão de obra.</p>
         )}
@@ -155,7 +155,7 @@ export function MaoDeObraBloco({ e, set }: BlocoProps): ReactElement {
                   }
                 />
                 {g.clt && (
-                  <div className="mt-2 space-y-2">
+                  <div className="mt-2 pilha-y-2">
                     <Field
                       label="Salário registrado na carteira (mensal)"
                       hint="Base dos encargos e da rescisão — pode diferir do valor pago"
@@ -247,7 +247,7 @@ export function AlimentacaoBloco({
         </Button>
       }
     >
-      <div className="space-y-3">
+      <div className="pilha-y-3">
         {e.alimentacoes.length === 0 && (
           <p className="text-xs text-slate-400">
             Inclua os custos de alimentação das pessoas envolvidas no serviço.
@@ -311,7 +311,7 @@ export function FerramentasBloco({ e, set }: BlocoProps): ReactElement {
         </Button>
       }
     >
-      <div className="space-y-2">
+      <div className="pilha-y-2">
         {e.ferramentas.length === 0 && (
           <p className="text-xs text-slate-400">
             Inclua insumos e despesas de manutenção dos equipamentos usados no serviço.
@@ -388,7 +388,7 @@ export function CombustivelBloco({
         </Button>
       }
     >
-      <div className="space-y-3">
+      <div className="pilha-y-3">
         {e.combustiveis.length === 0 && (
           <p className="text-xs text-slate-400">Um item por veículo usado no serviço.</p>
         )}
@@ -473,7 +473,7 @@ export function EstadiaBloco({ e, set }: BlocoProps): ReactElement {
         </Button>
       }
     >
-      <div className="space-y-3">
+      <div className="pilha-y-3">
         {e.estadias.length === 0 && (
           <p className="text-xs text-slate-400">
             Inclua despesas de hospedagem por pessoa ou de aluguel de imóvel.
@@ -568,7 +568,7 @@ export function AvulsosBloco({ e, set }: BlocoProps): ReactElement {
         </Button>
       }
     >
-      <div className="space-y-2">
+      <div className="pilha-y-2">
         {e.avulsos.length === 0 && (
           <p className="text-xs text-slate-400">
             Inclua despesas adicionais do serviço. Escolha o percentual de lucro ou o repasse pelo
@@ -597,7 +597,7 @@ export function AvulsosBloco({ e, set }: BlocoProps): ReactElement {
                   <ModoSelect value={a.modo} onChange={(m) => upd(a.id, { modo: m })} />
                 </Field>
               </div>
-              <div className="mt-3 space-y-1.5">
+              <div className="mt-3 pilha-y-1.5">
                 <Field label="Cálculo do lucro deste item">
                   <Select
                     value={

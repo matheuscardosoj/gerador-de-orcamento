@@ -364,7 +364,7 @@ export function ServicosCard({
                 return (
                   <tr key={i.id} className={errosItem.length ? 'bg-amber-50/70' : undefined}>
                     <td className="min-w-0 px-3 py-2 align-middle">
-                      <div className="min-w-0 space-y-1">
+                      <div className="min-w-0 pilha-y-1">
                         <div className="flex min-w-0 items-center gap-2">
                           <span className="min-w-0 break-words text-slate-700">{i.descricao}</span>
                           {i.calculo && <Badge color="green">calculado</Badge>}
@@ -522,7 +522,7 @@ export function ServicoManualModal({
         </>
       }
     >
-      <div className="space-y-4">
+      <div className="pilha-y-4">
         <Field label="Descrição do serviço">
           <Textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} autoFocus />
           <RevisaoIA texto={descricao} campo="descricaoServico" onAplicar={setDescricao} />
@@ -583,7 +583,7 @@ export function MateriaisCard({
           Nenhum material.
         </p>
       ) : (
-        <div className="space-y-2">
+        <div className="pilha-y-2">
           <ListaOrdenavel itens={orc.materiais} onChange={(materiais) => set({ materiais })}>
             {orc.materiais.map((m, indice) => (
               <div
@@ -663,7 +663,7 @@ export function TextosCard({
           </Button>
         }
       />
-      <div className="space-y-2">
+      <div className="pilha-y-2">
         <ListaOrdenavel itens={itens} onChange={onChange}>
           {itens.map((i) => (
             <div key={i.id} className="flex items-start gap-2">

@@ -345,7 +345,7 @@ export function EditorOrcamentoPage({ orcamentoId }: { orcamentoId?: string }): 
           <p className="mt-1">{mensagemValidacao(errosValidacao)}</p>
         </Mensagem>
       )}
-      <div className="space-y-5">
+      <div className="pilha-y-5">
         <AvisoAtualizacao {...atualizacao} sujo={sujo} />
         <ColaboracaoDocumento
           tipo="orcamento"

@@ -87,7 +87,7 @@ function UsuariosLegadosSection({
   }
   const lista = (data ?? []).filter((m) => correspondeBusca(busca, [m.nome, m.email]))
   return (
-    <div className="space-y-4">
+    <div className="pilha-y-4">
       <SectionTitle
         title="Usuários da empresa"
         description="Cada pessoa usa seu login. Todos os membros ativos têm acesso completo; as alterações ficam identificadas no histórico."
@@ -200,7 +200,7 @@ function UsuariosLegadosSection({
           </>
         }
       >
-        <div className="space-y-4">
+        <div className="pilha-y-4">
           <p className="text-sm text-slate-600">
             Crie e confirme a conta em Authentication. Depois informe o e-mail aqui. O usuário
             poderá entrar no aplicativo com seu próprio login.

@@ -135,7 +135,7 @@ export function Modal({
             <button
               onClick={onClose}
               disabled={busy}
-              className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-brand-teal/40"
+              className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus:outline-hidden focus:ring-2 focus:ring-brand-teal/40"
               aria-label="Fechar"
             >
               <AppIcon icon={X} />

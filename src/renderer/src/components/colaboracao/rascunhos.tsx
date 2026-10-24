@@ -148,7 +148,7 @@ export function PainelComparacao({
   onCriarNovo: () => void
 }): ReactElement {
   return (
-    <div className="space-y-4 border-t border-slate-200 pt-5">
+    <div className="pilha-y-4 border-t border-slate-200 pt-5">
       <SectionTitle
         title="Comparar com a versão da empresa"
         description={`Revisão atual: ${comparacao.revisaoRemota}. Alterações em campos diferentes são combinadas; disputas precisam da sua escolha.`}

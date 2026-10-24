@@ -107,7 +107,7 @@ export function SecaoEmpresa(): ReactElement {
             description="Logo do cabeçalho e faixa do rodapé"
           />
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="space-y-2">
+            <div className="pilha-y-2">
               <span className="block text-sm font-medium text-slate-700">Logo</span>
               <div className="flex items-center gap-4">
                 <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
@@ -157,7 +157,7 @@ export function SecaoEmpresa(): ReactElement {
                   type="color"
                   value={form.corFaixaRodape}
                   onChange={(e) => set({ corFaixaRodape: e.target.value })}
-                  className="h-9 w-14 cursor-pointer rounded border border-slate-300"
+                  className="h-9 w-14 cursor-pointer rounded-sm border border-slate-300"
                 />
                 <Input
                   value={form.corFaixaRodape}

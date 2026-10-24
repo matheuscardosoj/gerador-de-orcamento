@@ -127,7 +127,7 @@ export function AnexosCard<T extends AnexoEditavel>({
           : 'Nenhuma foto anexada. Arraste imagens aqui ou use “Fotos”.'}
       </div>
       {anexos.length > 0 && (
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 pilha-y-3">
           <ListaOrdenavel itens={anexos} onChange={onChange}>
             {anexos.map((a, idx) => (
               <div key={a.id} className="flex gap-4 rounded-lg border border-slate-200 p-3">

@@ -357,7 +357,7 @@ export function RecibosPage({
           }
         />
       ) : (
-        <div className="space-y-5">
+        <div className="pilha-y-5">
           <AvisoAtualizacao {...atualizacao} sujo={!!r && JSON.stringify(r) !== salvo} />
           <ColaboracaoDocumento
             tipo="recibo"

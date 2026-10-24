@@ -110,7 +110,7 @@ export function ConvitesSection({
       }
     })
   return (
-    <div className="space-y-4">
+    <div className="pilha-y-4">
       <SectionTitle
         title="Usuários da empresa"
         description="Convide por e-mail. Cada pessoa define sua senha e usa seu próprio acesso. Administradores também gerenciam pessoas e configurações."
@@ -217,7 +217,7 @@ export function ConvitesSection({
         </DataTableFrame>
       )}
       {(admin || conta.operador) && (
-        <Card className="space-y-4 p-6">
+        <Card className="pilha-y-4 p-6">
           <SectionTitle
             title="Convites"
             description="O destinatário recebe um código e conclui seu acesso pelo aplicativo."
@@ -298,7 +298,7 @@ export function ConvitesSection({
       >
         <form
           id="convite-usuario"
-          className="space-y-4"
+          className="pilha-y-4"
           onSubmit={(e) => {
             e.preventDefault()
             void executar(async () => {

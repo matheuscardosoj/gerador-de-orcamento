@@ -44,7 +44,7 @@ export function MinhaContaSection(): ReactElement {
     }
   }
   return (
-    <div className="w-full space-y-4">
+    <div className="w-full pilha-y-4">
       {erro && <MensagemFlutuante>{erro}</MensagemFlutuante>}
       {sucesso && (
         <MensagemFlutuante tom="sucesso" temporaria>
@@ -52,14 +52,14 @@ export function MinhaContaSection(): ReactElement {
         </MensagemFlutuante>
       )}
       <div className="grid gap-4">
-        <Card className="space-y-4 p-6">
+        <Card className="pilha-y-4 p-6">
           <SectionTitle
             title="Aparência"
             description="Vale para este computador e fica salvo ao fechar o aplicativo. Os documentos gerados (PDF, Word) continuam com fundo branco."
           />
           <SeletorTema />
         </Card>
-        <Card className="space-y-5 p-6">
+        <Card className="pilha-y-5 p-6">
           <SectionTitle
             title="Minha conta"
             description={conta.email}
@@ -72,7 +72,7 @@ export function MinhaContaSection(): ReactElement {
             }
           />
           <form
-            className="space-y-4"
+            className="pilha-y-4"
             onSubmit={(e) => {
               e.preventDefault()
               void executar(async () => {
@@ -104,7 +104,7 @@ export function MinhaContaSection(): ReactElement {
             </div>
           </form>
         </Card>
-        <Card className="space-y-5 p-6">
+        <Card className="pilha-y-5 p-6">
           <SectionTitle
             title="Alterar e-mail"
             description={
@@ -149,7 +149,7 @@ export function MinhaContaSection(): ReactElement {
             </div>
           )}
           <form
-            className="space-y-4"
+            className="pilha-y-4"
             onSubmit={(e) => {
               e.preventDefault()
               void executar(async () => {
@@ -198,13 +198,13 @@ export function MinhaContaSection(): ReactElement {
             </p>
           </form>
         </Card>
-        <Card className="space-y-5 p-6">
+        <Card className="pilha-y-5 p-6">
           <SectionTitle
             title="Alterar senha"
             description="Confirme sua senha atual para proteger o acesso à conta."
           />
           <form
-            className="space-y-4"
+            className="pilha-y-4"
             onSubmit={(e) => {
               e.preventDefault()
               void executar(async () => {

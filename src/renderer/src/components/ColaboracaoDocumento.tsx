@@ -502,7 +502,7 @@ export function ColaboracaoDocumento({
           </Button>
         }
       >
-        <div className="space-y-5">
+        <div className="pilha-y-5">
           <SectionTitle
             title="Rascunhos deste computador"
             description="Alternativas preservadas a partir de uma revisão conhecida. Salvar um rascunho não registra pagamento nem altera o documento compartilhado."
@@ -559,7 +559,7 @@ export function ColaboracaoDocumento({
             />
           )}
           {(status?.protocolo ?? 1) >= 2 && (
-            <div className="space-y-4 border-t border-slate-200 pt-5">
+            <div className="pilha-y-4 border-t border-slate-200 pt-5">
               <RecebimentosPendentes
                 tipo={tipo}
                 recebimentos={recebimentos}

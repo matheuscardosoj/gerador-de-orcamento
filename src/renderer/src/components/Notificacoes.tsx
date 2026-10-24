@@ -79,7 +79,7 @@ export function Notificacoes(): ReactElement | null {
       {fila.length > 3 && (
         <button
           type="button"
-          className="pointer-events-auto self-end rounded-full bg-inverso px-2.5 py-1 text-xs font-medium text-white shadow"
+          className="pointer-events-auto self-end rounded-full bg-inverso px-2.5 py-1 text-xs font-medium text-white shadow-sm"
           aria-expanded={expandida}
           onClick={() => setExpandida((aberta) => !aberta)}
         >
@@ -136,7 +136,7 @@ function AvisoFlutuante({
         {notificacao.acao && (
           <button
             type="button"
-            className="mt-2 rounded-md text-sm font-semibold underline underline-offset-2 focus:outline-none focus:ring-2 focus:ring-brand-teal/40"
+            className="mt-2 rounded-md text-sm font-semibold underline underline-offset-2 focus:outline-hidden focus:ring-2 focus:ring-brand-teal/40"
             disabled={ocupado || notificacao.acao.desabilitada}
             onClick={() => {
               if (ocupado) return
@@ -165,7 +165,7 @@ function AvisoFlutuante({
       <button
         type="button"
         aria-label="Fechar aviso"
-        className="rounded-md p-1 text-slate-500 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-teal/40"
+        className="rounded-md p-1 text-slate-500 hover:bg-slate-100 focus:outline-hidden focus:ring-2 focus:ring-brand-teal/40"
         onClick={() => aoFechar(notificacao.id)}
       >
         <AppIcon icon={X} size="sm" />

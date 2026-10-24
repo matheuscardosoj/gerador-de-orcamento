@@ -80,7 +80,7 @@ export function NuvemSection(): ReactElement {
             <summary className="cursor-pointer font-medium text-slate-700">
               Como configurar minha empresa na nuvem
             </summary>
-            <ol className="mt-3 list-decimal space-y-3 pl-5">
+            <ol className="mt-3 list-decimal pilha-y-3 pl-5">
               <li>
                 Se você já usa uma versão antiga, primeiro exporte um backup em Dados e backup,
                 feche o aplicativo e instale a atualização com o mesmo usuário do Windows. Abra a
@@ -290,7 +290,7 @@ export function NuvemSection(): ReactElement {
         </Button>
       )}
       {s && (
-        <div className="mt-6 space-y-3 border-t border-slate-200 pt-6 text-sm text-slate-600">
+        <div className="mt-6 pilha-y-3 border-t border-slate-200 pt-6 text-sm text-slate-600">
           <p>
             {s.autenticada ? 'Conta conectada' : 'Conta desconectada'} · {s.pendentes} alterações
             aguardando envio
@@ -300,7 +300,7 @@ export function NuvemSection(): ReactElement {
               <summary className="cursor-pointer font-medium text-slate-700">
                 Operações antigas preservadas ({s.pendenciasPreservadas})
               </summary>
-              <div className="mt-3 space-y-3">
+              <div className="mt-3 pilha-y-3">
                 <p>
                   Estes registros foram guardados durante uma atualização. Eles não fazem parte das
                   alterações aguardando envio e não impedem a sincronização.
@@ -320,14 +320,14 @@ export function NuvemSection(): ReactElement {
           {(s.falhas ?? []).map((x) => (
             <div
               key={x.id}
-              className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"
+              className="pilha-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"
             >
               <p>{x.detalhe}</p>
               <p className="break-all text-xs">
                 Operação: {x.id} · Entidade: {x.entidade}
               </p>
               {(x.codigo || x.causa || x.detalhes || x.dica) && (
-                <details className="rounded border border-amber-200 p-2 text-xs">
+                <details className="rounded-sm border border-amber-200 p-2 text-xs">
                   <summary className="cursor-pointer font-medium">
                     Detalhes técnicos da falha
                   </summary>
@@ -390,7 +390,7 @@ export function NuvemSection(): ReactElement {
           {s.conflitos.map((x) => (
             <div
               key={x.id}
-              className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"
+              className="pilha-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"
             >
               <p>{x.detalhe}</p>
               {(s.protocolo ?? 1) >= 2 &&
@@ -435,7 +435,7 @@ export function NuvemSection(): ReactElement {
         </div>
       )}
       {conta.central && s?.autenticada && (
-        <div className="mt-6 space-y-3 border-t border-slate-200 pt-6">
+        <div className="mt-6 pilha-y-3 border-t border-slate-200 pt-6">
           <SectionTitle
             title="Recuperar os dados deste computador"
             description="Substitui a base local deste perfil pelos dados confirmados da empresa na nuvem."

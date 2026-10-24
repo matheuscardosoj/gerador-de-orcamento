@@ -98,7 +98,7 @@ function LinhaOrdenavel({
       aria-label="Arrastar para reordenar"
       data-arrastando={isDragging ? 'true' : undefined}
       title="Arraste para reordenar; também funciona com espaço e setas"
-      className="shrink-0 touch-none rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal/40 disabled:opacity-40"
+      className="shrink-0 touch-none rounded-sm p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-brand-teal/40 disabled:opacity-40"
       style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
     >
       <AppIcon icon={GripVertical} size="sm" />
