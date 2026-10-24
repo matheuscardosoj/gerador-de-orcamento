@@ -11,7 +11,7 @@ fora do Git; o instalador não é assinado (`signAndEditExecutable: false`).
 | Ensaio                                                                 | Resultado                                                                                                                 |
 | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `npm run check` (lint, formatação, tipos, testes com cobertura, build) | 599 testes em 85 arquivos aprovados; cobertura de instruções 54,0% (piso 52%)                                             |
-| `scripts/capturar-telas.mjs` (Tailwind 3 → 4)                          | 14 capturas (7 telas × claro e escuro) idênticas pixel a pixel antes e depois                                             |
+| `scripts/capturar-telas.mjs` (Tailwind 3 → 4)                          | 30 capturas (claro e escuro) idênticas pixel a pixel antes e depois                                             |
 | `scripts/verificar-1-6-3-pacote.mjs` (executável final, Electron 45)   | Abre na 1.6.3 sem erros de página; trava velha substituída; `contas.json` truncado guardado; tema escuro salvo ao reabrir |
 | `scripts/verificar-ipc-validacao.mjs` (app compilado)                  | Argumentos malformados recusados; chamadas corretas passam                                                                |
 | `scripts/verificar-paginacao-longa.mjs` (layout real, Electron 45)     | 11 folhas, 0 estouros, texto preservado, mesmo número de folhas no PDF                                                    |
