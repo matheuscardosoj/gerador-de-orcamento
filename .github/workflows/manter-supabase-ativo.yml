@@ -1,0 +1,28 @@
+name: Manter o Supabase ativo
+
+# O plano gratuito pausa o projeto após cerca de 7 dias sem uso, e o aplicativo deixa de conectar.
+# Uma consulta leve a cada 3 dias conta como atividade. O endereço e a chave abaixo são os públicos
+# (publishable) que o aplicativo já distribui; não dão acesso a dados, que dependem de login e das
+# regras de segurança do banco.
+on:
+  schedule:
+    - cron: '17 9 */3 * *'
+  workflow_dispatch:
+
+permissions: {}
+
+env:
+  URL: https://ibqskynfmrbxknwqjnon.supabase.co
+  CHAVE: sb_publishable_fC9MRAy1YCywwVjIOmuCQQ_NMwfQf3i
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Consultar o projeto
+        run: |
+          codigo=$(curl -s -o /dev/null -m 30 -w '%{http_code}' -H "apikey: $CHAVE" "$URL/rest/v1/")
+          echo "Resposta: $codigo"
+          # 200 e 401 mostram um projeto ativo; qualquer outra coisa (pausado, removido) falha o fluxo.
+          test "$codigo" = "200" -o "$codigo" = "401"
